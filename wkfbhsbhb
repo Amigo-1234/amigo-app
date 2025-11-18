@@ -17,12 +17,12 @@
   box-sizing:border-box;
 }
 
-html, body{
+html,body{
   height:100%;
   background:var(--bg);
   color:var(--text);
   font-family:Inter,system-ui,Arial,sans-serif;
-  -webkit-text-size-adjust:100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 body{
@@ -31,19 +31,23 @@ body{
 }
 
 #app{
-  min-height:100vh;
+  height:100%;
   display:flex;
   flex-direction:column;
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* ===================== TOP / BOTTOM BARS ===================== */
 
 .topbar{
-  position:sticky;
-  top:0;
-  z-index:30;
+  height:56px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:0 12px;
+  backdrop-filter:blur(8px);
+  background:linear-gradient(90deg,rgba(255,63,216,0.08),rgba(0,245,160,0.06));
+  border-bottom:1px solid var(--border);
+  z-index:20;
 }
 
 .brand{
@@ -62,20 +66,14 @@ body{
 }
 
 .bottom-nav{
-  position:fixed;
-  left:0;
-  right:0;
-  bottom:0;
-  padding-bottom: env(safe-area-inset-bottom); /* sits above the pill */
   height:64px;
   border-top:1px solid var(--border);
   display:flex;
   justify-content:space-around;
   align-items:center;
   background:linear-gradient(180deg,rgba(0,0,0,0.2),rgba(255,255,255,0.03));
-  z-index:40;
+  z-index:20;
 }
-
 
 .bottom-nav .nav-btn{
   width:52px;
@@ -93,7 +91,7 @@ body{
   background:rgba(57,153,255,0.25);
 }
 
-/* ===================== PAGES LAYOUT (IMPORTANT) ===================== */
+/* ===================== PAGES LAYOUT ===================== */
 
 #pages{
   flex:1;
@@ -108,7 +106,7 @@ body{
   display:none;
   overflow-y:auto;
   overflow-x:hidden;
-  padding:12px 12px calc(80px + env(safe-area-inset-bottom));
+  padding:12px 12px 80px;  /* bottom padding so content stays above bottom nav */
   max-width:1200px;
   margin:0 auto;
 }
@@ -256,6 +254,7 @@ button:active{transform:scale(0.98)}
   border-radius:14px;
   color:var(--text);
   padding:12px;
+  font-size:16px;           /* stop iOS zoom */
 }
 .row{display:flex;gap:8px}
 .behind-emojis .floating-emoji{
@@ -308,7 +307,8 @@ button:active{transform:scale(0.98)}
   background:rgba(0,0,0,0.35);
   color:var(--text);
   padding:8px 10px;
-  font-size:14px;
+  font-size:16px;           /* stop iOS zoom */
+  font-family:inherit;
 }
 .composer-actions{
   margin-top:8px;
@@ -377,7 +377,9 @@ button:active{transform:scale(0.98)}
 .media-overlay{
   position:absolute;
   inset:0;
-  background:radial-gradient(circle at 20% 20%, rgba(255,63,216,0.25), transparent 40%), radial-gradient(circle at 80% 60%, rgba(0,245,160,0.25), transparent 40%);
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255,63,216,0.25), transparent 40%),
+    radial-gradient(circle at 80% 60%, rgba(0,245,160,0.25), transparent 40%);
 }
 .card-media.visualizer{
   display:flex;
@@ -529,8 +531,7 @@ button:active{transform:scale(0.98)}
 .t-right{display:flex;align-items:center;gap:8px}
 .t-xp{font-weight:800;color:var(--accent4)}
 
-/* ===================== CHAT PAGE (SEPARATE SCREEN) ===================== */
-/* Chat page (only visible when .active) */
+/* ===================== CHAT PAGE ===================== */
 
 .chat-wrap{
   flex:1;
@@ -624,6 +625,7 @@ button:active{transform:scale(0.98)}
   background:rgba(0,0,0,0.25);
   color:#fff;
   padding:0 10px;
+  font-size:16px;          /* stop iOS zoom */
 }
 
 /* ===================== PROFILE ===================== */
@@ -671,182 +673,6 @@ button:active{transform:scale(0.98)}
 .stat label{font-size:12px;color:var(--muted)}
 .stat div{font-weight:800}
 
-.mood{
-  display:flex;
-  align-items:center;
-  gap:8px;
-}
-.mood-badge{
-  padding:8px 10px;
-  border-radius:12px;
-  background:linear-gradient(90deg,var(--accent1),var(--accent3));
-  font-weight:800;
-}
-
-.collections{
-  display:grid;
-  gap:8px;
-}
-.col h3{margin:0 0 6px 0}
-.grid{
-  display:grid;
-  grid-template-columns:repeat(3,1fr);
-  gap:6px;
-}
-.grid img{
-  width:100%;
-  height:68px;
-  object-fit:cover;
-  border-radius:10px;
-}
-.profile-actions{
-  display:flex;
-  gap:8px;
-  justify-content:space-between;
-}
-
-/* ===================== RESPONSIVE ===================== */
-
-@media (min-width:600px){
-  body{overflow:auto;}
-  .page{padding:24px 24px 90px;}
-  .phones{gap:16px}
-  .phone{width:140px;height:240px;transform:rotate(-1deg)}
-  .mega-title{font-size:64px}
-  .landing-wrap{
-    flex-direction:row;
-    justify-content:space-between;
-    text-align:left;
-  }
-  .cta-row{justify-content:flex-start}
-  .sticker-pile{right:24px;bottom:24px}
-}
-
-@media (min-width:768px){
-  .feed{
-    display:grid;
-    grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:16px;
-  }
-}
-
-@media (min-width:1024px){
-  .feed{
-    grid-template-columns:repeat(3,minmax(0,1fr));
-  }
-}
-.meta-right{
-  display:flex;
-  align-items:center;
-  gap:6px;
-}
-
-.post-delete-btn{
-  border:none;
-  background:rgba(0,0,0,0.25);
-  border-radius:10px;
-  padding:4px 8px;
-  color:var(--text);
-  cursor:pointer;
-  font-size:14px;
-}
-.post-delete-btn:hover{
-  background:rgba(255,63,216,0.4);
-} 
-.post-delete-btn:active{
-  transform:scale(0.95);
-} 
-/* ===== SAVE BUTTON STYLE ===== */
-
-.meta-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.save-btn {
-  border: none;
-  border-radius: 12px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  background: rgba(255,255,255,0.08);
-  color: var(--text);
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.save-btn:hover {
-  background: rgba(0,245,160,0.3);
-  box-shadow: 0 0 10px rgba(0,245,160,0.4);
-}
-
-/* optional tighter look */
-.save-btn:active {
-  transform: scale(0.95);
-}
-/* ========== SAVED MEMES (PROFILE GRID) ========== */
-
-#saved-memes-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  padding: 8px 0;
-}
-
-#saved-memes-grid img {
-  width: 100%;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 12px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-  transition: transform .22s ease, box-shadow .22s ease;
-}
-
-#saved-memes-grid img:hover {
-  transform: translateY(-3px) scale(1.03);
-  box-shadow: 0 10px 26px rgba(0,0,0,0.35);
-}
-/* --- Profile: my posts --- */
-
-.profile-my-posts{
-  margin-top:16px;
-}
-
-.profile-my-posts h3{
-  margin:0 0 6px 0;
-  font-size:15px;
-}
-
-.profile-posts-list{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-}
-
-/* mini post card inside profile */
-.profile-post-card{
-  border-radius:14px;
-  padding:8px 10px;
-  background:linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03));
-  border:1px solid var(--border);
-  font-size:12px;
-}
-
-.profile-post-card .pp-meta{
-  display:flex;
-  justify-content:space-between;
-  color:var(--muted);
-  margin-bottom:4px;
-}
-
-.profile-post-card .pp-text{
-  font-weight:600;
-  margin-bottom:4px;
-  word-wrap:break-word;
-}
 .profile-bio-block{
   margin-top:8px;
   padding:8px 10px;
@@ -889,38 +715,107 @@ button:active{transform:scale(0.98)}
 .profile-post-card .pp-text{
   word-wrap:break-word;
 }
-/* Auth inputs */
-.field input{
-  background:rgba(0,0,0,0.25);
-  border:1px solid rgba(255,255,255,0.2);
-  border-radius:14px;
-  color:var(--text);
-  padding:12px;
-  font-size:16px;           /* 👈 important */
+
+.profile-actions{
+  display:flex;
+  gap:8px;
+  justify-content:space-between;
 }
 
-/* Post composer */
-.composer textarea{
+/* ===================== SAVE & DELETE ===================== */
+
+.meta-right{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.save-btn{
+  border:none;
+  border-radius:12px;
+  padding:4px 10px;
+  font-size:12px;
+  font-weight:600;
+  background:rgba(255,255,255,0.08);
+  color:var(--text);
+  cursor:pointer;
+  transition:0.2s ease;
+}
+.save-btn:hover{
+  background:rgba(0,245,160,0.3);
+  box-shadow:0 0 10px rgba(0,245,160,0.4);
+}
+.save-btn:active{
+  transform:scale(0.95);
+}
+
+.post-delete-btn{
+  border:none;
+  background:rgba(0,0,0,0.25);
+  border-radius:10px;
+  padding:4px 8px;
+  color:var(--text);
+  cursor:pointer;
+  font-size:14px;
+  transition:0.2s ease;
+}
+.post-delete-btn:hover{
+  background:rgba(255,63,216,0.4);
+}
+.post-delete-btn:active{
+  transform:scale(0.95);
+}
+
+/* ========== (Optional) SAVED MEMES GRID – safe to keep even if not used yet ========== */
+
+#saved-memes-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+  padding:8px 0;
+}
+#saved-memes-grid img{
   width:100%;
-  min-height:70px;
-  resize:none;
+  height:80px;
+  object-fit:cover;
   border-radius:12px;
-  border:1px solid var(--border);
-  background:rgba(0,0,0,0.35);
-  color:var(--text);
-  padding:8px 10px;
-  font-family:inherit;
-  font-size:16px;           /* 👈 important */
+  background:rgba(255,255,255,0.08);
+  border:1px solid rgba(255,255,255,0.15);
+  box-shadow:0 6px 18px rgba(0,0,0,0.25);
+  transition:transform .22s ease, box-shadow .22s ease;
+}
+#saved-memes-grid img:hover{
+  transform:translateY(-3px) scale(1.03);
+  box-shadow:0 10px 26px rgba(0,0,0,0.35);
 }
 
-/* Chat input – this is the one in your screenshot */
-.chat-input input{
-  flex:1;
-  height:40px;
-  border-radius:12px;
-  border:1px solid var(--border);
-  background:rgba(0,0,0,0.25);
-  color:#fff;
-  padding:0 10px;
-  font-size:16px;           /* 👈 important */
+/* ===================== RESPONSIVE ===================== */
+
+@media (min-width:600px){
+  body{overflow:auto;}
+  .page{padding:24px 24px 90px;}
+  .phones{gap:16px}
+  .phone{width:140px;height:240px;transform:rotate(-1deg)}
+  .mega-title{font-size:64px}
+  .landing-wrap{
+    flex-direction:row;
+    justify-content:space-between;
+    text-align:left;
+  }
+  .cta-row{justify-content:flex-start}
+  .sticker-pile{right:24px;bottom:24px}
+}
+
+@media (min-width:768px){
+  .feed{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:16px;
+  }
+}
+
+@media (min-width:1024px){
+  .feed{
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
 }
