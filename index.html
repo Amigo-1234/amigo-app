@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>AMIGO WORLD</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Changa+One:wght@400&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="styles.css">
+
+  <!-- Animation lib (GSAP) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "gsap": "https://esm.sh/gsap@3.12.5",
+        "nipplejs": "https://esm.sh/nipplejs@0.9.0"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Neon background auras -->
+  <div class="bg-auras">
+    <div class="aura aura-1"></div>
+    <div class="aura aura-2"></div>
+    <div class="aura aura-3"></div>
+    <div class="aura aura-4"></div>
+  </div>
+
+  <!-- Floating emoji layer -->
+  <div class="float-emoji-layer" aria-hidden="true"></div>
+
+  <div id="app">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="brand">
+        <img src="amigo_logo.png" alt="AMIGO WORLD logo" class="logo">
+        <span class="brand-title">AMIGO WORLD</span>
+      </div>
+      <div class="top-actions">
+        <button class="holo-btn mini" data-open="palette">🎨</button>
+        <button class="holo-btn mini" data-open="notif">🔔</button>
+      </div>
+    </header>
+
+    <!-- Main sections -->
+    <main id="pages">
+      <!-- Landing (used when logged out) -->
+      <section id="landing" class="page active">
+        <div class="landing-wrap">
+          <div class="landing-main">
+            <h1 class="mega-title">
+              <span class="title-line">AMIGO</span>
+              <span class="title-line">WORLD</span>
+            </h1>
+            <p class="subtitle">Where vibes, jokes, chaos &amp; good energy live.</p>
+
+            <div class="cta-row">
+              <button class="glow-btn" data-nav="auth">Enter the Chaos ✨</button>
+              <button class="ghost-btn" data-nav="auth">Already a Member? Login</button>
+            </div>
+          </div>
+
+          <div class="landing-preview">
+            <div class="phones">
+              <div class="phone">
+                <img src="mock_feed.png" alt="mock memes feed" />
+              </div>
+              <div class="phone">
+                <img src="mock_audio.png" alt="audio visualizer mock" />
+              </div>
+              <div class="phone">
+                <img src="mock_tasks.png" alt="task streaks mock" />
+              </div>
+            </div>
+
+            <div class="sticker-pile">
+              <img class="sticker bounce" src="sticker_flame.png" alt="">
+              <img class="sticker wobble" src="sticker_heart.png" alt="">
+              <img class="sticker swing" src="sticker_lol.png" alt="">
+              <img class="sticker boing" src="sticker_star.png" alt="">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Auth -->
+      <section id="auth" class="page">
+        <div class="auth-wrap">
+          <div class="glass-card">
+            <h2 class="card-title">Sign in to the Chaos</h2>
+
+            <label class="field">
+              <span>Don’t be shy, type your email 👀</span>
+              <input id="login-email" type="email" placeholder="you@vibes.com" />
+            </label>
+            <label class="field">
+              <span>Password (don’t worry, we won’t leak it lol)</span>
+              <input id="login-password" type="password" placeholder="••••••••" />
+            </label>
+
+            <div class="row">
+              <button class="glow-btn wide" id="login-btn">Sign In</button>
+              <button class="ghost-btn wide" id="go-signup">Create Account</button>
+            </div>
+          </div>
+
+          <div class="behind-emojis">
+            <img src="sticker_heart.png" alt="" class="floating-emoji e1">
+            <img src="sticker_star.png" alt="" class="floating-emoji e2">
+            <img src="sticker_lol.png" alt="" class="floating-emoji e3">
+          </div>
+        </div>
+      </section>
+
+      <!-- Home Feed -->
+      <section id="home" class="page">
+        <div class="tabs">
+          <button class="tab active" data-tab="trends">🔥 Trends</button>
+          <button class="tab" data-tab="memes">😂 Memes</button>
+          <button class="tab" data-tab="music">🎵 Music</button>
+          <button class="tab" data-tab="videos">🎬 Videos</button>
+          <button class="tab" data-tab="audio">🎤 Audio</button>
+          <button class="tab" data-tab="comics">🎨 Comics</button>
+          <button class="tab" data-tab="chats">💬 Chats</button>
+        </div>
+
+        <!-- Post composer -->
+        <div class="composer">
+          <textarea id="post-text" placeholder="Drop your chaos, thoughts, memes..."></textarea>
+          <div class="composer-actions">
+            <select id="post-category">
+              <option value="trends">🔥 Trends</option>
+              <option value="memes">😂 Memes</option>
+              <option value="music">🎵 Music</option>
+              <option value="videos">🎬 Videos</option>
+              <option value="audio">🎤 Audio</option>
+              <option value="comics">🎨 Comics</option>
+              <option value="chats">💬 Chats</option>
+            </select>
+
+            <button id="post-btn" class="glow-btn mini">Drop chaos</button>
+
+            <div class="composer-extra">
+              <label class="file-label">
+                📷 Add image
+                <input type="file" id="post-image" accept="image/*">
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Feed -->
+        <div class="feed" id="feed-list">
+          <p class="empty-hint">No chaos yet. Be the first to drop a post 🌀</p>
+        </div>
+      </section>
+
+      <!-- Tasks -->
+      <section id="tasks" class="page">
+        <div class="tasks-wrap">
+          <div class="level-row">
+            <div class="badge" id="level-badge">Lv. 1 – New Vibe</div>
+            <div class="streak" id="streak-display">🔥 x0</div>
+          </div>
+
+          <div class="xp-bar">
+            <div class="track">
+              <div class="fill" id="xp-fill"></div>
+            </div>
+            <span class="xp-text" id="xp-text">0 / 100 XP</span>
+          </div>
+
+          <div class="task-list" id="task-list">
+            <p class="empty-hint">Your missions will appear here once you log in 💫</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Chat (separate page) -->
+      <section id="chat" class="page">
+        <div class="chat-wrap">
+          <div class="chat-top">
+            <img src="https://i.pravatar.cc/100?img=12" alt="" class="avatar" id="chat-avatar">
+            <div class="chat-meta">
+              <div class="username" id="chat-username">@amigo_user</div>
+              <div class="status" id="chat-status">Global chaos room</div>
+            </div>
+            <button class="holo-btn mini">⋯</button>
+          </div>
+
+          <div class="chat-window" id="chat-window">
+            <p class="empty-hint">No messages yet. Say hi 👋</p>
+          </div>
+
+          <div class="chat-input">
+            <button class="picker">😀</button>
+            <button class="picker">GIF</button>
+            <input id="chat-input" type="text" placeholder="Type a vibe…" />
+            <button class="send glow-btn mini" id="chat-send-btn">Send</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Profile -->
+      <section id="profile" class="page">
+        <div class="profile-wrap">
+          <div class="banner"></div>
+
+          <div class="avatar-wrap">
+            <img src="https://i.pravatar.cc/140?img=56" alt="" class="avatar big" id="profile-avatar">
+            <div class="avatar-glow"></div>
+          </div>
+
+          <div class="profile-header-text">
+            <h2 id="profile-name">@amigo_user</h2>
+            <p id="profile-email" class="profile-email">you@vibes.com</p>
+          </div>
+
+          <div class="stats">
+            <div class="stat">
+              <label>Level</label>
+              <div id="profile-level">1</div>
+            </div>
+            <div class="stat">
+              <label>XP</label>
+              <div id="profile-xp">0</div>
+            </div>
+            <div class="stat">
+              <label>Streak</label>
+              <div id="profile-streak">🔥 x0</div>
+            </div>
+          </div>
+
+          <!-- bio block -->
+          <div class="profile-bio-block">
+            <h3>About you</h3>
+            <p id="profile-bio" class="profile-bio">
+              No bio yet. Tap edit profile to add one.
+            </p>
+          </div>
+
+          <!-- YOUR POSTS SECTION -->
+          <div class="profile-posts">
+            <h3>Your posts</h3>
+            <p id="profile-posts-empty" class="empty-hint">
+              You haven’t dropped any chaos yet. Go to Home and make your first post 🔥
+            </p>
+            <div id="profile-posts-list"></div>
+          </div>
+
+          <div class="profile-actions">
+            <button class="glow-btn" id="edit-profile-btn">Edit profile</button>
+            <button class="ghost-btn" id="switch-mood-btn">Switch mood</button>
+            <button class="holo-btn" id="logout-btn">Logout</button>
+            <button class="holo-btn" id="see-badges-btn">See badges</button>
+          </div>
+        </div>
+      </section>
+    </main> <!-- 🔥 THIS WAS MISSING BEFORE -->
+
+    <!-- Bottom navigation -->
+    <nav class="bottom-nav">
+      <!-- main buttons -->
+      <button class="nav-btn active" data-nav="home">🏠</button>
+      <button class="nav-btn" data-nav="home">📱</button>
+      <button class="nav-btn" data-nav="tasks">🔥</button>
+      <button class="nav-btn" data-nav="chat">💬</button>
+      <button class="nav-btn" data-nav="profile">👤</button>
+    </nav>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
+

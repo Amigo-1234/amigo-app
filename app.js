@@ -1,0 +1,777 @@
+import { gsap } from "gsap";
+
+/* ---------- tiny DOM helpers ---------- */
+const qs  = (s, r = document) => r.querySelector(s);
+const qsa = (s, r = document) => Array.from(r.querySelectorAll(s));
+
+const pages      = qsa(".page");
+const navBtns    = qsa(".bottom-nav .nav-btn");
+const floatLayer = qs(".float-emoji-layer");
+
+/* ---------- floating emojis ---------- */
+const EMOJIS = ["❤️","😂","🤯","😭","🔥","✨","🌈","⚡️","🍭","🎧","🎮","🐣","🫶","💥"];
+
+function spawnEmojis () {
+  if (!floatLayer) return;
+  for (let i = 0; i < 18; i++) {
+    const span = document.createElement("span");
+    span.className = "float-emoji";
+    span.textContent = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+    span.style.left = `${Math.random() * 100}%`;
+    span.style.top  = `${Math.random() * 100}%`;
+    span.style.animationDelay = `${Math.random() * 2}s`;
+    floatLayer.appendChild(span);
+  }
+}
+spawnEmojis();
+
+/* ---------- navigation ---------- */
+let currentUser = null;
+
+function showPage (id) {
+  const protectedPages = ["home", "tasks", "chat", "profile"];
+
+  if (!currentUser && protectedPages.includes(id)) {
+    id = "auth";
+  }
+
+  pages.forEach(p => p.classList.toggle("active", p.id === id));
+  navBtns.forEach(b => b.classList.toggle("active", b.dataset.nav === id));
+
+  gsap.fromTo(".brand-title", { scale: 1 }, {
+    scale: 1.06,
+    duration: 0.25,
+    yoyo: true,
+    repeat: 1
+  });
+}
+
+navBtns.forEach(btn => {
+  btn.addEventListener("click", () => showPage(btn.dataset.nav));
+});
+
+qsa("[data-nav]").forEach(el => {
+  el.addEventListener("click", () => showPage(el.dataset.nav));
+});
+
+/* ---------- Firebase setup ---------- */
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+
+import {
+  getAuth,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  updateProfile
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  serverTimestamp,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  increment,
+  arrayUnion
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA7LCr6HouDusvM0Yot261PvLidOCvG0oY",
+  authDomain: "amigo-world-ebfab.firebaseapp.com",
+  projectId: "amigo-world-ebfab",
+  storageBucket: "amigo-world-ebfab.firebasestorage.app",
+  messagingSenderId: "1071245255296",
+  appId: "1:1071245255296:web:b090d0bb080402a01a3c65"
+};
+
+const fbApp = initializeApp(firebaseConfig);
+const auth  = getAuth(fbApp);
+const db    = getFirestore(fbApp);
+
+/* ---------- helpers ---------- */
+function usernameFromUser (user) {
+  if (!user) return "amigo_user";
+  if (user.displayName) return user.displayName;
+  if (user.email) return user.email.split("@")[0];
+  return "amigo_user";
+}
+
+function escapeHTML (str = "") {
+  return str.replace(/[&<>"']/g, m => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[m]));
+}
+
+function categoryLabel (cat) {
+  switch (cat) {
+    case "trends": return "🔥 Trends";
+    case "memes":  return "😂 Memes";
+    case "music":  return "🎵 Music";
+    case "videos": return "🎬 Videos";
+    case "audio":  return "🎤 Audio";
+    case "comics": return "🎨 Comics";
+    case "chats":  return "💬 Chats";
+    default:       return cat;
+  }
+}
+
+/* helper to read a File -> dataURL (for inline image store) */
+function readFileAsDataURL (file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result);
+    reader.onerror = (e) => reject(e);
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---------- auth UI refs ---------- */
+const loginEmail    = qs("#login-email");
+const loginPassword = qs("#login-password");
+const loginBtn      = qs("#login-btn");
+const signupBtn     = qs("#go-signup");
+const logoutBtn     = qs("#logout-btn");
+
+const profileName  = qs("#profile-name");
+const profileEmail = qs("#profile-email");
+const profileMood  = qs("#profile-mood");
+const profileBioEl = qs("#profile-bio");
+
+const chatUsername = qs("#chat-username");
+
+const editProfileBtn = qs("#edit-profile-btn");
+const switchMoodBtn  = qs("#switch-mood-btn");
+
+/* ---------- auth logic ---------- */
+loginBtn?.addEventListener("click", async () => {
+  const email = loginEmail.value.trim();
+  const pass  = loginPassword.value.trim();
+  if (!email || !pass) {
+    alert("Type email and password first 🙂");
+    return;
+  }
+  try {
+    await signInWithEmailAndPassword(auth, email, pass);
+  } catch (err) {
+    console.error(err);
+    alert("Login failed: " + err.message);
+  }
+});
+
+signupBtn?.addEventListener("click", async () => {
+  const email = loginEmail.value.trim();
+  const pass  = loginPassword.value.trim();
+  if (!email || !pass) {
+    alert("To sign up, type email + password first 🤝");
+    return;
+  }
+  try {
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    await updateProfile(cred.user, { displayName: email.split("@")[0] });
+  } catch (err) {
+    console.error(err);
+    alert("Signup failed: " + err.message);
+  }
+});
+
+logoutBtn?.addEventListener("click", async () => {
+  try { await signOut(auth); } catch (err) { console.error(err); }
+});
+
+/* ---------- XP / tasks / profile ---------- */
+let xp = 0;
+let level = 1;
+let streak = 0;
+const XP_PER_LEVEL = 100;
+
+const TASKS = [
+  { emoji: "💧", text: "Drink water & stop being dusty", xp: 10 },
+  { emoji: "🔥", text: "Pray before scrolling", xp: 15 },
+  { emoji: "👀", text: "Study small, your future dey look you", xp: 20 },
+  { emoji: "❤️", text: "Text someone nice today", xp: 10 }
+];
+
+const xpFill        = qs("#xp-fill");
+const xpText        = qs("#xp-text");
+const levelBadge    = qs("#level-badge");
+const streakDisplay = qs("#streak-display");
+
+const profileLevel  = qs("#profile-level");
+const profileXP     = qs("#profile-xp");
+const profileStreak = qs("#profile-streak");
+
+function updateXPUI () {
+  const currentLevelXP = xp % XP_PER_LEVEL;
+  const pct = Math.min(100, (currentLevelXP / XP_PER_LEVEL) * 100);
+
+  if (xpFill) xpFill.style.width = `${pct}%`;
+  if (xpText) xpText.textContent = `${currentLevelXP} / ${XP_PER_LEVEL} XP`;
+
+  if (levelBadge)    levelBadge.textContent    = `Lv. ${level} – Chaos Rookie`;
+  if (streakDisplay) streakDisplay.textContent = `🔥 x${streak}`;
+
+  if (profileLevel)  profileLevel.textContent  = level;
+  if (profileXP)     profileXP.textContent     = xp;
+  if (profileStreak) profileStreak.textContent = `🔥 x${streak}`;
+}
+
+function loadTasks () {
+  const taskList = qs("#task-list");
+  if (!taskList) return;
+  taskList.innerHTML = "";
+  TASKS.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "task-card";
+    div.innerHTML = `
+      <div class="t-left">
+        <span class="t-emoji">${t.emoji}</span>
+        <div class="t-text">${t.text}</div>
+      </div>
+      <div class="t-right">
+        <div class="t-xp">+${t.xp}XP</div>
+        <button class="glow-btn mini task-done-btn" data-xp="${t.xp}">Done</button>
+      </div>
+    `;
+    taskList.appendChild(div);
+  });
+}
+
+qs("#task-list")?.addEventListener("click", e => {
+  const btn = e.target.closest(".task-done-btn");
+  if (!btn) return;
+  const add = parseInt(btn.dataset.xp || "0", 10);
+  xp += add;
+  if (xp >= level * XP_PER_LEVEL) level++;
+  streak++;
+  updateXPUI();
+  btn.disabled = true;
+  btn.textContent = "Done ✅";
+});
+
+/* ---------- Profile: edit name + bio + mood ---------- */
+
+const MOODS = [
+  "Bubble Electric",
+  "Soft Focus",
+  "Chaos Sunny",
+  "Study Mode",
+  "Calm Night"
+];
+let moodIndex = 0;
+
+// keep bio locally for now
+function loadLocalBio (user) {
+  if (!user || !profileBioEl) return;
+  const key = `amigoProfile:${user.uid}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    if (data.bio) {
+      profileBioEl.textContent = data.bio;
+    }
+  } catch (_) {}
+}
+function saveLocalBio (user, bio) {
+  if (!user) return;
+  const key = `amigoProfile:${user.uid}`;
+  localStorage.setItem(key, JSON.stringify({ bio }));
+}
+
+editProfileBtn?.addEventListener("click", async () => {
+  if (!currentUser) {
+    showPage("auth");
+    return;
+  }
+  const currentName = usernameFromUser(currentUser);
+  const newName = prompt("Change your @name", currentName);
+  if (!newName || !newName.trim()) return;
+
+  const newBio = prompt("Write a short bio (optional)", profileBioEl?.textContent || "");
+  try {
+    await updateProfile(currentUser, { displayName: newName.trim() });
+    if (profileName)  profileName.textContent  = "@" + newName.trim();
+    if (chatUsername) chatUsername.textContent = "@" + newName.trim();
+    if (profileBioEl) {
+      const bioText = newBio && newBio.trim()
+        ? newBio.trim()
+        : "No bio yet. Tap edit profile to add one.";
+      profileBioEl.textContent = bioText;
+      saveLocalBio(currentUser, bioText);
+    }
+  } catch (err) {
+    console.error(err);
+    alert("Couldn't update profile: " + err.message);
+  }
+});
+
+switchMoodBtn?.addEventListener("click", () => {
+  moodIndex = (moodIndex + 1) % MOODS.length;
+  const mood = MOODS[moodIndex];
+  if (profileMood) profileMood.textContent = mood;
+});
+
+/* ---------- feed / posts ---------- */
+const postText     = qs("#post-text");
+const postCategory = qs("#post-category");
+const postBtn      = qs("#post-btn");
+const postImage    = qs("#post-image");
+const feedList     = qs("#feed-list");
+
+const profilePostsList  = qs("#profile-posts-list");
+const profilePostsEmpty = qs("#profile-posts-empty");
+
+let activeTab  = "trends";
+let postsCache = [];
+
+const postsCol = collection(db, "posts");
+const REACTION_TYPES = ["heart", "lol", "wow", "cry", "fire"];
+
+/* create / upload post (image stored as dataURL inside Firestore) */
+postBtn?.addEventListener("click", async () => {
+  if (!currentUser) {
+    showPage("auth");
+    return;
+  }
+
+  const text = (postText.value || "").trim();
+  const category = postCategory.value || "trends";
+  const file = postImage?.files[0];
+
+  if (!text && !file) return;
+
+  const authorName = usernameFromUser(currentUser);
+
+  const baseReactions = {};
+  const baseReacted = {};
+  REACTION_TYPES.forEach(t => {
+    baseReactions[t] = 0;
+    baseReacted[t] = [];
+  });
+
+  let imageDataUrl = null;
+  if (file) {
+    try {
+      imageDataUrl = await readFileAsDataURL(file);
+    } catch (err) {
+      console.error("Image read error, will save text only:", err);
+    }
+  }
+
+  try {
+    await addDoc(postsCol, {
+      text,
+      category,
+      authorId: currentUser.uid,
+      authorName,
+      createdAt: serverTimestamp(),
+      reactions: baseReactions,
+      reacted: baseReacted,
+      commentsCount: 0,
+      imageDataUrl: imageDataUrl || null
+    });
+
+    postText.value = "";
+    if (postCategory) postCategory.value = "trends";
+    if (postImage) postImage.value = "";
+  } catch (err) {
+    console.error(err);
+    alert("Failed to drop chaos: " + err.message);
+  }
+});
+
+/* tabs -> filter feed only (chat page is separate) */
+qsa(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    qsa(".tab").forEach(t => t.classList.remove("active"));
+    tab.classList.add("active");
+    activeTab = tab.dataset.tab;
+    renderFeed();
+  });
+});
+
+function renderFeed () {
+  if (!feedList) return;
+  feedList.innerHTML = "";
+
+  let items = postsCache.slice(); // copy
+
+  if (activeTab && activeTab !== "all") {
+    items = items.filter(p => p.category === activeTab);
+  }
+
+  if (!items.length) {
+    feedList.innerHTML = `<p class="empty-hint">No chaos yet. Be the first to drop a post 🌀</p>`;
+    renderProfilePosts(); // keep profile synced
+    return;
+  }
+
+  items.forEach(post => {
+    const card = document.createElement("article");
+    card.className = "holo-card";
+    card.dataset.id = post.id;
+    card.dataset.category = post.category;
+
+    const createdAt = post.createdAt?.toDate
+      ? post.createdAt.toDate()
+      : (post.createdAt instanceof Date ? post.createdAt : new Date());
+    const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    const r = post.reactions || {};
+    const getR = (k) => r[k] || 0;
+
+    const imgSrc = post.imageUrl || post.imageDataUrl || null;
+
+    card.innerHTML = `
+      <div class="card-info">
+        <div class="meta">
+          <span class="creator">@${escapeHTML(post.authorName || "amigo_user")}</span>
+          <span class="category">${categoryLabel(post.category)}</span>
+        </div>
+
+        <p class="content">${escapeHTML(post.text || "")}</p>
+
+        ${imgSrc ? `
+        <div class="card-media">
+          <img src="${imgSrc}" alt="">
+        </div>` : ""}
+
+        <div class="meta" style="margin-top:4px;">
+          <span class="time">${timeStr}</span>
+        </div>
+
+        <div class="reactions" data-post-id="${post.id}">
+          <button class="reaction-btn" data-type="heart">❤️ <span>${getR("heart")}</span></button>
+          <button class="reaction-btn" data-type="lol">😂 <span>${getR("lol")}</span></button>
+          <button class="reaction-btn" data-type="wow">🤯 <span>${getR("wow")}</span></button>
+          <button class="reaction-btn" data-type="cry">😭 <span>${getR("cry")}</span></button>
+          <button class="reaction-btn" data-type="fire">🔥 <span>${getR("fire")}</span></button>
+        </div>
+
+        <div class="comments">
+          <button class="comment-toggle" data-post-id="${post.id}">
+            💬 Comments (<span class="comment-count">${post.commentsCount || 0}</span>)
+          </button>
+          <div class="comments-panel" data-post-id="${post.id}" style="display:none;">
+            <div class="comments-list"></div>
+            <div class="comments-input-row">
+              <input type="text" placeholder="Drop a comment..." />
+              <button class="glow-btn mini comment-send-btn">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    feedList.appendChild(card);
+  });
+
+  // also refresh profile posts whenever feed renders
+  renderProfilePosts();
+}
+
+/* ---------- profile: show user's own posts ---------- */
+
+function renderProfilePosts () {
+  if (!profilePostsList || !profilePostsEmpty) return;
+
+  if (!currentUser) {
+    profilePostsList.innerHTML = "";
+    profilePostsEmpty.textContent = "Log in to see your posts.";
+    profilePostsEmpty.style.display = "block";
+    return;
+  }
+
+  const myPosts = postsCache.filter(p => p.authorId === currentUser.uid);
+
+  if (!myPosts.length) {
+    profilePostsList.innerHTML = "";
+    profilePostsEmpty.textContent =
+      "You haven't dropped any chaos yet. Go to Home and make your first post 🔥";
+    profilePostsEmpty.style.display = "block";
+    return;
+  }
+
+  profilePostsEmpty.style.display = "none";
+  profilePostsList.innerHTML = "";
+
+  myPosts.forEach(post => {
+    const li = document.createElement("li");
+    li.className = "profile-post-row";
+    const createdAt = post.createdAt?.toDate
+      ? post.createdAt.toDate()
+      : (post.createdAt instanceof Date ? post.createdAt : new Date());
+    const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+    li.innerHTML = `
+      <div class="profile-post-main">
+        <div class="profile-post-text">${escapeHTML(post.text || "")}</div>
+        <div class="profile-post-meta">
+          <span>${categoryLabel(post.category)}</span>
+          <span>${timeStr}</span>
+        </div>
+      </div>
+    `;
+    profilePostsList.appendChild(li);
+  });
+}
+
+/* ---------- reactions + comments (feed) ---------- */
+
+async function handleReaction (postId, type) {
+  try {
+    const post = postsCache.find(p => p.id === postId);
+    if (!post || !currentUser) return;
+
+    const reactedMap = post.reacted || {};
+    const already = (reactedMap[type] || []).includes(currentUser.uid);
+    if (already) return; // only once per emoji type
+
+    const ref = doc(db, "posts", postId);
+    await updateDoc(ref, {
+      [`reactions.${type}`]: increment(1),
+      [`reacted.${type}`]: arrayUnion(currentUser.uid)
+    });
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function subscribeComments (postId, panel) {
+  const listEl = qs(".comments-list", panel);
+  if (!listEl) return;
+
+  listEl.innerHTML = `<p class="empty-hint">Loading comments…</p>`;
+
+  const commentsCol = collection(db, "posts", postId, "comments");
+  const commentsQ   = query(commentsCol, orderBy("createdAt", "asc"));
+
+  onSnapshot(commentsQ, snap => {
+    listEl.innerHTML = "";
+    if (snap.empty) {
+      listEl.innerHTML = `<p class="empty-hint">No comments yet.</p>`;
+      return;
+    }
+    snap.forEach(docSnap => {
+      const c = docSnap.data();
+      const div = document.createElement("div");
+      div.className = "comment";
+      const createdAt = c.createdAt?.toDate ? c.createdAt.toDate() : new Date();
+      const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      div.innerHTML = `
+        <span class="comment-author">@${escapeHTML(c.authorName || "user")}</span>
+        <span class="comment-text">${escapeHTML(c.text || "")}</span>
+        <span class="comment-time">${timeStr}</span>
+      `;
+      listEl.appendChild(div);
+    });
+  });
+}
+
+async function addComment (postId, text) {
+  if (!currentUser) return;
+  const authorName = usernameFromUser(currentUser);
+
+  const commentsCol = collection(db, "posts", postId, "comments");
+  await addDoc(commentsCol, {
+    text,
+    authorId: currentUser.uid,
+    authorName,
+    createdAt: serverTimestamp()
+  });
+
+  const ref = doc(db, "posts", postId);
+  await updateDoc(ref, { commentsCount: increment(1) });
+}
+
+feedList?.addEventListener("click", async (e) => {
+  const reactionBtn = e.target.closest(".reaction-btn");
+  if (reactionBtn) {
+    if (!currentUser) {
+      showPage("auth");
+      return;
+    }
+    const type   = reactionBtn.dataset.type;
+    const postId = reactionBtn.closest(".reactions").dataset.postId;
+    await handleReaction(postId, type);
+    return;
+  }
+
+  const toggle = e.target.closest(".comment-toggle");
+  if (toggle) {
+    const postId = toggle.dataset.postId;
+    const panel  = qs(`.comments-panel[data-post-id="${postId}"]`, feedList);
+    if (!panel) return;
+    const open = panel.style.display === "block";
+    panel.style.display = open ? "none" : "block";
+    if (!open) subscribeComments(postId, panel);
+    return;
+  }
+
+  const sendBtn = e.target.closest(".comment-send-btn");
+  if (sendBtn) {
+    if (!currentUser) {
+      showPage("auth");
+      return;
+    }
+    const panel = sendBtn.closest(".comments-panel");
+    const input = qs("input", panel);
+    const text  = input.value.trim();
+    if (!text) return;
+    const postId = panel.dataset.postId;
+    await addComment(postId, text);
+    input.value = "";
+  }
+});
+
+/* live posts listener – ordered by created time (newest first) */
+const postsQ = query(postsCol, orderBy("createdAt", "desc"));
+onSnapshot(postsQ, snap => {
+  const arr = [];
+  snap.forEach(docSnap => arr.push({ id: docSnap.id, ...docSnap.data() }));
+  postsCache = arr;
+  renderFeed();
+});
+
+/* ---------- global chat ---------- */
+const chatWindow  = qs("#chat-window");
+const chatInput   = qs("#chat-input");
+const chatSendBtn = qs("#chat-send-btn");
+
+const chatCol = collection(db, "globalChat");
+const chatQ   = query(chatCol, orderBy("createdAt", "asc"));
+
+onSnapshot(chatQ, snap => {
+  if (!chatWindow) return;
+  chatWindow.innerHTML = "";
+  if (snap.empty) {
+    chatWindow.innerHTML = `<p class="empty-hint">No messages yet. Say hi 👋</p>`;
+    return;
+  }
+  snap.forEach(docSnap => {
+    const m = docSnap.data();
+    const isMe = currentUser && m.authorId === currentUser.uid;
+    const div = document.createElement("div");
+    div.className = "message " + (isMe ? "me" : "other");
+    const createdAt = m.createdAt?.toDate ? m.createdAt.toDate() : new Date();
+    const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    div.innerHTML = `
+      <div class="bubble">
+        <strong>${escapeHTML(m.authorName || "")}:</strong>
+        ${escapeHTML(m.text || "")}
+        <br>
+        <span style="font-size:10px;opacity:0.7;">${timeStr}</span>
+      </div>
+    `;
+    chatWindow.appendChild(div);
+  });
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+});
+
+async function sendChatMessage () {
+  if (!currentUser) {
+    showPage("auth");
+    return;
+  }
+  const text = (chatInput.value || "").trim();
+  if (!text) return;
+
+  const authorName = usernameFromUser(currentUser);
+
+  try {
+    await addDoc(chatCol, {
+      text,
+      authorId: currentUser.uid,
+      authorName,
+      createdAt: serverTimestamp()
+    });
+    chatInput.value = "";
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+chatSendBtn?.addEventListener("click", sendChatMessage);
+chatInput?.addEventListener("keydown", e => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    sendChatMessage();
+  }
+});
+
+/* ---------- palette + notif buttons ---------- */
+qsa('[data-open="palette"]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    gsap.to(".bg-auras", {
+      filter: "blur(90px)",
+      duration: 0.3,
+      yoyo: true,
+      repeat: 1
+    });
+  });
+});
+
+qsa('[data-open="notif"]').forEach(btn => {
+  btn.addEventListener("click", () => {
+    const ping = document.createElement("div");
+    ping.textContent = "✨ New chaos drop!";
+    ping.style.position = "absolute";
+    ping.style.right = "12px";
+    ping.style.top = "60px";
+    ping.style.padding = "8px 12px";
+    ping.style.border = "1px solid rgba(255,255,255,0.18)";
+    ping.style.borderRadius = "12px";
+    ping.style.background =
+      "linear-gradient(90deg, rgba(255,63,216,0.35), rgba(0,245,160,0.25))";
+    ping.style.zIndex = "999";
+    document.body.appendChild(ping);
+    gsap.to(ping, {
+      y: -12,
+      opacity: 0,
+      duration: 1.8,
+      delay: 1,
+      onComplete: () => ping.remove()
+    });
+  });
+});
+
+/* ---------- auth state listener ---------- */
+onAuthStateChanged(auth, (user) => {
+  currentUser = user || null;
+
+  if (user) {
+    const uname = usernameFromUser(user);
+    if (profileName)  profileName.textContent  = "@" + uname;
+    if (profileEmail) profileEmail.textContent = user.email || "";
+    if (chatUsername) chatUsername.textContent = "@" + uname;
+    if (profileMood)  profileMood.textContent  = MOODS[moodIndex];
+
+    loadLocalBio(user);
+
+    loadTasks();
+    updateXPUI();
+    renderProfilePosts();
+    showPage("home");
+  } else {
+    if (profileName)  profileName.textContent  = "@amigo_user";
+    if (profileEmail) profileEmail.textContent = "you@vibes.com";
+    if (profileMood)  profileMood.textContent  = "Unknown";
+    if (profileBioEl) profileBioEl.textContent = "No bio yet. Tap edit profile to add one.";
+    renderProfilePosts();
+    showPage("landing");
+  }
+});
+
+/* ---------- start ---------- */
+showPage("landing");
