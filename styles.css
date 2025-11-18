@@ -22,6 +22,7 @@ html,body{
   background:var(--bg);
   color:var(--text);
   font-family:Inter,system-ui,Arial,sans-serif;
+  -webkit-text-size-adjust: 100%;
 }
 
 body{
@@ -887,4 +888,38 @@ button:active{transform:scale(0.98)}
 .profile-post-card .pp-text{
   word-wrap:break-word;
 }
+/* Auth inputs */
+.field input{
+  background:rgba(0,0,0,0.25);
+  border:1px solid rgba(255,255,255,0.2);
+  border-radius:14px;
+  color:var(--text);
+  padding:12px;
+  font-size:16px;           /* 👈 important */
+}
 
+/* Post composer */
+.composer textarea{
+  width:100%;
+  min-height:70px;
+  resize:none;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(0,0,0,0.35);
+  color:var(--text);
+  padding:8px 10px;
+  font-family:inherit;
+  font-size:16px;           /* 👈 important */
+}
+
+/* Chat input – this is the one in your screenshot */
+.chat-input input{
+  flex:1;
+  height:40px;
+  border-radius:12px;
+  border:1px solid var(--border);
+  background:rgba(0,0,0,0.25);
+  color:#fff;
+  padding:0 10px;
+  font-size:16px;           /* 👈 important */
+}

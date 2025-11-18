@@ -772,6 +772,13 @@ onAuthStateChanged(auth, (user) => {
     showPage("landing");
   }
 });
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/sw.js")
+      .catch((err) => console.log("SW registration failed", err));
+  });
+}
 
 /* ---------- start ---------- */
 showPage("landing");

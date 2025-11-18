@@ -2,12 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  />
   <title>AMIGO WORLD</title>
+
+  <!-- Icons for browser tab + iPhone home screen -->
+  <link rel="icon" type="image/png" href="amigo_logo.png">
+  <link rel="apple-touch-icon" href="amigo_logo.png">
+
+  <!-- PWA manifest (for Android/desktop install) -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Make it behave like an “app” on mobile -->
+  <meta name="theme-color" content="#050510">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Changa+One:wght@400&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Changa+One:wght@400&family=Inter:wght@400;600;800&display=swap"
+    rel="stylesheet"
+  >
 
   <!-- Styles -->
   <link rel="stylesheet" href="styles.css">
@@ -261,11 +279,10 @@
           </div>
         </div>
       </section>
-    </main> <!-- 🔥 THIS WAS MISSING BEFORE -->
+    </main>
 
     <!-- Bottom navigation -->
     <nav class="bottom-nav">
-      <!-- main buttons -->
       <button class="nav-btn active" data-nav="home">🏠</button>
       <button class="nav-btn" data-nav="home">📱</button>
       <button class="nav-btn" data-nav="tasks">🔥</button>
@@ -277,4 +294,3 @@
   <script type="module" src="app.js"></script>
 </body>
 </html>
-

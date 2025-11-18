@@ -1,0 +1,20 @@
+{
+  "name": "AMIGO WORLD",
+  "short_name": "AMIGO",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#050510",
+  "theme_color": "#050510",
+  "icons": [
+    {
+      "src": "amigo_logo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "amigo_logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
