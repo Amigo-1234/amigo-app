@@ -779,6 +779,28 @@ if ("serviceWorker" in navigator) {
       .catch((err) => console.log("SW registration failed", err));
   });
 }
+// ===== IMAGE VIEWER LOGIC =====
+const viewer = document.getElementById('image-viewer');
+const viewerImg = document.getElementById('image-viewer-img');
+const viewerClose = document.getElementById('image-viewer-close');
+const viewerBackdrop = document.querySelector('.image-viewer-backdrop');
+
+// open when any .post-image is tapped
+document.addEventListener('click', (e) => {
+  const img = e.target.closest('.post-image');
+  if (!img) return;
+
+  viewerImg.src = img.src;
+  viewer.classList.add('show');
+});
+
+// close on X or backdrop
+[viewerClose, viewerBackdrop].forEach(el => {
+  el.addEventListener('click', () => {
+    viewer.classList.remove('show');
+    viewerImg.src = '';
+  });
+});
 
 /* ---------- start ---------- */
 showPage("landing");

@@ -17,7 +17,7 @@
   box-sizing:border-box;
 }
 
-html,body{
+html, body{
   height:100%;
   background:var(--bg);
   color:var(--text);
@@ -923,4 +923,49 @@ button:active{transform:scale(0.98)}
   color:#fff;
   padding:0 10px;
   font-size:16px;           /* 👈 important */
+}
+/* ===== IMAGE VIEWER (LIGHTBOX) ===== */
+
+.image-viewer{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,0.85);
+  z-index:999;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .2s ease;
+}
+
+.image-viewer.show{
+  opacity:1;
+  pointer-events:auto;
+}
+
+.image-viewer-backdrop{
+  position:absolute;
+  inset:0;
+}
+
+.image-viewer img{
+  position:relative;
+  max-width:90vw;
+  max-height:90vh;
+  border-radius:18px;
+  box-shadow:0 18px 40px rgba(0,0,0,0.6);
+}
+
+#image-viewer-close{
+  position:absolute;
+  top:env(safe-area-inset-top, 12px);
+  right:16px;
+  border:none;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:16px;
+  background:rgba(0,0,0,0.55);
+  color:#fff;
+  cursor:pointer;
 }
