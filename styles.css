@@ -969,3 +969,21 @@ button:active{transform:scale(0.98)}
   color:#fff;
   cursor:pointer;
 }
+/* ===== WEB AD SLOT (for AdSense) ===== */
+
+.web-ad-slot{
+  margin: 8px auto 16px;
+  max-width: 900px;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+/* temporary placeholder while we don't have real ads yet */
+.web-ad-placeholder{
+  background: linear-gradient(90deg, #ff3fd81f, rgba(0,245,160,0.12));
+  border: 1px dashed rgba(255,255,255,0.28);
+  padding: 10px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
