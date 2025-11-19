@@ -416,7 +416,6 @@ function renderFeed () {
     renderProfilePosts(); // keep profile synced
     return;
   }
-
   items.forEach(post => {
     const card = document.createElement("article");
     card.className = "holo-card";
@@ -444,7 +443,7 @@ function renderFeed () {
 
         ${imgSrc ? `
         <div class="card-media">
-          <img src="${imgSrc}" alt="">
+          <img src="${imgSrc}" alt="Post image" class="post-image">
         </div>` : ""}
 
         <div class="meta" style="margin-top:4px;">
@@ -772,6 +771,8 @@ onAuthStateChanged(auth, (user) => {
     showPage("landing");
   }
 });
+
+/* ---------- service worker (PWA) ---------- */
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker
@@ -779,26 +780,29 @@ if ("serviceWorker" in navigator) {
       .catch((err) => console.log("SW registration failed", err));
   });
 }
-// ===== IMAGE VIEWER LOGIC =====
-const viewer = document.getElementById('image-viewer');
-const viewerImg = document.getElementById('image-viewer-img');
-const viewerClose = document.getElementById('image-viewer-close');
-const viewerBackdrop = document.querySelector('.image-viewer-backdrop');
+
+/* ---------- IMAGE VIEWER LOGIC ---------- */
+const viewer         = qs("#image-viewer");
+const viewerImg      = qs("#image-viewer-img");
+const viewerClose    = qs("#image-viewer-close");
+const viewerBackdrop = qs(".image-viewer-backdrop");
 
 // open when any .post-image is tapped
-document.addEventListener('click', (e) => {
-  const img = e.target.closest('.post-image');
+document.addEventListener("click", (e) => {
+  if (!viewer || !viewerImg) return;
+  const img = e.target.closest(".post-image");
   if (!img) return;
 
   viewerImg.src = img.src;
-  viewer.classList.add('show');
+  viewer.classList.add("show");
 });
 
 // close on X or backdrop
 [viewerClose, viewerBackdrop].forEach(el => {
-  el.addEventListener('click', () => {
-    viewer.classList.remove('show');
-    viewerImg.src = '';
+  if (!el) return;
+  el.addEventListener("click", () => {
+    viewer.classList.remove("show");
+    viewerImg.src = "";
   });
 });
 
