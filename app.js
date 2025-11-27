@@ -145,7 +145,7 @@ const logoutBtn     = qs("#logout-btn");
 
 const profileName  = qs("#profile-name");
 const profileEmail = qs("#profile-email");
-const profileMood  = qs("#profile-mood");
+const profileMood  = qs("#profile-mood"); // optional in HTML
 const profileBioEl = qs("#profile-bio");
 
 const chatUsername = qs("#chat-username");
@@ -164,8 +164,8 @@ loginBtn?.addEventListener("click", async () => {
   try {
     await signInWithEmailAndPassword(auth, email, pass);
   } catch (err) {
-    console.error(err);
-    alert("Login failed: " + err.message);
+    console.error("LOGIN ERROR", err);
+    alert(`Login failed: ${err.code} - ${err.message}`);
   }
 });
 
@@ -179,14 +179,19 @@ signupBtn?.addEventListener("click", async () => {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(cred.user, { displayName: email.split("@")[0] });
+    alert("Account created, now logged in ✅");
   } catch (err) {
-    console.error(err);
-    alert("Signup failed: " + err.message);
+    console.error("SIGNUP ERROR", err);
+    alert(`Signup failed: ${err.code} - ${err.message}`);
   }
 });
 
 logoutBtn?.addEventListener("click", async () => {
-  try { await signOut(auth); } catch (err) { console.error(err); }
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.error(err);
+  }
 });
 
 /* ---------- XP / tasks / profile ---------- */
@@ -322,7 +327,7 @@ switchMoodBtn?.addEventListener("click", () => {
   if (profileMood) profileMood.textContent = mood;
 });
 
-/* ---------- feed / posts ---------- */
+/* ---------- FEED / POSTS ---------- */
 const postText     = qs("#post-text");
 const postCategory = qs("#post-category");
 const postBtn      = qs("#post-btn");
@@ -335,10 +340,84 @@ const profilePostsEmpty = qs("#profile-posts-empty");
 let activeTab  = "trends";
 let postsCache = [];
 
-const postsCol = collection(db, "posts");
+const postsCol  = collection(db, "posts");
 const REACTION_TYPES = ["heart", "lol", "wow", "cry", "fire"];
 
-/* create / upload post (image stored as dataURL inside Firestore) */
+/* ---------- FRIENDS (LOCAL STORAGE) ---------- */
+
+let friends = []; // [{id, name}]
+
+const friendsListEl = qs("#friends-list");
+const friendsHintEl = qs("#friends-hint");
+
+function friendsKeyForUser (user) {
+  return `amigoFriends:${user.uid}`;
+}
+
+function loadFriends (user) {
+  friends = [];
+  if (!user) {
+    renderFriendsStrip();
+    return;
+  }
+  try {
+    const raw = localStorage.getItem(friendsKeyForUser(user));
+    if (raw) friends = JSON.parse(raw);
+  } catch (err) {
+    console.error("Failed to load friends", err);
+    friends = [];
+  }
+  renderFriendsStrip();
+}
+
+function saveFriends () {
+  if (!currentUser) return;
+  try {
+    localStorage.setItem(friendsKeyForUser(currentUser), JSON.stringify(friends));
+  } catch (err) {
+    console.error("Failed to save friends", err);
+  }
+}
+
+function renderFriendsStrip () {
+  if (!friendsListEl || !friendsHintEl) return;
+
+  friendsListEl.innerHTML = "";
+
+  if (!currentUser) {
+    friendsHintEl.textContent = "Log in to start adding friends ⭐";
+    return;
+  }
+
+  if (!friends.length) {
+    friendsHintEl.textContent =
+      "You don’t have any friends yet. Tap ☆ Friend on a post to save them here 📌";
+    return;
+  }
+
+  friendsHintEl.textContent = "People you’ve starred as friends";
+
+  friends.forEach(f => {
+    const pill = document.createElement("button");
+    pill.className = "friend-pill";
+    const initial = (f.name || "?").charAt(0).toUpperCase();
+    pill.innerHTML = `
+      <div class="friend-avatar">${escapeHTML(initial)}</div>
+      <div class="friend-name">@${escapeHTML(f.name || "amigo")}</div>
+    `;
+    friendsListEl.appendChild(pill);
+  });
+}
+
+function addFriend (id, name) {
+  if (!id) return;
+  if (friends.some(f => f.id === id)) return;
+  friends.push({ id, name });
+  saveFriends();
+  renderFriendsStrip();
+}
+
+/* ---------- create / upload post ---------- */
 postBtn?.addEventListener("click", async () => {
   if (!currentUser) {
     showPage("auth");
@@ -391,7 +470,7 @@ postBtn?.addEventListener("click", async () => {
   }
 });
 
-/* tabs -> filter feed only (chat page is separate) */
+/* tabs -> filter feed only */
 qsa(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
     qsa(".tab").forEach(t => t.classList.remove("active"));
@@ -416,6 +495,7 @@ function renderFeed () {
     renderProfilePosts(); // keep profile synced
     return;
   }
+
   items.forEach(post => {
     const card = document.createElement("article");
     card.className = "holo-card";
@@ -432,11 +512,25 @@ function renderFeed () {
 
     const imgSrc = post.imageUrl || post.imageDataUrl || null;
 
+    const rawName  = post.authorName || "amigo_user";
+    const safeName = escapeHTML(rawName);
+
+    const showFriendBtn = currentUser && post.authorId && currentUser.uid !== post.authorId;
+    const isFriend      = showFriendBtn && friends.some(f => f.id === post.authorId);
+    const friendHtml    = showFriendBtn
+      ? `<button class="friend-btn"
+                  data-author-id="${post.authorId}"
+                  data-author-name="${safeName}">
+           ${isFriend ? "⭐ Friend" : "☆ Friend"}
+         </button>`
+      : "";
+
     card.innerHTML = `
       <div class="card-info">
         <div class="meta">
-          <span class="creator">@${escapeHTML(post.authorName || "amigo_user")}</span>
+          <span class="creator">@${safeName}</span>
           <span class="category">${categoryLabel(post.category)}</span>
+          ${friendHtml}
         </div>
 
         <p class="content">${escapeHTML(post.text || "")}</p>
@@ -476,7 +570,7 @@ function renderFeed () {
     feedList.appendChild(card);
   });
 
-  // also refresh profile posts whenever feed renders
+  // refresh profile posts whenever feed renders
   renderProfilePosts();
 }
 
@@ -595,6 +689,21 @@ async function addComment (postId, text) {
 }
 
 feedList?.addEventListener("click", async (e) => {
+  // friend button
+  const friendBtn = e.target.closest(".friend-btn");
+  if (friendBtn) {
+    if (!currentUser) {
+      showPage("auth");
+      return;
+    }
+    const id   = friendBtn.dataset.authorId;
+    const name = friendBtn.dataset.authorName || "amigo";
+    addFriend(id, name);
+    renderFeed(); // update button state (☆ -> ⭐)
+    return;
+  }
+
+  // reactions
   const reactionBtn = e.target.closest(".reaction-btn");
   if (reactionBtn) {
     if (!currentUser) {
@@ -607,6 +716,7 @@ feedList?.addEventListener("click", async (e) => {
     return;
   }
 
+  // toggle comments
   const toggle = e.target.closest(".comment-toggle");
   if (toggle) {
     const postId = toggle.dataset.postId;
@@ -618,6 +728,7 @@ feedList?.addEventListener("click", async (e) => {
     return;
   }
 
+  // send comment
   const sendBtn = e.target.closest(".comment-send-btn");
   if (sendBtn) {
     if (!currentUser) {
@@ -757,6 +868,7 @@ onAuthStateChanged(auth, (user) => {
     if (profileMood)  profileMood.textContent  = MOODS[moodIndex];
 
     loadLocalBio(user);
+    loadFriends(user);
 
     loadTasks();
     updateXPUI();
@@ -767,6 +879,8 @@ onAuthStateChanged(auth, (user) => {
     if (profileEmail) profileEmail.textContent = "you@vibes.com";
     if (profileMood)  profileMood.textContent  = "Unknown";
     if (profileBioEl) profileBioEl.textContent = "No bio yet. Tap edit profile to add one.";
+    friends = [];
+    renderFriendsStrip();
     renderProfilePosts();
     showPage("landing");
   }

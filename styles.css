@@ -987,3 +987,54 @@ button:active{transform:scale(0.98)}
   font-size: 13px;
   color: var(--muted);
 }
+.friends-block{
+  margin-top:12px;
+  padding:10px;
+  border-radius:12px;
+  background:rgba(0,0,0,0.35);
+  border:1px solid rgba(255,255,255,0.18);
+}
+
+.friends-block h3{
+  margin:0 0 8px 0;
+}
+
+.friends-search{
+  display:flex;
+  gap:8px;
+  margin-bottom:10px;
+}
+
+.friends-search input{
+  flex:1;
+  border-radius:10px;
+  border:1px solid var(--border);
+  background:rgba(0,0,0,0.4);
+  color:var(--text);
+  padding:8px 10px;
+  font-size:14px;
+}
+
+.friends-columns{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.friends-col h4{
+  margin:0 0 4px 0;
+  font-size:13px;
+  color:var(--muted);
+}
+
+.friends-list{
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,0.12);
+  background:rgba(0,0,0,0.35);
+  padding:6px 8px;
+  min-height:40px;
+  font-size:13px;
+}
+
+
+/* later we’ll style each friend row when we add it in JS */

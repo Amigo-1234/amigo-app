@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5330784001821858"
-     crossorigin="anonymous"></script>
+  <!-- Google AdSense (already set up) -->
+  <script async
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5330784001821858"
+    crossorigin="anonymous"></script>
+
   <meta charset="UTF-8" />
   <meta
     name="viewport"
@@ -68,7 +71,7 @@
     </header>
 
     <!-- Main sections -->
-    <main id="pages">
+    <main id="pages" role="main">
       <!-- Landing (used when logged out) -->
       <section id="landing" class="page active">
         <div class="landing-wrap">
@@ -99,10 +102,10 @@
             </div>
 
             <div class="sticker-pile">
-              <img class="sticker bounce" src="sticker_flame.png" alt="">
-              <img class="sticker wobble" src="sticker_heart.png" alt="">
-              <img class="sticker swing" src="sticker_lol.png" alt="">
-              <img class="sticker boing" src="sticker_star.png" alt="">
+              <img class="sticker bounce" src="sticker_flame.png" alt="Flame sticker">
+              <img class="sticker wobble" src="sticker_heart.png" alt="Heart sticker">
+              <img class="sticker swing" src="sticker_lol.png" alt="Laughing sticker">
+              <img class="sticker boing" src="sticker_star.png" alt="Star sticker">
             </div>
           </div>
         </div>
@@ -175,11 +178,21 @@
         </div>
 
         <!-- Web Ad Slot (placeholder for AdSense) -->
-<div class="web-ad-slot">
-  <div class="web-ad-placeholder">
-    <span>Ads space  – AMIGO WORLD</span>
-  </div>
-</div>
+        <div class="web-ad-slot">
+          <div class="web-ad-placeholder">
+            <span>Ads space – AMIGO WORLD</span>
+          </div>
+        </div>
+                <!-- Friends strip -->
+        <section class="friends-strip">
+          <div class="friends-header">
+            <span class="friends-title">Your friends</span>
+            <span class="friends-subtitle" id="friends-hint">
+              You don’t have any friends yet. Tap ☆ Friend on a post to save them here 📌
+            </span>
+          </div>
+          <div class="friends-list" id="friends-list"></div>
+        </section>
         <!-- Feed -->
         <div class="feed" id="feed-list">
           <p class="empty-hint">No chaos yet. Be the first to drop a post 🌀</p>
@@ -242,10 +255,12 @@
             <div class="avatar-glow"></div>
           </div>
 
-          <div class="profile-header-text">
-            <h2 id="profile-name">@amigo_user</h2>
-            <p id="profile-email" class="profile-email">you@vibes.com</p>
-          </div>
+<div class="profile-header-text">
+  <h2 id="profile-name">@amigo_user</h2>
+  <p id="profile-email" class="profile-email">you@vibes.com</p>
+  <!-- add this line -->
+  <p id="profile-mood" class="profile-mood">Unknown</p>
+</div>
 
           <div class="stats">
             <div class="stat">
@@ -290,20 +305,21 @@
     </main>
 
     <!-- Bottom navigation -->
-    <nav class="bottom-nav">
-      <button class="nav-btn active" data-nav="home">🏠</button>
-      <button class="nav-btn" data-nav="home">📱</button>
-      <button class="nav-btn" data-nav="tasks">🔥</button>
-      <button class="nav-btn" data-nav="chat">💬</button>
-      <button class="nav-btn" data-nav="profile">👤</button>
+    <nav class="bottom-nav" role="navigation" aria-label="Primary">
+      <button class="nav-btn active" data-nav="home" aria-label="Home">🏠</button>
+      <button class="nav-btn" data-nav="preview" aria-label="Preview">📱</button>
+      <button class="nav-btn" data-nav="tasks" aria-label="Tasks">🔥</button>
+      <button class="nav-btn" data-nav="chat" aria-label="Chat">💬</button>
+      <button class="nav-btn" data-nav="profile" aria-label="Profile">👤</button>
     </nav>
   </div>
-<!-- Full-screen image viewer -->
-<div id="image-viewer" class="image-viewer">
-  <div class="image-viewer-backdrop"></div>
-  <img id="image-viewer-img" src="" alt="Post image">
-  <button id="image-viewer-close" aria-label="Close image">✕</button>
-</div>
+
+  <!-- Full-screen image viewer -->
+  <div id="image-viewer" class="image-viewer">
+    <div class="image-viewer-backdrop"></div>
+    <img id="image-viewer-img" src="" alt="Post image">
+    <button id="image-viewer-close" aria-label="Close image">✕</button>
+  </div>
 
   <script type="module" src="app.js"></script>
 </body>
