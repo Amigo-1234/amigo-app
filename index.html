@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Google AdSense (already set up) -->
+  <!-- Google AdSense -->
   <script async
     src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5330784001821858"
     crossorigin="anonymous"></script>
@@ -183,19 +183,36 @@
             <span>Ads space – AMIGO WORLD</span>
           </div>
         </div>
-                <!-- Friends strip -->
-        <section class="friends-strip">
-          <div class="friends-header">
-            <span class="friends-title">Your friends</span>
-            <span class="friends-subtitle" id="friends-hint">
-              You don’t have any friends yet. Tap ☆ Friend on a post to save them here 📌
-            </span>
-          </div>
-          <div class="friends-list" id="friends-list"></div>
-        </section>
+
         <!-- Feed -->
         <div class="feed" id="feed-list">
           <p class="empty-hint">No chaos yet. Be the first to drop a post 🌀</p>
+        </div>
+      </section>
+
+      <!-- Friends (separate page) -->
+      <section id="friends" class="page">
+        <div class="friends-page-wrap">
+          <header class="friends-page-header">
+            <h2>Your Friends</h2>
+            <p id="friends-hint" class="friends-subtitle">
+              You don’t have any friends yet. Add or star people to see them here 📌
+            </p>
+          </header>
+
+          <!-- Optional: search bar for future friend search -->
+          <div class="friends-search">
+            <input
+              type="text"
+              id="friends-search-input"
+              placeholder="Search your friends (coming soon)…"
+              disabled
+            />
+          </div>
+
+          <div class="friends-list" id="friends-list">
+            <!-- friend.js will render friend pills/cards here -->
+          </div>
         </div>
       </section>
 
@@ -255,12 +272,11 @@
             <div class="avatar-glow"></div>
           </div>
 
-<div class="profile-header-text">
-  <h2 id="profile-name">@amigo_user</h2>
-  <p id="profile-email" class="profile-email">you@vibes.com</p>
-  <!-- add this line -->
-  <p id="profile-mood" class="profile-mood">Unknown</p>
-</div>
+          <div class="profile-header-text">
+            <h2 id="profile-name">@amigo_user</h2>
+            <p id="profile-email" class="profile-email">you@vibes.com</p>
+            <p id="profile-mood" class="profile-mood">Unknown</p>
+          </div>
 
           <div class="stats">
             <div class="stat">
@@ -307,7 +323,7 @@
     <!-- Bottom navigation -->
     <nav class="bottom-nav" role="navigation" aria-label="Primary">
       <button class="nav-btn active" data-nav="home" aria-label="Home">🏠</button>
-      <button class="nav-btn" data-nav="preview" aria-label="Preview">📱</button>
+      <button class="nav-btn" data-nav="friends" aria-label="Friends">👥</button>
       <button class="nav-btn" data-nav="tasks" aria-label="Tasks">🔥</button>
       <button class="nav-btn" data-nav="chat" aria-label="Chat">💬</button>
       <button class="nav-btn" data-nav="profile" aria-label="Profile">👤</button>
@@ -322,5 +338,6 @@
   </div>
 
   <script type="module" src="app.js"></script>
+  <script type="module" src="friend.js"></script>
 </body>
 </html>

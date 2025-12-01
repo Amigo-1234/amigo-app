@@ -126,12 +126,11 @@ function categoryLabel (cat) {
   }
 }
 
-/* helper to read a File -> dataURL (for inline image store) */
 function readFileAsDataURL (file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload  = () => resolve(reader.result);
-    reader.onerror = (e) => reject(e);
+    reader.onerror = reject;
     reader.readAsDataURL(file);
   });
 }
@@ -145,7 +144,7 @@ const logoutBtn     = qs("#logout-btn");
 
 const profileName  = qs("#profile-name");
 const profileEmail = qs("#profile-email");
-const profileMood  = qs("#profile-mood"); // optional in HTML
+const profileMood  = qs("#profile-mood");
 const profileBioEl = qs("#profile-bio");
 
 const chatUsername = qs("#chat-username");
@@ -153,53 +152,36 @@ const chatUsername = qs("#chat-username");
 const editProfileBtn = qs("#edit-profile-btn");
 const switchMoodBtn  = qs("#switch-mood-btn");
 
-/* ---------- auth logic ---------- */
+/* ---------- login / signup ---------- */
 loginBtn?.addEventListener("click", async () => {
-  const email = loginEmail.value.trim();
-  const pass  = loginPassword.value.trim();
-  if (!email || !pass) {
-    alert("Type email and password first 🙂");
-    return;
-  }
   try {
-    await signInWithEmailAndPassword(auth, email, pass);
+    await signInWithEmailAndPassword(auth, loginEmail.value.trim(), loginPassword.value.trim());
   } catch (err) {
-    console.error("LOGIN ERROR", err);
-    alert(`Login failed: ${err.code} - ${err.message}`);
+    alert(err.message);
   }
 });
 
 signupBtn?.addEventListener("click", async () => {
   const email = loginEmail.value.trim();
   const pass  = loginPassword.value.trim();
-  if (!email || !pass) {
-    alert("To sign up, type email + password first 🤝");
-    return;
-  }
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
     await updateProfile(cred.user, { displayName: email.split("@")[0] });
-    alert("Account created, now logged in ✅");
   } catch (err) {
-    console.error("SIGNUP ERROR", err);
-    alert(`Signup failed: ${err.code} - ${err.message}`);
+    alert(err.message);
   }
 });
 
 logoutBtn?.addEventListener("click", async () => {
-  try {
-    await signOut(auth);
-  } catch (err) {
-    console.error(err);
-  }
+  try { await signOut(auth); } catch {}
 });
 
-/* ---------- XP / tasks / profile ---------- */
+/* ---------- XP / Tasks ---------- */
 let xp = 0;
 let level = 1;
 let streak = 0;
-const XP_PER_LEVEL = 100;
 
+const XP_PER_LEVEL = 100;
 const TASKS = [
   { emoji: "💧", text: "Drink water & stop being dusty", xp: 10 },
   { emoji: "🔥", text: "Pray before scrolling", xp: 15 },
@@ -217,114 +199,76 @@ const profileXP     = qs("#profile-xp");
 const profileStreak = qs("#profile-streak");
 
 function updateXPUI () {
-  const currentLevelXP = xp % XP_PER_LEVEL;
-  const pct = Math.min(100, (currentLevelXP / XP_PER_LEVEL) * 100);
+  const currentXP = xp % XP_PER_LEVEL;
+  const pct = (currentXP / XP_PER_LEVEL) * 100;
 
-  if (xpFill) xpFill.style.width = `${pct}%`;
-  if (xpText) xpText.textContent = `${currentLevelXP} / ${XP_PER_LEVEL} XP`;
+  xpFill.style.width = pct + "%";
+  xpText.textContent = `${currentXP} / ${XP_PER_LEVEL} XP`;
+  levelBadge.textContent = `Lv. ${level}`;
+  streakDisplay.textContent = `🔥 x${streak}`;
 
-  if (levelBadge)    levelBadge.textContent    = `Lv. ${level} – Chaos Rookie`;
-  if (streakDisplay) streakDisplay.textContent = `🔥 x${streak}`;
-
-  if (profileLevel)  profileLevel.textContent  = level;
-  if (profileXP)     profileXP.textContent     = xp;
-  if (profileStreak) profileStreak.textContent = `🔥 x${streak}`;
+  profileLevel.textContent = level;
+  profileXP.textContent = xp;
+  profileStreak.textContent = `🔥 x${streak}`;
 }
 
 function loadTasks () {
-  const taskList = qs("#task-list");
-  if (!taskList) return;
-  taskList.innerHTML = "";
+  const list = qs("#task-list");
+  list.innerHTML = "";
   TASKS.forEach(t => {
     const div = document.createElement("div");
     div.className = "task-card";
     div.innerHTML = `
       <div class="t-left">
         <span class="t-emoji">${t.emoji}</span>
-        <div class="t-text">${t.text}</div>
+        <span class="t-text">${t.text}</span>
       </div>
-      <div class="t-right">
-        <div class="t-xp">+${t.xp}XP</div>
-        <button class="glow-btn mini task-done-btn" data-xp="${t.xp}">Done</button>
-      </div>
+      <button class="glow-btn mini task-done-btn" data-xp="${t.xp}">+${t.xp}XP</button>
     `;
-    taskList.appendChild(div);
+    list.appendChild(div);
   });
 }
 
 qs("#task-list")?.addEventListener("click", e => {
   const btn = e.target.closest(".task-done-btn");
   if (!btn) return;
-  const add = parseInt(btn.dataset.xp || "0", 10);
-  xp += add;
-  if (xp >= level * XP_PER_LEVEL) level++;
+  xp += parseInt(btn.dataset.xp);
   streak++;
-  updateXPUI();
+  if (xp >= level * XP_PER_LEVEL) level++;
   btn.disabled = true;
-  btn.textContent = "Done ✅";
+  btn.textContent = "Done";
+  updateXPUI();
 });
 
-/* ---------- Profile: edit name + bio + mood ---------- */
-
-const MOODS = [
-  "Bubble Electric",
-  "Soft Focus",
-  "Chaos Sunny",
-  "Study Mode",
-  "Calm Night"
-];
+/* ---------- Profile ---------- */
+const MOODS = ["Bubble Electric", "Soft Focus", "Chaos Sunny", "Study Mode", "Calm Night"];
 let moodIndex = 0;
-
-// keep bio locally for now
-function loadLocalBio (user) {
-  if (!user || !profileBioEl) return;
-  const key = `amigoProfile:${user.uid}`;
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return;
-    const data = JSON.parse(raw);
-    if (data.bio) {
-      profileBioEl.textContent = data.bio;
-    }
-  } catch (_) {}
-}
-function saveLocalBio (user, bio) {
-  if (!user) return;
-  const key = `amigoProfile:${user.uid}`;
-  localStorage.setItem(key, JSON.stringify({ bio }));
-}
-
-editProfileBtn?.addEventListener("click", async () => {
-  if (!currentUser) {
-    showPage("auth");
-    return;
-  }
-  const currentName = usernameFromUser(currentUser);
-  const newName = prompt("Change your @name", currentName);
-  if (!newName || !newName.trim()) return;
-
-  const newBio = prompt("Write a short bio (optional)", profileBioEl?.textContent || "");
-  try {
-    await updateProfile(currentUser, { displayName: newName.trim() });
-    if (profileName)  profileName.textContent  = "@" + newName.trim();
-    if (chatUsername) chatUsername.textContent = "@" + newName.trim();
-    if (profileBioEl) {
-      const bioText = newBio && newBio.trim()
-        ? newBio.trim()
-        : "No bio yet. Tap edit profile to add one.";
-      profileBioEl.textContent = bioText;
-      saveLocalBio(currentUser, bioText);
-    }
-  } catch (err) {
-    console.error(err);
-    alert("Couldn't update profile: " + err.message);
-  }
-});
 
 switchMoodBtn?.addEventListener("click", () => {
   moodIndex = (moodIndex + 1) % MOODS.length;
-  const mood = MOODS[moodIndex];
-  if (profileMood) profileMood.textContent = mood;
+  profileMood.textContent = MOODS[moodIndex];
+});
+
+function loadLocalBio(user) {
+  const raw = localStorage.getItem("bio_" + user.uid);
+  if (raw) profileBioEl.textContent = raw;
+}
+
+function saveLocalBio(user, bio) {
+  localStorage.setItem("bio_" + user.uid, bio);
+}
+
+editProfileBtn?.addEventListener("click", async () => {
+  if (!currentUser) return;
+
+  const newName = prompt("Change username", usernameFromUser(currentUser));
+  const newBio  = prompt("Write bio", profileBioEl.textContent);
+
+  if (newName) await updateProfile(currentUser, { displayName: newName });
+  if (newBio) {
+    profileBioEl.textContent = newBio;
+    saveLocalBio(currentUser, newBio);
+  }
 });
 
 /* ---------- FEED / POSTS ---------- */
@@ -340,137 +284,35 @@ const profilePostsEmpty = qs("#profile-posts-empty");
 let activeTab  = "trends";
 let postsCache = [];
 
-const postsCol  = collection(db, "posts");
-const REACTION_TYPES = ["heart", "lol", "wow", "cry", "fire"];
-
-/* ---------- FRIENDS (LOCAL STORAGE) ---------- */
-
-let friends = []; // [{id, name}]
-
-const friendsListEl = qs("#friends-list");
-const friendsHintEl = qs("#friends-hint");
-
-function friendsKeyForUser (user) {
-  return `amigoFriends:${user.uid}`;
-}
-
-function loadFriends (user) {
-  friends = [];
-  if (!user) {
-    renderFriendsStrip();
-    return;
-  }
-  try {
-    const raw = localStorage.getItem(friendsKeyForUser(user));
-    if (raw) friends = JSON.parse(raw);
-  } catch (err) {
-    console.error("Failed to load friends", err);
-    friends = [];
-  }
-  renderFriendsStrip();
-}
-
-function saveFriends () {
-  if (!currentUser) return;
-  try {
-    localStorage.setItem(friendsKeyForUser(currentUser), JSON.stringify(friends));
-  } catch (err) {
-    console.error("Failed to save friends", err);
-  }
-}
-
-function renderFriendsStrip () {
-  if (!friendsListEl || !friendsHintEl) return;
-
-  friendsListEl.innerHTML = "";
-
-  if (!currentUser) {
-    friendsHintEl.textContent = "Log in to start adding friends ⭐";
-    return;
-  }
-
-  if (!friends.length) {
-    friendsHintEl.textContent =
-      "You don’t have any friends yet. Tap ☆ Friend on a post to save them here 📌";
-    return;
-  }
-
-  friendsHintEl.textContent = "People you’ve starred as friends";
-
-  friends.forEach(f => {
-    const pill = document.createElement("button");
-    pill.className = "friend-pill";
-    const initial = (f.name || "?").charAt(0).toUpperCase();
-    pill.innerHTML = `
-      <div class="friend-avatar">${escapeHTML(initial)}</div>
-      <div class="friend-name">@${escapeHTML(f.name || "amigo")}</div>
-    `;
-    friendsListEl.appendChild(pill);
-  });
-}
-
-function addFriend (id, name) {
-  if (!id) return;
-  if (friends.some(f => f.id === id)) return;
-  friends.push({ id, name });
-  saveFriends();
-  renderFriendsStrip();
-}
-
-/* ---------- create / upload post ---------- */
 postBtn?.addEventListener("click", async () => {
-  if (!currentUser) {
-    showPage("auth");
-    return;
-  }
+  if (!currentUser) return;
 
-  const text = (postText.value || "").trim();
-  const category = postCategory.value || "trends";
-  const file = postImage?.files[0];
+  const text = postText.value.trim();
+  const category = postCategory.value;
+  const file = postImage.files[0];
 
   if (!text && !file) return;
 
-  const authorName = usernameFromUser(currentUser);
+  let imageDataUrl = null;
+  if (file) imageDataUrl = await readFileAsDataURL(file);
 
-  const baseReactions = {};
-  const baseReacted = {};
-  REACTION_TYPES.forEach(t => {
-    baseReactions[t] = 0;
-    baseReacted[t] = [];
+  await addDoc(collection(db, "posts"), {
+    text,
+    category,
+    authorId: currentUser.uid,
+    authorName: usernameFromUser(currentUser),
+    createdAt: serverTimestamp(),
+    reactions: { heart:0, lol:0, wow:0, cry:0, fire:0 },
+    reacted: {},
+    commentsCount: 0,
+    imageDataUrl
   });
 
-  let imageDataUrl = null;
-  if (file) {
-    try {
-      imageDataUrl = await readFileAsDataURL(file);
-    } catch (err) {
-      console.error("Image read error, will save text only:", err);
-    }
-  }
-
-  try {
-    await addDoc(postsCol, {
-      text,
-      category,
-      authorId: currentUser.uid,
-      authorName,
-      createdAt: serverTimestamp(),
-      reactions: baseReactions,
-      reacted: baseReacted,
-      commentsCount: 0,
-      imageDataUrl: imageDataUrl || null
-    });
-
-    postText.value = "";
-    if (postCategory) postCategory.value = "trends";
-    if (postImage) postImage.value = "";
-  } catch (err) {
-    console.error(err);
-    alert("Failed to drop chaos: " + err.message);
-  }
+  postText.value = "";
+  postImage.value = "";
+  postCategory.value = "trends";
 });
 
-/* tabs -> filter feed only */
 qsa(".tab").forEach(tab => {
   tab.addEventListener("click", () => {
     qsa(".tab").forEach(t => t.classList.remove("active"));
@@ -481,88 +323,54 @@ qsa(".tab").forEach(tab => {
 });
 
 function renderFeed () {
-  if (!feedList) return;
   feedList.innerHTML = "";
 
-  let items = postsCache.slice(); // copy
-
-  if (activeTab && activeTab !== "all") {
-    items = items.filter(p => p.category === activeTab);
-  }
+  let items = postsCache.filter(p => p.category === activeTab);
 
   if (!items.length) {
-    feedList.innerHTML = `<p class="empty-hint">No chaos yet. Be the first to drop a post 🌀</p>`;
-    renderProfilePosts(); // keep profile synced
+    feedList.innerHTML = `<p class="empty-hint">No chaos yet 🌀</p>`;
     return;
   }
 
   items.forEach(post => {
     const card = document.createElement("article");
     card.className = "holo-card";
-    card.dataset.id = post.id;
-    card.dataset.category = post.category;
 
-    const createdAt = post.createdAt?.toDate
-      ? post.createdAt.toDate()
-      : (post.createdAt instanceof Date ? post.createdAt : new Date());
-    const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const createdAt = post.createdAt?.toDate?.() || new Date();
+    const timeStr = createdAt.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
 
-    const r = post.reactions || {};
-    const getR = (k) => r[k] || 0;
-
-    const imgSrc = post.imageUrl || post.imageDataUrl || null;
-
-    const rawName  = post.authorName || "amigo_user";
-    const safeName = escapeHTML(rawName);
-
-    const showFriendBtn = currentUser && post.authorId && currentUser.uid !== post.authorId;
-    const isFriend      = showFriendBtn && friends.some(f => f.id === post.authorId);
-    const friendHtml    = showFriendBtn
-      ? `<button class="friend-btn"
-                  data-author-id="${post.authorId}"
-                  data-author-name="${safeName}">
-           ${isFriend ? "⭐ Friend" : "☆ Friend"}
-         </button>`
+    const img = post.imageDataUrl
+      ? `<div class="card-media"><img src="${post.imageDataUrl}" class="post-image"></div>`
       : "";
 
     card.innerHTML = `
-      <div class="card-info">
-        <div class="meta">
-          <span class="creator">@${safeName}</span>
-          <span class="category">${categoryLabel(post.category)}</span>
-          ${friendHtml}
-        </div>
+      <div class="meta">
+        <span>@${escapeHTML(post.authorName)}</span>
+        <span>${categoryLabel(post.category)}</span>
+      </div>
 
-        <p class="content">${escapeHTML(post.text || "")}</p>
+      <p>${escapeHTML(post.text)}</p>
+      ${img}
 
-        ${imgSrc ? `
-        <div class="card-media">
-          <img src="${imgSrc}" alt="Post image" class="post-image">
-        </div>` : ""}
+      <div class="meta small">${timeStr}</div>
 
-        <div class="meta" style="margin-top:4px;">
-          <span class="time">${timeStr}</span>
-        </div>
+      <div class="reactions" data-post-id="${post.id}">
+        <button class="reaction-btn" data-type="heart">❤️ ${post.reactions.heart}</button>
+        <button class="reaction-btn" data-type="lol">😂 ${post.reactions.lol}</button>
+        <button class="reaction-btn" data-type="wow">🤯 ${post.reactions.wow}</button>
+        <button class="reaction-btn" data-type="cry">😭 ${post.reactions.cry}</button>
+        <button class="reaction-btn" data-type="fire">🔥 ${post.reactions.fire}</button>
+      </div>
 
-        <div class="reactions" data-post-id="${post.id}">
-          <button class="reaction-btn" data-type="heart">❤️ <span>${getR("heart")}</span></button>
-          <button class="reaction-btn" data-type="lol">😂 <span>${getR("lol")}</span></button>
-          <button class="reaction-btn" data-type="wow">🤯 <span>${getR("wow")}</span></button>
-          <button class="reaction-btn" data-type="cry">😭 <span>${getR("cry")}</span></button>
-          <button class="reaction-btn" data-type="fire">🔥 <span>${getR("fire")}</span></button>
-        </div>
+      <button class="comment-toggle" data-post-id="${post.id}">
+        💬 Comments (${post.commentsCount})
+      </button>
 
-        <div class="comments">
-          <button class="comment-toggle" data-post-id="${post.id}">
-            💬 Comments (<span class="comment-count">${post.commentsCount || 0}</span>)
-          </button>
-          <div class="comments-panel" data-post-id="${post.id}" style="display:none;">
-            <div class="comments-list"></div>
-            <div class="comments-input-row">
-              <input type="text" placeholder="Drop a comment..." />
-              <button class="glow-btn mini comment-send-btn">Send</button>
-            </div>
-          </div>
+      <div class="comments-panel" data-post-id="${post.id}" style="display:none;">
+        <div class="comments-list"></div>
+        <div class="comments-input-row">
+          <input type="text" placeholder="Drop a comment...">
+          <button class="comment-send-btn">Send</button>
         </div>
       </div>
     `;
@@ -570,48 +378,39 @@ function renderFeed () {
     feedList.appendChild(card);
   });
 
-  // refresh profile posts whenever feed renders
   renderProfilePosts();
 }
 
-/* ---------- profile: show user's own posts ---------- */
-
+/* ---------- Profile Posts ---------- */
 function renderProfilePosts () {
-  if (!profilePostsList || !profilePostsEmpty) return;
-
   if (!currentUser) {
-    profilePostsList.innerHTML = "";
-    profilePostsEmpty.textContent = "Log in to see your posts.";
     profilePostsEmpty.style.display = "block";
+    profilePostsList.innerHTML = "";
     return;
   }
 
-  const myPosts = postsCache.filter(p => p.authorId === currentUser.uid);
+  const mine = postsCache.filter(p => p.authorId === currentUser.uid);
 
-  if (!myPosts.length) {
-    profilePostsList.innerHTML = "";
-    profilePostsEmpty.textContent =
-      "You haven't dropped any chaos yet. Go to Home and make your first post 🔥";
+  if (!mine.length) {
     profilePostsEmpty.style.display = "block";
+    profilePostsList.innerHTML = "";
     return;
   }
 
   profilePostsEmpty.style.display = "none";
   profilePostsList.innerHTML = "";
 
-  myPosts.forEach(post => {
+  mine.forEach(p => {
+    const createdAt = p.createdAt?.toDate?.() || new Date();
+    const timeStr = createdAt.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+
     const li = document.createElement("li");
     li.className = "profile-post-row";
-    const createdAt = post.createdAt?.toDate
-      ? post.createdAt.toDate()
-      : (post.createdAt instanceof Date ? post.createdAt : new Date());
-    const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
     li.innerHTML = `
       <div class="profile-post-main">
-        <div class="profile-post-text">${escapeHTML(post.text || "")}</div>
+        <div class="profile-post-text">${escapeHTML(p.text)}</div>
         <div class="profile-post-meta">
-          <span>${categoryLabel(post.category)}</span>
+          <span>${categoryLabel(p.category)}</span>
           <span>${timeStr}</span>
         </div>
       </div>
@@ -620,197 +419,128 @@ function renderProfilePosts () {
   });
 }
 
-/* ---------- reactions + comments (feed) ---------- */
-
+/* ---------- reactions ---------- */
 async function handleReaction (postId, type) {
-  try {
-    const post = postsCache.find(p => p.id === postId);
-    if (!post || !currentUser) return;
+  const post = postsCache.find(p => p.id === postId);
+  if (!post || !currentUser) return;
 
-    const reactedMap = post.reacted || {};
-    const already = (reactedMap[type] || []).includes(currentUser.uid);
-    if (already) return; // only once per emoji type
+  const reacted = post.reacted?.[type] || [];
 
-    const ref = doc(db, "posts", postId);
-    await updateDoc(ref, {
-      [`reactions.${type}`]: increment(1),
-      [`reacted.${type}`]: arrayUnion(currentUser.uid)
-    });
-  } catch (err) {
-    console.error(err);
-  }
-}
+  if (reacted.includes(currentUser.uid)) return;
 
-function subscribeComments (postId, panel) {
-  const listEl = qs(".comments-list", panel);
-  if (!listEl) return;
-
-  listEl.innerHTML = `<p class="empty-hint">Loading comments…</p>`;
-
-  const commentsCol = collection(db, "posts", postId, "comments");
-  const commentsQ   = query(commentsCol, orderBy("createdAt", "asc"));
-
-  onSnapshot(commentsQ, snap => {
-    listEl.innerHTML = "";
-    if (snap.empty) {
-      listEl.innerHTML = `<p class="empty-hint">No comments yet.</p>`;
-      return;
-    }
-    snap.forEach(docSnap => {
-      const c = docSnap.data();
-      const div = document.createElement("div");
-      div.className = "comment";
-      const createdAt = c.createdAt?.toDate ? c.createdAt.toDate() : new Date();
-      const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      div.innerHTML = `
-        <span class="comment-author">@${escapeHTML(c.authorName || "user")}</span>
-        <span class="comment-text">${escapeHTML(c.text || "")}</span>
-        <span class="comment-time">${timeStr}</span>
-      `;
-      listEl.appendChild(div);
-    });
+  await updateDoc(doc(db, "posts", postId), {
+    [`reactions.${type}`]: increment(1),
+    [`reacted.${type}`]: arrayUnion(currentUser.uid)
   });
 }
 
-async function addComment (postId, text) {
-  if (!currentUser) return;
-  const authorName = usernameFromUser(currentUser);
-
-  const commentsCol = collection(db, "posts", postId, "comments");
-  await addDoc(commentsCol, {
-    text,
-    authorId: currentUser.uid,
-    authorName,
-    createdAt: serverTimestamp()
-  });
-
-  const ref = doc(db, "posts", postId);
-  await updateDoc(ref, { commentsCount: increment(1) });
-}
-
-feedList?.addEventListener("click", async (e) => {
-  // friend button
-  const friendBtn = e.target.closest(".friend-btn");
-  if (friendBtn) {
-    if (!currentUser) {
-      showPage("auth");
-      return;
-    }
-    const id   = friendBtn.dataset.authorId;
-    const name = friendBtn.dataset.authorName || "amigo";
-    addFriend(id, name);
-    renderFeed(); // update button state (☆ -> ⭐)
+feedList?.addEventListener("click", async e => {
+  const btn = e.target.closest(".reaction-btn");
+  if (btn) {
+    await handleReaction(btn.closest(".reactions").dataset.postId, btn.dataset.type);
     return;
   }
 
-  // reactions
-  const reactionBtn = e.target.closest(".reaction-btn");
-  if (reactionBtn) {
-    if (!currentUser) {
-      showPage("auth");
-      return;
-    }
-    const type   = reactionBtn.dataset.type;
-    const postId = reactionBtn.closest(".reactions").dataset.postId;
-    await handleReaction(postId, type);
-    return;
-  }
-
-  // toggle comments
   const toggle = e.target.closest(".comment-toggle");
   if (toggle) {
     const postId = toggle.dataset.postId;
-    const panel  = qs(`.comments-panel[data-post-id="${postId}"]`, feedList);
-    if (!panel) return;
-    const open = panel.style.display === "block";
-    panel.style.display = open ? "none" : "block";
-    if (!open) subscribeComments(postId, panel);
+    const panel = qs(`.comments-panel[data-post-id="${postId}"]`);
+    panel.style.display = panel.style.display === "block" ? "none" : "block";
+    if (panel.style.display === "block") loadComments(postId, panel);
     return;
   }
 
-  // send comment
   const sendBtn = e.target.closest(".comment-send-btn");
   if (sendBtn) {
-    if (!currentUser) {
-      showPage("auth");
-      return;
-    }
     const panel = sendBtn.closest(".comments-panel");
-    const input = qs("input", panel);
-    const text  = input.value.trim();
-    if (!text) return;
     const postId = panel.dataset.postId;
-    await addComment(postId, text);
+    const input = qs("input", panel);
+    const text = input.value.trim();
+    if (!text) return;
+
+    await addDoc(collection(db, "posts", postId, "comments"), {
+      text,
+      authorId: currentUser.uid,
+      authorName: usernameFromUser(currentUser),
+      createdAt: serverTimestamp()
+    });
+
+    await updateDoc(doc(db, "posts", postId), {
+      commentsCount: increment(1)
+    });
+
     input.value = "";
   }
 });
 
-/* live posts listener – ordered by created time (newest first) */
-const postsQ = query(postsCol, orderBy("createdAt", "desc"));
-onSnapshot(postsQ, snap => {
-  const arr = [];
-  snap.forEach(docSnap => arr.push({ id: docSnap.id, ...docSnap.data() }));
-  postsCache = arr;
-  renderFeed();
-});
+/* ---------- comments loader ---------- */
+function loadComments (postId, panel) {
+  const list = qs(".comments-list", panel);
+  list.innerHTML = "Loading...";
+
+  const q2 = query(
+    collection(db, "posts", postId, "comments"),
+    orderBy("createdAt", "asc")
+  );
+
+  onSnapshot(q2, snap => {
+    list.innerHTML = "";
+    snap.forEach(docSnap => {
+      const c = docSnap.data();
+      const createdAt = c.createdAt?.toDate?.() || new Date();
+      const timeStr = createdAt.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+      const div = document.createElement("div");
+      div.className = "comment";
+      div.innerHTML = `
+        <b>@${escapeHTML(c.authorName)}</b>
+        <span>${escapeHTML(c.text)}</span>
+        <small>${timeStr}</small>
+      `;
+      list.appendChild(div);
+    });
+  });
+}
+
+/* ---------- live feed listener ---------- */
+onSnapshot(
+  query(collection(db, "posts"), orderBy("createdAt", "desc")),
+  snap => {
+    postsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderFeed();
+  }
+);
 
 /* ---------- global chat ---------- */
 const chatWindow  = qs("#chat-window");
 const chatInput   = qs("#chat-input");
 const chatSendBtn = qs("#chat-send-btn");
 
-const chatCol = collection(db, "globalChat");
-const chatQ   = query(chatCol, orderBy("createdAt", "asc"));
+onSnapshot(
+  query(collection(db, "globalChat"), orderBy("createdAt", "asc")),
+  snap => {
+    chatWindow.innerHTML = "";
+    snap.forEach(docSnap => {
+      const m = docSnap.data();
+      const me = currentUser && m.authorId === currentUser.uid;
 
-onSnapshot(chatQ, snap => {
-  if (!chatWindow) return;
-  chatWindow.innerHTML = "";
-  if (snap.empty) {
-    chatWindow.innerHTML = `<p class="empty-hint">No messages yet. Say hi 👋</p>`;
-    return;
-  }
-  snap.forEach(docSnap => {
-    const m = docSnap.data();
-    const isMe = currentUser && m.authorId === currentUser.uid;
-    const div = document.createElement("div");
-    div.className = "message " + (isMe ? "me" : "other");
-    const createdAt = m.createdAt?.toDate ? m.createdAt.toDate() : new Date();
-    const timeStr = createdAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    div.innerHTML = `
-      <div class="bubble">
-        <strong>${escapeHTML(m.authorName || "")}:</strong>
-        ${escapeHTML(m.text || "")}
-        <br>
-        <span style="font-size:10px;opacity:0.7;">${timeStr}</span>
-      </div>
-    `;
-    chatWindow.appendChild(div);
-  });
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-});
+      const div = document.createElement("div");
+      div.className = "message " + (me ? "me" : "other");
 
-async function sendChatMessage () {
-  if (!currentUser) {
-    showPage("auth");
-    return;
-  }
-  const text = (chatInput.value || "").trim();
-  if (!text) return;
+      const createdAt = m.createdAt?.toDate?.() || new Date();
+      const timeStr = createdAt.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
 
-  const authorName = usernameFromUser(currentUser);
-
-  try {
-    await addDoc(chatCol, {
-      text,
-      authorId: currentUser.uid,
-      authorName,
-      createdAt: serverTimestamp()
+      div.innerHTML = `
+        <div class="bubble">
+          <strong>@${escapeHTML(m.authorName)}</strong> ${escapeHTML(m.text)}
+          <br><span class="time">${timeStr}</span>
+        </div>
+      `;
+      chatWindow.appendChild(div);
     });
-    chatInput.value = "";
-  } catch (err) {
-    console.error(err);
+
+    chatWindow.scrollTop = chatWindow.scrollHeight;
   }
-}
+);
 
 chatSendBtn?.addEventListener("click", sendChatMessage);
 chatInput?.addEventListener("keydown", e => {
@@ -820,105 +550,63 @@ chatInput?.addEventListener("keydown", e => {
   }
 });
 
-/* ---------- palette + notif buttons ---------- */
-qsa('[data-open="palette"]').forEach(btn => {
-  btn.addEventListener("click", () => {
-    gsap.to(".bg-auras", {
-      filter: "blur(90px)",
-      duration: 0.3,
-      yoyo: true,
-      repeat: 1
-    });
+async function sendChatMessage() {
+  if (!currentUser) return;
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  await addDoc(collection(db, "globalChat"), {
+    text,
+    authorId: currentUser.uid,
+    authorName: usernameFromUser(currentUser),
+    createdAt: serverTimestamp()
   });
-});
 
-qsa('[data-open="notif"]').forEach(btn => {
-  btn.addEventListener("click", () => {
-    const ping = document.createElement("div");
-    ping.textContent = "✨ New chaos drop!";
-    ping.style.position = "absolute";
-    ping.style.right = "12px";
-    ping.style.top = "60px";
-    ping.style.padding = "8px 12px";
-    ping.style.border = "1px solid rgba(255,255,255,0.18)";
-    ping.style.borderRadius = "12px";
-    ping.style.background =
-      "linear-gradient(90deg, rgba(255,63,216,0.35), rgba(0,245,160,0.25))";
-    ping.style.zIndex = "999";
-    document.body.appendChild(ping);
-    gsap.to(ping, {
-      y: -12,
-      opacity: 0,
-      duration: 1.8,
-      delay: 1,
-      onComplete: () => ping.remove()
-    });
-  });
-});
-
-/* ---------- auth state listener ---------- */
-onAuthStateChanged(auth, (user) => {
-  currentUser = user || null;
-
-  if (user) {
-    const uname = usernameFromUser(user);
-    if (profileName)  profileName.textContent  = "@" + uname;
-    if (profileEmail) profileEmail.textContent = user.email || "";
-    if (chatUsername) chatUsername.textContent = "@" + uname;
-    if (profileMood)  profileMood.textContent  = MOODS[moodIndex];
-
-    loadLocalBio(user);
-    loadFriends(user);
-
-    loadTasks();
-    updateXPUI();
-    renderProfilePosts();
-    showPage("home");
-  } else {
-    if (profileName)  profileName.textContent  = "@amigo_user";
-    if (profileEmail) profileEmail.textContent = "you@vibes.com";
-    if (profileMood)  profileMood.textContent  = "Unknown";
-    if (profileBioEl) profileBioEl.textContent = "No bio yet. Tap edit profile to add one.";
-    friends = [];
-    renderFriendsStrip();
-    renderProfilePosts();
-    showPage("landing");
-  }
-});
-
-/* ---------- service worker (PWA) ---------- */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker
-      .register("/sw.js")
-      .catch((err) => console.log("SW registration failed", err));
-  });
+  chatInput.value = "";
 }
 
-/* ---------- IMAGE VIEWER LOGIC ---------- */
+/* ---------- Image Viewer ---------- */
 const viewer         = qs("#image-viewer");
 const viewerImg      = qs("#image-viewer-img");
 const viewerClose    = qs("#image-viewer-close");
 const viewerBackdrop = qs(".image-viewer-backdrop");
 
-// open when any .post-image is tapped
-document.addEventListener("click", (e) => {
-  if (!viewer || !viewerImg) return;
+document.addEventListener("click", e => {
   const img = e.target.closest(".post-image");
   if (!img) return;
-
   viewerImg.src = img.src;
   viewer.classList.add("show");
 });
 
-// close on X or backdrop
 [viewerClose, viewerBackdrop].forEach(el => {
-  if (!el) return;
-  el.addEventListener("click", () => {
+  el?.addEventListener("click", () => {
     viewer.classList.remove("show");
-    viewerImg.src = "";
   });
+});
+
+/* ---------- auth state ---------- */
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+
+  if (user) {
+    profileName.textContent  = "@" + usernameFromUser(user);
+    profileEmail.textContent = user.email;
+    chatUsername.textContent = "@" + usernameFromUser(user);
+    profileMood.textContent  = MOODS[moodIndex];
+
+    loadLocalBio(user);
+    loadTasks();
+    updateXPUI();
+
+    showPage("home");
+  } else {
+    profileName.textContent = "@amigo_user";
+    profileEmail.textContent = "you@vibes.com";
+    profileBioEl.textContent = "No bio yet.";
+    showPage("landing");
+  }
 });
 
 /* ---------- start ---------- */
 showPage("landing");
+

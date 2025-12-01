@@ -1,4 +1,4 @@
-:root{
+:root{ 
   --bg: #0a0a12;
   --text: #f8f9ff;
   --muted: #bfc3ff;
@@ -23,15 +23,18 @@ html, body{
   color:var(--text);
   font-family:Inter,system-ui,Arial,sans-serif;
   -webkit-text-size-adjust:100%;
+  margin:0;
+  padding:0;
 }
 
+/* 🔥 allow normal scrolling; no more lock */
 body{
   margin:0;
-  overflow:hidden; /* scroll happens inside .page on mobile */
+  overflow:auto;
 }
 
 #app{
-  min-height:100vh;
+  min-height:100dvh; /* better on mobile than 100vh */
   display:flex;
   flex-direction:column;
   padding-top: env(safe-area-inset-top);
@@ -76,7 +79,6 @@ body{
   z-index:40;
 }
 
-
 .bottom-nav .nav-btn{
   width:52px;
   height:44px;
@@ -95,24 +97,23 @@ body{
 
 /* ===================== PAGES LAYOUT (IMPORTANT) ===================== */
 
+/* main content scrolls */
 #pages{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  overflow:hidden;
+  flex:1 1 auto;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
 }
 
-/* each page is its own screen */
+/* each page is just a block section, only .active is visible */
 .page{
-  flex:1;
   display:none;
-  overflow-y:auto;
-  overflow-x:hidden;
   padding:12px 12px calc(80px + env(safe-area-inset-bottom));
   max-width:1200px;
   margin:0 auto;
 }
-.page.active{display:block;}
+.page.active{
+  display:block;
+}
 
 /* ===================== BACKGROUND AURAS & EMOJIS ===================== */
 
@@ -530,7 +531,6 @@ button:active{transform:scale(0.98)}
 .t-xp{font-weight:800;color:var(--accent4)}
 
 /* ===================== CHAT PAGE (SEPARATE SCREEN) ===================== */
-/* Chat page (only visible when .active) */
 
 .chat-wrap{
   flex:1;
@@ -735,6 +735,7 @@ button:active{transform:scale(0.98)}
     grid-template-columns:repeat(3,minmax(0,1fr));
   }
 }
+
 .meta-right{
   display:flex;
   align-items:center;
@@ -756,6 +757,7 @@ button:active{transform:scale(0.98)}
 .post-delete-btn:active{
   transform:scale(0.95);
 } 
+
 /* ===== SAVE BUTTON STYLE ===== */
 
 .meta-right {
@@ -785,6 +787,7 @@ button:active{transform:scale(0.98)}
 .save-btn:active {
   transform: scale(0.95);
 }
+
 /* ========== SAVED MEMES (PROFILE GRID) ========== */
 
 #saved-memes-grid {
@@ -809,6 +812,7 @@ button:active{transform:scale(0.98)}
   transform: translateY(-3px) scale(1.03);
   box-shadow: 0 10px 26px rgba(0,0,0,0.35);
 }
+
 /* --- Profile: my posts --- */
 
 .profile-my-posts{
@@ -847,6 +851,7 @@ button:active{transform:scale(0.98)}
   margin-bottom:4px;
   word-wrap:break-word;
 }
+
 .profile-bio-block{
   margin-top:8px;
   padding:8px 10px;
@@ -889,17 +894,18 @@ button:active{transform:scale(0.98)}
 .profile-post-card .pp-text{
   word-wrap:break-word;
 }
-/* Auth inputs */
+
+/* Auth inputs – bump font size for mobile keyboards */
 .field input{
   background:rgba(0,0,0,0.25);
   border:1px solid rgba(255,255,255,0.2);
   border-radius:14px;
   color:var(--text);
   padding:12px;
-  font-size:16px;           /* 👈 important */
+  font-size:16px;
 }
 
-/* Post composer */
+/* Post composer – bigger font, no zoom */
 .composer textarea{
   width:100%;
   min-height:70px;
@@ -910,10 +916,10 @@ button:active{transform:scale(0.98)}
   color:var(--text);
   padding:8px 10px;
   font-family:inherit;
-  font-size:16px;           /* 👈 important */
+  font-size:16px;
 }
 
-/* Chat input – this is the one in your screenshot */
+/* Chat input – bigger font, no zoom */
 .chat-input input{
   flex:1;
   height:40px;
@@ -922,8 +928,9 @@ button:active{transform:scale(0.98)}
   background:rgba(0,0,0,0.25);
   color:#fff;
   padding:0 10px;
-  font-size:16px;           /* 👈 important */
+  font-size:16px;
 }
+
 /* ===== IMAGE VIEWER (LIGHTBOX) ===== */
 
 .image-viewer{
@@ -969,6 +976,7 @@ button:active{transform:scale(0.98)}
   color:#fff;
   cursor:pointer;
 }
+
 /* ===== WEB AD SLOT (for AdSense) ===== */
 
 .web-ad-slot{
@@ -987,6 +995,9 @@ button:active{transform:scale(0.98)}
   font-size: 13px;
   color: var(--muted);
 }
+
+/* ===== FRIENDS BLOCK (can be used on friends page later) ===== */
+
 .friends-block{
   margin-top:12px;
   padding:10px;
@@ -1035,6 +1046,5 @@ button:active{transform:scale(0.98)}
   min-height:40px;
   font-size:13px;
 }
-
 
 /* later we’ll style each friend row when we add it in JS */
