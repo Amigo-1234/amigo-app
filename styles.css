@@ -1046,5 +1046,110 @@ button:active{transform:scale(0.98)}
   min-height:40px;
   font-size:13px;
 }
+.friend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+
+.friend-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+}
+
+.friend-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+/* ===== FRIENDS PAGE ===== */
+
+.friends-page-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.friends-title-main {
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.friends-search-bar input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.friends-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 15px;
+}
+
+.friends-list-block {
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.friend-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 10px;
+}
+
+.friend-row-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.friend-row-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  object-fit: cover;
+  box-shadow: 0 0 10px rgba(57,153,255,0.4);
+}
+
+.friend-row-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.friend-follow-btn {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.friend-follow-btn.following {
+  background: rgba(0,245,160,0.25);
+  border-color: rgba(0,245,160,0.4);
+}
+
 
 /* later we’ll style each friend row when we add it in JS */

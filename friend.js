@@ -1,149 +1,262 @@
-// ------------------ FIREBASE SETUP (same config) ------------------
+// friend.js  – AMIGO WORLD Friends page
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
-import { 
-  getFirestore, doc, getDoc, updateDoc, arrayUnion, arrayRemove 
-} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import {
-  getAuth, onAuthStateChanged
+  getAuth,
+  onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
-const firebaseConfig = {
-  apiKey: "AIzaSyA7LCr6HouDusvMVYot261PvLidOCvG0oY",
-  authDomain: "amigo-world-ebfab.firebaseapp.com",
-  projectId: "amigo-world-ebfab",
-  storageBucket: "amigo-world-ebfab.firebasestorage.app",
-  messagingSenderId: "1071245255296",
-  appId: "1:1071245255296:web:b090d0bb080402a01a3c65"
-};
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  deleteDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-// init firebase
-const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
-const auth = getAuth(app);
+const auth = getAuth();          // reuse default app from app.js
+const db   = getFirestore();     // reuse same Firestore
 
-// ------------------ GLOBAL STATE ------------------
+// ---------- DOM refs ----------
+const followingList   = document.getElementById("friends-following-list");
+const followersList   = document.getElementById("friends-followers-list");
+const suggestionsList = document.getElementById("friends-suggestions-list");
+const searchInput     = document.getElementById("friend-search-input");
+
 let currentUser = null;
+let allUsersCache = [];          // [{id, displayName, email, avatarUrl}]
+let followingIds  = new Set();
+let followerIds   = new Set();
 
-// ------------------ FOLLOW USER ------------------
-export async function followUser(targetUserId) {
-  if (!currentUser) return alert("Login first 💀");
-
-  const myRef = doc(db, "users", currentUser.uid);
-  const targetRef = doc(db, "users", targetUserId);
-
-  try {
-    await updateDoc(myRef, {
-      following: arrayUnion(targetUserId)
-    });
-
-    await updateDoc(targetRef, {
-      followers: arrayUnion(currentUser.uid)
-    });
-
-    console.log("Followed:", targetUserId);
-    return true;
-  } catch (err) {
-    console.error("FOLLOW ERROR:", err);
-    return false;
-  }
+// small helper
+function safeName(user) {
+  return (
+    user.displayName ||
+    (user.email ? user.email.split("@")[0] : "") ||
+    "amigo_user"
+  );
 }
 
-// ------------------ UNFOLLOW USER ------------------
-export async function unfollowUser(targetUserId) {
-  if (!currentUser) return alert("Login first 💀");
-
-  const myRef = doc(db, "users", currentUser.uid);
-  const targetRef = doc(db, "users", targetUserId);
-
-  try {
-    await updateDoc(myRef, {
-      following: arrayRemove(targetUserId)
-    });
-
-    await updateDoc(targetRef, {
-      followers: arrayRemove(currentUser.uid)
-    });
-
-    console.log("Unfollowed:", targetUserId);
-    return true;
-  } catch (err) {
-    console.error("UNFOLLOW ERROR:", err);
-    return false;
-  }
+// ---------- ensure user doc exists ----------
+async function ensureUserDoc(user) {
+  if (!user) return;
+  const ref = doc(db, "users", user.uid);
+  await setDoc(
+    ref,
+    {
+      displayName: safeName(user),
+      email: user.email || "",
+      avatarUrl: null,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
 }
 
-// ------------------ LOAD FOLLOWING LIST ------------------
-export async function getMyFollowing() {
-  if (!currentUser) return [];
-
-  const ref = doc(db, "users", currentUser.uid);
-  const snap = await getDoc(ref);
-  
-  if (!snap.exists()) return [];
-  return snap.data().following || [];
+// ---------- load all users into cache ----------
+async function loadAllUsers() {
+  const snap = await getDocs(collection(db, "users"));
+  allUsersCache = [];
+  snap.forEach((d) => {
+    allUsersCache.push({ id: d.id, ...d.data() });
+  });
 }
 
-// ------------------ LOAD FOLLOWERS ------------------
-export async function getMyFollowers() {
-  if (!currentUser) return [];
-
-  const ref = doc(db, "users", currentUser.uid);
-  const snap = await getDoc(ref);
-  
-  if (!snap.exists()) return [];
-  return snap.data().followers || [];
+// ---------- load following / followers ----------
+async function loadFollowing(uid) {
+  followingIds = new Set();
+  const ref = collection(db, "users", uid, "following");
+  const snap = await getDocs(ref);
+  snap.forEach((d) => followingIds.add(d.id));
 }
 
-// ------------------ LOAD ANY USER PROFILE ------------------
-export async function getUserProfile(uid) {
-  const ref = doc(db, "users", uid);
-  const snap = await getDoc(ref);
-
-  if (!snap.exists()) return null;
-  return snap.data();
+async function loadFollowers(uid) {
+  followerIds = new Set();
+  const ref = collection(db, "users", uid, "followers");
+  const snap = await getDocs(ref);
+  snap.forEach((d) => followerIds.add(d.id));
 }
 
-// ------------------ RENDER FRIENDS LIST (OPTIONAL UI) ------------------
-export async function renderFriendsUI() {
-  const container = document.querySelector("#friends-list");
-  if (!container) return;
-
-  container.innerHTML = `<p>Loading friends...</p>`;
-  
-  const following = await getMyFollowing();
-
-  if (following.length === 0) {
-    container.innerHTML = `<p>You aren't following anyone yet 👀</p>`;
+// ---------- UI builders ----------
+function renderUserList(users, container, emptyText) {
+  container.innerHTML = "";
+  if (!users.length) {
+    container.innerHTML = `<p class="empty-hint">${emptyText}</p>`;
     return;
   }
 
-  container.innerHTML = "";
-
-  for (let uid of following) {
-    const data = await getUserProfile(uid);
-    if (!data) continue;
-
-    const div = document.createElement("div");
-    div.className = "friend-row";
-
-    div.innerHTML = `
-      <div class="friend-avatar">${(data.displayName || "?")[0]}</div>
-      <div class="friend-name">@${data.displayName}</div>
-    `;
-
-    container.appendChild(div);
-  }
+  users.forEach((u) => {
+    container.appendChild(makeFriendRow(u));
+  });
 }
 
-// ------------------ AUTH LISTENER ------------------
-onAuthStateChanged(auth, (user) => {
+function makeFriendRow(user) {
+  const row = document.createElement("div");
+  row.className = "friend-row";
+
+  const avatarUrl =
+    user.avatarUrl || "https://i.pravatar.cc/80?img=15";
+  const display = safeName(user);
+
+  const isFollowing = currentUser && followingIds.has(user.id);
+
+  row.innerHTML = `
+    <div class="friend-row-left">
+      <img src="${avatarUrl}" class="friend-row-avatar" alt="">
+      <span class="friend-row-name">@${display}</span>
+    </div>
+    ${
+      currentUser && user.id !== currentUser.uid
+        ? `<button class="friend-follow-btn ${isFollowing ? "following" : ""}" data-id="${user.id}">
+             ${isFollowing ? "Following" : "Follow"}
+           </button>`
+        : ""
+    }
+  `;
+
+  const btn = row.querySelector(".friend-follow-btn");
+  if (btn) {
+    btn.addEventListener("click", async () => {
+      const targetId = btn.dataset.id;
+      const nowFollowing = btn.classList.contains("following");
+
+      if (!nowFollowing) {
+        await followUser(targetId);
+        btn.classList.add("following");
+        btn.textContent = "Following";
+      } else {
+        await unfollowUser(targetId);
+        btn.classList.remove("following");
+        btn.textContent = "Follow";
+      }
+
+      // refresh local state
+      await loadFollowing(currentUser.uid);
+      renderFriendsSections();
+    });
+  }
+
+  return row;
+}
+
+// ---------- follow / unfollow ----------
+async function followUser(targetId) {
+  if (!currentUser) return;
+
+  const myId = currentUser.uid;
+
+  // add to my "following"
+  await setDoc(
+    doc(db, "users", myId, "following", targetId),
+    { followedAt: serverTimestamp() }
+  );
+
+  // add to their "followers"
+  await setDoc(
+    doc(db, "users", targetId, "followers", myId),
+    { followedAt: serverTimestamp() }
+  );
+}
+
+async function unfollowUser(targetId) {
+  if (!currentUser) return;
+
+  const myId = currentUser.uid;
+
+  await deleteDoc(doc(db, "users", myId, "following", targetId));
+  await deleteDoc(doc(db, "users", targetId, "followers", myId));
+}
+
+// ---------- render all sections ----------
+function renderFriendsSections() {
+  if (!currentUser) {
+    followingList.innerHTML   = `<p class="empty-hint">Log in to see friends.</p>`;
+    followersList.innerHTML   = `<p class="empty-hint">Log in to see friends.</p>`;
+    suggestionsList.innerHTML = `<p class="empty-hint">Log in to discover people.</p>`;
+    return;
+  }
+
+  // following
+  const followingUsers = allUsersCache.filter((u) =>
+    followingIds.has(u.id)
+  );
+  renderUserList(
+    followingUsers,
+    followingList,
+    "You are not following anyone yet."
+  );
+
+  // followers
+  const followerUsers = allUsersCache.filter((u) =>
+    followerIds.has(u.id)
+  );
+  renderUserList(
+    followerUsers,
+    followersList,
+    "You have no followers yet."
+  );
+
+  // suggestions = everyone except me + people I already follow
+  const suggestions = allUsersCache.filter(
+    (u) => u.id !== currentUser.uid && !followingIds.has(u.id)
+  );
+  renderUserList(
+    suggestions,
+    suggestionsList,
+    "No suggestions available."
+  );
+}
+
+// ---------- search logic ----------
+function setupSearch() {
+  if (!searchInput) return;
+
+  searchInput.addEventListener("input", () => {
+    const term = searchInput.value.trim().toLowerCase();
+
+    if (!term) {
+      // empty search → show normal suggestions again
+      renderFriendsSections();
+      return;
+    }
+
+    const matches = allUsersCache.filter((u) => {
+      const name = safeName(u).toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      return name.includes(term) || email.includes(term);
+    });
+
+    // use suggestions block to show search results
+    renderUserList(
+      matches,
+      suggestionsList,
+      "No users match that search."
+    );
+  });
+}
+
+// ---------- auth state ----------
+onAuthStateChanged(auth, async (user) => {
   currentUser = user || null;
 
-  if (currentUser) {
-    console.log("FRIENDS.JS: Logged in as", currentUser.uid);
-    renderFriendsUI();
-  } else {
-    console.log("FRIENDS.JS: Logged out");
+  if (!user) {
+    renderFriendsSections();
+    return;
   }
+
+  // 1) make sure this user exists in /users
+  await ensureUserDoc(user);
+
+  // 2) load everything
+  await loadAllUsers();
+  await loadFollowing(user.uid);
+  await loadFollowers(user.uid);
+
+  // 3) render UI
+  renderFriendsSections();
 });
+
+// kick off search binding
+setupSearch();

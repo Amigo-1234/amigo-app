@@ -191,30 +191,47 @@
       </section>
 
       <!-- Friends (separate page) -->
-      <section id="friends" class="page">
-        <div class="friends-page-wrap">
-          <header class="friends-page-header">
-            <h2>Your Friends</h2>
-            <p id="friends-hint" class="friends-subtitle">
-              You don’t have any friends yet. Add or star people to see them here 📌
-            </p>
-          </header>
+       
+      <!-- FRIENDS PAGE -->
+<section id="friends" class="page">
+  <div class="friends-page-wrap">
 
-          <!-- Optional: search bar for future friend search -->
-          <div class="friends-search">
-            <input
-              type="text"
-              id="friends-search-input"
-              placeholder="Search your friends (coming soon)…"
-              disabled
-            />
-          </div>
+    <h2 class="friends-title-main">Friends</h2>
 
-          <div class="friends-list" id="friends-list">
-            <!-- friend.js will render friend pills/cards here -->
-          </div>
-        </div>
-      </section>
+    <!-- Search -->
+    <div class="friends-search-bar">
+      <input id="friend-search-input" type="text" placeholder="Search users…" />
+    </div>
+
+    <!-- FOLLOWING -->
+    <div class="friends-section">
+      <h3>Your Following</h3>
+      <div id="friends-following-list" class="friends-list-block">
+        <p class="empty-hint">You are not following anyone yet.</p>
+      </div>
+    </div>
+
+    <!-- FOLLOWERS -->
+    <div class="friends-section">
+      <h3>Your Followers</h3>
+      <div id="friends-followers-list" class="friends-list-block">
+        <p class="empty-hint">You have no followers yet.</p>
+      </div>
+    </div>
+
+    <!-- Suggestions -->
+    <div class="friends-section">
+      <h3>Suggested Users</h3>
+      <div id="friends-suggestions-list" class="friends-list-block">
+        <p class="empty-hint">No suggestions available.</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+
+
 
       <!-- Tasks -->
       <section id="tasks" class="page">
