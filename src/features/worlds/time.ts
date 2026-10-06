@@ -64,3 +64,9 @@ export function statusLine(w: World, now: number): { status: WorldStatus; text: 
   }
   return { status, text: `Ended ${formatWhen(w.endsAt)}`, spoken: `Ended ${formatWhen(w.endsAt)}` };
 }
+
+const timeOnly = new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" });
+/** "Tue, Oct 6, 10:49 AM – 12:49 PM" (same day) or the full range across days. */
+export function formatSpan(a: Date, b: Date): string {
+  return a.toDateString() === b.toDateString() ? `${formatWhen(a)} – ${timeOnly.format(b)}` : `${formatWhen(a)} – ${formatWhen(b)}`;
+}

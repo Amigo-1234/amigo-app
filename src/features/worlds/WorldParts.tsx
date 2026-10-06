@@ -70,7 +70,6 @@ export function Leaderboard({
             <span className="leaderboard__points">
               <strong>{r.points}</strong> {r.points === 1 ? "pt" : "pts"}
             </span>
-            {!me && <FollowButton personId={r.person.id} personName={r.person.name} following={r.viewerFollows} />}
           </li>
         );
       })}
@@ -113,7 +112,7 @@ export function PeopleHere({ world }: { world: World }) {
   const [people, setPeople] = useState<PersonSummary[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    dataSource.worlds!.listParticipants(world.id, viewer.id, 5).then((p) => !cancelled && setPeople(p)).catch(() => !cancelled && setPeople([]));
+    dataSource.worlds!.listParticipants(world.id, viewer.id, 3).then((p) => !cancelled && setPeople(p)).catch(() => !cancelled && setPeople([]));
     return () => {
       cancelled = true;
     };

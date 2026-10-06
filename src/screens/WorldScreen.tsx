@@ -1,11 +1,12 @@
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, CircleAlert, Gift, Orbit, PenLine, Timer, Trophy } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, Gift, Orbit, PenLine, Timer, Trophy } from "lucide-react";
 import { Composer } from "../features/composer/Composer";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
 import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
-import { countdown, countdownLong, entriesOpen, formatWhen, useNow, worldStatus } from "../features/worlds/time";
+import { countdown, countdownLong, entriesOpen, formatSpan, formatWhen, useNow, worldStatus } from "../features/worlds/time";
 import { useLeaderboard, useWorld, useWorldChat, useWorldPosts } from "../features/worlds/useWorlds";
 import { JoinButton, Participants, StatusPill, WorldCover } from "../features/worlds/WorldBits";
 import { Leaderboard, PeopleHere, scoringText, WinnerCard, WorldChat } from "../features/worlds/WorldParts";
@@ -77,6 +78,20 @@ function WorldView({ world }: { world: World }) {
   const mine = rows.find((r) => r.person.id === viewer.id);
   const winner = status === "finished" && rows[0] ? rows[0] : null;
 
+  // Switching tabs brings the tab content into view instead of leaving it under the hero.
+  const tabsRef = useRef<HTMLElement>(null);
+  const firstTab = useRef(true);
+  useEffect(() => {
+    if (firstTab.current) {
+      firstTab.current = false;
+      return;
+    }
+    const el = tabsRef.current;
+    if (el && el.getBoundingClientRect().top > window.innerHeight * 0.4) {
+      window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - el.offsetHeight - 8, behavior: "smooth" });
+    }
+  }, [tab]);
+
   return (
     <>
       <section className="world-hero" aria-labelledby="world-title">
@@ -87,16 +102,33 @@ function WorldView({ world }: { world: World }) {
             {world.title}
           </h2>
           <p className="world-hero__tagline">{world.tagline}</p>
-          {world.description && <p className="world-hero__desc">{world.description}</p>}
-          <p className="world-hero__when">
-            {formatWhen(world.startsAt)} – {formatWhen(world.endsAt)}
-          </p>
+          {/* Details only on the Live tab, so Chat/Entries/Leaderboard start near the top on phones. */}
+          {tab === "live" && (
+            <>
+              {world.description && <Description text={world.description} />}
+              <p className="world-hero__when">{formatSpan(world.startsAt, world.endsAt)}</p>
+            </>
+          )}
           <div className="world-hero__row">
             <Participants world={world} />
             <JoinButton world={world} now={now} />
           </div>
           {comp && (
-            <dl className="world-comp">
+            <details className="world-comp">
+              <summary>
+                <Trophy size={16} aria-hidden="true" />
+                <span className="world-comp__summary">
+                  <strong>Competition</strong>
+                  {" · "}
+                  {status === "upcoming"
+                    ? "entries open at the start"
+                    : entriesOpen(world, now)
+                      ? <span aria-label={`entries close in ${countdownLong(comp.entriesCloseAt.getTime() - now)}`}>entries close in {countdown(comp.entriesCloseAt.getTime() - now)}</span>
+                      : status === "live" ? "entries closed" : "finished"}
+                </span>
+                <span className="world-comp__more">How it works <ChevronDown size={16} aria-hidden="true" /></span>
+              </summary>
+            <dl>
               <div>
                 <dt>
                   <Timer size={15} aria-hidden="true" /> Entries
@@ -125,13 +157,14 @@ function WorldView({ world }: { world: World }) {
                 </div>
               )}
             </dl>
+            </details>
           )}
         </div>
       </section>
 
       {winner && <WinnerCard winner={winner} />}
 
-      <nav className="tabs world-tabs" aria-label="World sections">
+      <nav className="tabs world-tabs" aria-label="World sections" ref={tabsRef}>
         {tabs.map((t) => (
           <Link
             key={t.id}
@@ -169,11 +202,39 @@ function Callout({ world, now, entry }: { world: World; now: number; entry?: boo
     return (
       <p className="world-note">
         Opens in {countdown(world.startsAt.getTime() - now)}.{" "}
-        {world.viewerJoined ? "You're in — you'll be able to post when it starts." : "Join now to be in from the start."}
+        {world.viewerJoined ? "You're in — you'll be able to post when it starts." : "Join now to be in from the first minute."}
       </p>
     );
-  if (!world.viewerJoined) return <p className="world-note">Join this World to {entry ? "submit an entry" : "post"} and chat.</p>;
+  if (!world.viewerJoined) return <JoinPrompt world={world} now={now} entry={entry} />;
   return null;
+}
+
+/** Non-members of a live World: say what joining gets you (the Join button sits just above in the hero). */
+function JoinPrompt({ world, now, entry }: { world: World; now: number; entry?: boolean }) {
+  const canEnter = entriesOpen(world, now);
+  const what = entry ? "submit an entry, post and chat" : canEnter ? "post, chat and enter the competition" : "post and chat";
+  return (
+    <div className="join-prompt">
+      <p>
+        <strong>You're looking in.</strong> Join to {what} with {world.participantCount.toLocaleString()} people.
+      </p>
+    </div>
+  );
+}
+
+function Description({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  const long = text.length > 140;
+  return (
+    <p className={`world-hero__desc${long && !open ? " is-clamped" : ""}`}>
+      {text}
+      {long && (
+        <button type="button" className="world-hero__more" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {open ? "Less" : "More"}
+        </button>
+      )}
+    </p>
+  );
 }
 
 function PostList({ worldId, entriesOnly, emptyTitle, emptyBody }: { worldId: string; entriesOnly: boolean; emptyTitle: string; emptyBody: string }) {
@@ -198,6 +259,14 @@ function LiveTab({ world, now }: { world: World; now: number }) {
   const live = worldStatus(world, now) === "live";
   return (
     <>
+      {live && world.viewerJoined && entriesOpen(world, now) && (
+        <p className="world-note world-note--nudge">
+          Entries close in {countdown(world.competition!.entriesCloseAt.getTime() - now)} —{" "}
+          <Link to="?tab=entries" replace>
+            submit yours
+          </Link>
+        </p>
+      )}
       {live && world.viewerJoined ? (
         <div className="world-composer">
           <Composer variant="inline" world={{ id: world.id, entry: false, placeholder: `Say something in ${world.title}…`, submitLabel: "Post" }} />
