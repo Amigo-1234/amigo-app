@@ -41,6 +41,17 @@ a.person-row__main:hover .person-row__name {
   white-space: nowrap;
 }
 
+.person-row__bio {
+  margin-top: 3px;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .follow-btn {
   min-width: 96px;
 }

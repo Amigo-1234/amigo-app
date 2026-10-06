@@ -265,6 +265,12 @@ export const supabaseSource: DataSource = {
     invalidate();
   },
 
+  discovery: {
+    explore: (viewerId) => q.fetchExplore(supabase, viewerId),
+    searchPeople: (query, viewerId, limit) => q.searchPeople(supabase, query, viewerId, limit),
+    searchPosts: (query, viewerId, opts) => q.searchPosts(supabase, query, viewerId, opts),
+  },
+
   profiles: {
     getProfile: (handle, viewerId) => q.fetchProfileByHandle(supabase, handle, viewerId),
 

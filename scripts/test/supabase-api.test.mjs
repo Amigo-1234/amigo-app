@@ -179,6 +179,39 @@ try {
   await q.updateProfileRow(zoe, ids.leo, { bio: "hijacked" }); // RLS filters to zero rows
   ok("cannot edit someone else's profile", (await q.fetchProfileByHandle(ama, `leo_${tag}`, ids.ama))?.bio === "Hiking.");
 
+  // discovery (Phase 4)
+  const zoeHandle = (await q.fetchProfile(leo, ids.zoe)).username;
+  let people = await q.searchPeople(leo, zoeHandle.slice(0, 5).toUpperCase(), ids.leo, 10);
+  ok("people search by username prefix, case-insensitive", people.some((x) => x.id === ids.zoe));
+  people = await q.searchPeople(leo, `zoe ${tag}`, ids.leo, 10);
+  ok("people search by display name", people.length === 1 && people[0].id === ids.zoe && typeof people[0].bio === "string");
+  people = await q.searchPeople(leo, `@${zoeHandle}`, ids.leo, 10);
+  ok("leading @ ignored", people[0]?.id === ids.zoe);
+  people = await q.searchPeople(leo, `Ama Renamed ${tag}`, ids.leo, 10);
+  ok("search reflects profile edits and follow state", people[0]?.id === ids.ama && people[0].viewerFollows === true);
+  ok("'%' is literal, not match-all", (await q.searchPeople(leo, "%", ids.leo, 10)).length === 0);
+  ok("'_' is literal", (await q.searchPeople(leo, "_x_x_", ids.leo, 10)).length === 0);
+  ok("commas/parentheses don't break the filter", (await q.searchPeople(leo, "a,b(c)", ids.leo, 10)).length === 0);
+
+  const hits = await q.searchPosts(zoe, tag, ids.zoe, { order: "latest", limit: 20 });
+  ok("post text search incl. replies", hits.posts.length === 3 && hits.posts.some((x) => x.replyTo));
+  ok("latest order", hits.posts[0].createdAt >= hits.posts[1].createdAt);
+  const topHits = await q.searchPosts(zoe, tag, ids.zoe, { order: "top", limit: 20 });
+  ok("top order = most liked first", topHits.posts[0].likeCount >= topHits.posts[1].likeCount);
+  const mediaHits = await q.searchPosts(zoe, tag, ids.zoe, { order: "latest", mediaOnly: true, limit: 20 });
+  ok("media-only search", mediaHits.posts.length === 1 && mediaHits.posts[0].media.length === 1);
+  ok("search paging", (await q.searchPosts(zoe, tag, ids.zoe, { order: "latest", limit: 1 })).hasMore === true);
+  ok("no matches → empty", (await q.searchPosts(zoe, `nothing_${tag}`, ids.zoe, { order: "latest", limit: 5 })).posts.length === 0);
+  ok("blank query → empty without a request", (await q.searchPosts(zoe, "   ", ids.zoe, { order: "latest", limit: 5 })).posts.length === 0);
+
+  const ex = await q.fetchExplore(zoe, ids.zoe);
+  ok("explore: suggestions exclude self", ex.suggestedPeople.every((x) => x.id !== ids.zoe));
+  ok("explore: popular this week (7-day window)", ex.popular.windowDays === 7 && ex.popular.posts.length > 0);
+  ok("explore: conversations only have replies", ex.conversations.length > 0 && ex.conversations.every((x) => x.replyCount > 0));
+  ok("explore: media only has media", ex.media.every((x) => x.media.length > 0));
+  const { error: anonSugg } = await anon.rpc("suggested_profiles", { p_limit: 3 });
+  ok("suggestions are for signed-in people only", anonSugg?.code === "42501", anonSugg?.code);
+
   // private surfaces
   const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });
   ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);

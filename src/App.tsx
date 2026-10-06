@@ -8,6 +8,7 @@ import { AppShell } from "./shell/AppShell";
 import { ComposerProvider } from "./state/composer";
 import { SessionProvider, useSession, useViewer } from "./state/session";
 import { profilesEnabled } from "./features/profile/links";
+import { dataSource } from "./data";
 import { ThemeProvider } from "./state/theme";
 import { ToastProvider } from "./state/toast";
 import { AmigoMark } from "./ui/Brand";
@@ -16,6 +17,7 @@ const PostScreen = lazy(() => import("./screens/PostScreen"));
 const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
 const FollowListScreen = lazy(() => import("./screens/FollowListScreen"));
 const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
+const ExploreScreen = lazy(() => import("./screens/ExploreScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
@@ -78,7 +80,9 @@ const router = createBrowserRouter([
         : []),
       {
         path: "explore",
-        element: (
+        element: dataSource.discovery ? (
+          <ExploreScreen />
+        ) : (
           <ComingSoonScreen title="Explore" icon={Compass} body="Search for people and posts, and see what's happening across Amigo World." />
         ),
       },

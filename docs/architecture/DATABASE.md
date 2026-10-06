@@ -52,7 +52,9 @@ Reads go straight to tables (RLS) or to `SECURITY INVOKER` functions:
 | `create_post(body, parent_id, media, visibility)` | Post or reply plus media in one transaction; validates length and media. |
 | `set_post_like(post_id, liked)` | Idempotent like toggle. |
 | `delete_post(post_id)` | Author-only soft delete. |
-| `suggested_profiles(limit)` | People you don't follow yet. |
+| `suggested_profiles(limit)` | People you don't follow yet (signed-in only). |
+
+Search and Explore are plain RLS-protected table reads, documented in [SEARCH.md](SEARCH.md).
 
 ## Row Level Security review
 
@@ -77,8 +79,12 @@ only public information.
 question or performs one owner-checked action. Execute is revoked from
 everyone and granted back function by function.
 
-Tested by `supabase/tests/database.test.sql` (63 checks) and
-`scripts/test/supabase-api.test.mjs` (29 checks through PostgREST).
+Function execute rights are explicit: PostgreSQL's built-in `PUBLIC` execute default is revoked
+(migration `20261006140000`), and the test suite fails if any `public` function is executable by
+`PUBLIC`. **Every migration that adds a function must `revoke … from public` and grant explicitly.**
+
+Tested by `supabase/tests/database.test.sql` (68 checks) and
+`scripts/test/supabase-api.test.mjs` (66 checks through PostgREST).
 
 ## Realtime
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router";
 import { dataSource, type PersonSummary } from "../data";
 import { useViewer } from "../state/session";
 import { PersonRow } from "../features/profile/PersonRow";
@@ -6,10 +7,12 @@ import { Skeleton } from "../ui/Skeleton";
 
 /** Desktop-only companion column. Uses the prototype's real follow graph. */
 export function RightRail() {
+  // Explore has its own "Suggested for you" section; don't show it twice.
+  const onExplore = useLocation().pathname === "/explore";
   return (
     <aside className="rail" aria-label="Suggestions">
       <div className="rail__inner">
-        <WhoToFollow />
+        {!onExplore && <WhoToFollow />}
         <p className="rail__foot">Amigo World · {new Date().getFullYear()}</p>
       </div>
     </aside>

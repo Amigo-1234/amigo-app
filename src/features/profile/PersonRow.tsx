@@ -14,6 +14,7 @@ export function PersonRow({ person, onFollowChange }: { person: PersonSummary; o
       <span className="person-row__text">
         <span className="person-row__name">{person.name}</span>
         <span className="person-row__handle">@{person.handle}</span>
+        {person.bio && <span className="person-row__bio">{person.bio}</span>}
       </span>
     </>
   );

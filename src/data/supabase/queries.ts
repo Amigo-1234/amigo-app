@@ -5,7 +5,7 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { ProfileError, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
+import { ProfileError, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
@@ -262,4 +262,94 @@ export async function updateProfileRow(
   // Only the username format constraint means "invalid username"; other checks (bio/name length) are generic.
   if (error.code === "23514" && /profiles_username_format/.test(error.message)) throw new ProfileError("handle-invalid", error.message);
   throw new ProfileError("unknown", error.message);
+}
+
+// ---------------------------------------------------------------- discovery
+//
+// Case-insensitive substring search via ILIKE. Fine at today's size; see
+// docs/architecture/SEARCH.md for the indexes/full-text search to add before
+// it gets big. No schema changes are needed for this version.
+
+/** Escape LIKE wildcards in user input so "%" or "_" match literally. */
+export function likePattern(query: string): string {
+  return `%${query.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+/** Quote a value for a PostgREST or=() filter (commas/parentheses would otherwise split it). */
+function orValue(value: string): string {
+  return `"${value.replace(/["\\]/g, (c) => `\\${c}`)}"`;
+}
+
+export async function searchPeople(db: Db, query: string, viewerId: string, limit: number) {
+  const q = query.trim().replace(/^@/, "").toLowerCase();
+  if (!q) return [];
+  const pattern = orValue(likePattern(q));
+  const { data, error } = await db
+    .from("profiles")
+    .select("id, username, display_name, avatar_url, bio, follower_count")
+    .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
+    .order("follower_count", { ascending: false })
+    .limit(Math.min(limit * 3, 100));
+  if (error) throw dataError(error);
+  // Usernames that start with the query rank first (people usually type the start of a handle).
+  const ranked = [...data].sort((a, b) => Number(b.username.startsWith(q)) - Number(a.username.startsWith(q))).slice(0, limit);
+  const following = await viewerFollowsSet(db, viewerId, ranked.map((p) => p.id));
+  return ranked.map((p) => ({
+    id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id),
+  }));
+}
+
+export async function searchPosts(
+  db: Db,
+  query: string,
+  viewerId: string,
+  opts: { order: PostSearchOrder; mediaOnly?: boolean; limit: number },
+) {
+  const q = query.trim();
+  if (!q) return { posts: [], hasMore: false };
+  let req = db.from("posts").select(opts.mediaOnly ? MEDIA_SELECT : POST_SELECT).ilike("body", likePattern(q));
+  if (opts.order === "top") req = req.order("like_count", { ascending: false });
+  const { data, error } = await req.order("created_at", { ascending: false }).limit(opts.limit + 1).returns<PostRow[]>();
+  if (error) throw dataError(error);
+  const rows = data.slice(0, opts.limit);
+  await attachParents(db, rows);
+  const liked = await likedSet(db, viewerId, rows.map((r) => r.id));
+  return { posts: rows.map((r) => toPost(db, r, liked)), hasMore: data.length > opts.limit };
+}
+
+const POPULAR_WINDOW_DAYS = 7;
+
+export async function fetchExplore(db: Db, viewerId: string): Promise<ExploreFeed> {
+  const since = new Date(Date.now() - POPULAR_WINDOW_DAYS * 86_400_000).toISOString();
+  const topLevel = () => db.from("posts").select(POST_SELECT).is("parent_id", null);
+
+  const [people, recentPopular, conversations, media] = await Promise.all([
+    db.rpc("suggested_profiles", { p_limit: 4 }),
+    topLevel().gte("created_at", since).order("like_count", { ascending: false }).order("created_at", { ascending: false }).limit(3).returns<PostRow[]>(),
+    topLevel().gt("reply_count", 0).order("created_at", { ascending: false }).limit(3).returns<PostRow[]>(),
+    db.from("posts").select(MEDIA_SELECT).is("parent_id", null).order("created_at", { ascending: false }).limit(9).returns<PostRow[]>(),
+  ]);
+  for (const r of [people, recentPopular, conversations, media]) if (r.error) throw dataError(r.error);
+
+  // Nothing posted this week: fall back to all-time, and say so (windowDays: null).
+  let popularRows = recentPopular.data!;
+  let windowDays: number | null = POPULAR_WINDOW_DAYS;
+  if (popularRows.length === 0) {
+    const allTime = await topLevel().order("like_count", { ascending: false }).order("created_at", { ascending: false }).limit(3).returns<PostRow[]>();
+    if (allTime.error) throw dataError(allTime.error);
+    popularRows = allTime.data;
+    windowDays = null;
+  }
+
+  const allRows = [...popularRows, ...conversations.data!, ...media.data!];
+  const liked = await likedSet(db, viewerId, [...new Set(allRows.map((r) => r.id))]);
+  const map = (rows: PostRow[]) => rows.map((r) => toPost(db, r, liked));
+  return {
+    suggestedPeople: people.data!.map((p) => ({
+      id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: false,
+    })),
+    popular: { posts: map(popularRows), windowDays },
+    conversations: map(conversations.data!),
+    media: map(media.data!),
+  };
 }

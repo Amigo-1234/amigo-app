@@ -91,6 +91,9 @@ let records: PostRecord[] = [
   rec("p11", "kofi", "Jollof debate is closed. We won. Moving on.", minutes(60 * 49), 980),
   rec("p12", "mira", "Sunday reset.", minutes(60 * 75), 233, [img("amigo-plant", 1080, 1350)]),
   rec("p13", "ama", "Shot this one on the walk home. No edits.", minutes(60 * 100), 340, [img("amigo-street", 1600, 1067)]),
+  rec("p14", "kofi", "Football tonight. Who's watching? I've got snacks and zero chill.", minutes(60 * 5), 152),
+  rec("p15", "tomi", "Five-a-side football at 7 this Saturday — we need two more players.", minutes(60 * 28), 44, [img("amigo-pitch", 1600, 1000)]),
+  rec("p16", "rosa", "Long run playlist recommendations? Need something for kilometre 15 onwards.", minutes(60 * 60), 37),
   // replies
   rec("r1", "tomi", "the plan is vibes. always has been.", minutes(15), 9, [], "p2"),
   rec("r2", "zoe", "Felt this in my soul", minutes(12), 4, [], "p2"),
@@ -99,6 +102,8 @@ let records: PostRecord[] = [
   rec("r5", "me", "This is the most relatable thing I've read all week", minutes(10), 3, [], "p2"),
   rec("r6", "me", "Congrats Rosa! Huge.", minutes(30), 2, [], "p3"),
   rec("r7", "leo", "Rooftop crew when?", minutes(2), 1, [], "p1"),
+  rec("r8", "leo", "Count me in for football if there's still space", minutes(60 * 20), 3, [], "p15"),
+  rec("r9", "mira", "Anything by Little Simz. Trust me.", minutes(60 * 50), 8, [], "p16"),
 ];
 
 // ------------------------------------------------------------------ helpers
@@ -106,7 +111,17 @@ let records: PostRecord[] = [
 type Listener = () => void;
 const listeners = new Set<Listener>();
 const emit = () => listeners.forEach((l) => l());
-const later = <T>(fn: () => T, ms = latency) => new Promise<T>((r) => setTimeout(() => r(fn()), ms));
+/** Resolve with fn() after a fake network delay; a throw becomes a rejection, not an uncaught error. */
+const later = <T>(fn: () => T, ms = latency) =>
+  new Promise<T>((resolve, reject) =>
+    setTimeout(() => {
+      try {
+        resolve(fn());
+      } catch (e) {
+        reject(e);
+      }
+    }, ms),
+  );
 
 function watch<T>(sub: Subscription<T>, read: () => T): () => void {
   if (scenario === "loading") return () => {};
@@ -167,8 +182,19 @@ function profileOf(p: PersonRecord, viewerId: string): Profile {
 }
 
 const summary = (p: PersonRecord, viewerId: string): PersonSummary => ({
-  id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl, viewerFollows: follows.has(edge(viewerId, p.id)),
+  id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl, viewerFollows: follows.has(edge(viewerId, p.id)), bio: p.bio,
 });
+
+const followerCount = (id: string) => [...follows].filter((e) => e.endsWith(`->${id}`)).length;
+const likes = (r: PostRecord) => r.baseLikes + r.likers.size;
+const norm = (x: string) => x.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/** Demo-only instrumentation so tests can prove search input is debounced. */
+const stats = ((globalThis as { __amigoDemoStats?: { searches: number; queries: string[] } }).__amigoDemoStats ??= { searches: 0, queries: [] });
+
+function failIfError() {
+  if (scenario === "error") throw new Error("Demo network error");
+}
 
 // -------------------------------------------------------------------- auth
 
@@ -251,6 +277,55 @@ export const demoSource: DataSource = {
     later(() => peopleList.filter((p) => p.id !== viewerId && !follows.has(edge(viewerId, p.id))).slice(0, max).map((p) => summary(p, viewerId))),
   follow: (viewerId, id) => later(() => { follows.add(edge(viewerId, id)); emit(); }, 300),
   unfollow: (viewerId, id) => later(() => { follows.delete(edge(viewerId, id)); emit(); }, 300),
+
+  discovery: {
+    explore: (viewerId) =>
+      later(() => {
+        failIfError();
+        const top = topLevel();
+        const weekAgo = Date.now() - 7 * 86_400_000;
+        const recent = top.filter((r) => r.createdAt.getTime() >= weekAgo);
+        const pool = recent.length ? recent : top;
+        return {
+          suggestedPeople: peopleList
+            .filter((p) => p.id !== viewerId && !follows.has(edge(viewerId, p.id)))
+            .sort((a, b) => followerCount(b.id) - followerCount(a.id))
+            .slice(0, 4)
+            .map((p) => summary(p, viewerId)),
+          popular: { posts: [...pool].sort((a, b) => likes(b) - likes(a)).slice(0, 3).map(toPost), windowDays: recent.length ? 7 : null },
+          conversations: top.filter((r) => replyCount(r.id) > 0).slice(0, 3).map(toPost),
+          media: top.filter((r) => r.media.length > 0).slice(0, 9).map(toPost),
+        };
+      }),
+
+    searchPeople: (query, viewerId, limit) =>
+      later(() => {
+        stats.searches++;
+        stats.queries.push(query);
+        failIfError();
+        const q = norm(query.trim().replace(/^@/, ""));
+        if (!q) return [];
+        return peopleList
+          .filter((p) => norm(p.handle).includes(q) || norm(p.name).includes(q))
+          // Exact/prefix username matches first, then by followers.
+          .sort((a, b) => Number(norm(b.handle).startsWith(q)) - Number(norm(a.handle).startsWith(q)) || followerCount(b.id) - followerCount(a.id))
+          .slice(0, limit)
+          .map((p) => summary(p, viewerId));
+      }),
+
+    searchPosts: (query, _viewerId, { order, mediaOnly, limit }) =>
+      later(() => {
+        stats.searches++;
+        stats.queries.push(query);
+        failIfError();
+        const q = norm(query.trim());
+        if (!q) return { posts: [], hasMore: false };
+        const matches = records
+          .filter((r) => norm(r.text).includes(q) && (!mediaOnly || r.media.length > 0))
+          .sort(order === "top" ? (a, b) => likes(b) - likes(a) || newest(a, b) : newest);
+        return { posts: matches.slice(0, limit).map(toPost), hasMore: matches.length > limit };
+      }),
+  },
 
   profiles: {
     getProfile: (handle, viewerId) =>

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { dataSource, type Post } from "../../data";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
@@ -13,6 +13,13 @@ export function useLike(post: Post) {
   const delta = optimistic !== null && optimistic !== post.likedByViewer ? (optimistic ? 1 : -1) : 0;
   const count = Math.max(0, post.likeCount + delta);
 
+  // Keep the optimistic value until the post data catches up. Live lists
+  // (feeds) catch up via their subscription; one-off lists (search results,
+  // Explore) never re-fetch, so clearing early would visually undo the like.
+  useEffect(() => {
+    if (optimistic !== null && post.likedByViewer === optimistic) setOptimistic(null);
+  }, [post.likedByViewer, optimistic]);
+
   const toggle = useCallback(async () => {
     const next = !liked;
     setOptimistic(next);
@@ -20,9 +27,8 @@ export function useLike(post: Post) {
       await dataSource.setLiked(post.id, viewer.id, next);
     } catch (e) {
       console.error(e);
-      toast(next ? "Couldn't like that post. Try again." : "Couldn't remove your like. Try again.", "error");
-    } finally {
       setOptimistic(null);
+      toast(next ? "Couldn't like that post. Try again." : "Couldn't remove your like. Try again.", "error");
     }
   }, [liked, post.id, viewer.id, toast]);
 

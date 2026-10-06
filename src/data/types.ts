@@ -55,6 +55,8 @@ export interface PersonSummary {
   handle: string;
   avatarUrl: string | null;
   viewerFollows: boolean;
+  /** Present where a short bio helps (search results, suggestions). */
+  bio?: string;
 }
 
 export interface NewPostInput {
@@ -147,6 +149,47 @@ export interface ProfilesApi {
   updateProfile(viewerId: string, update: ProfileUpdate): Promise<void>;
 }
 
+// ---------------------------------------------------------------- discovery
+
+export type SearchTab = "top" | "people" | "posts" | "media";
+
+export interface PostPage {
+  posts: Post[];
+  hasMore: boolean;
+}
+
+/** Everything on the Explore landing page. Every section is derived from real data. */
+export interface ExploreFeed {
+  suggestedPeople: PersonSummary[];
+  /**
+   * Most-liked recent posts. windowDays says how far back "recent" reaches:
+   * 7 → "Popular this week"; null → no recent activity, so all-time most liked.
+   */
+  popular: { posts: Post[]; windowDays: number | null };
+  /** Newest posts that have replies. */
+  conversations: Post[];
+  /** Newest posts with images or video. */
+  media: Post[];
+}
+
+export type PostSearchOrder = "top" | "latest";
+
+/**
+ * Search and discovery. Optional capability: demo and Supabase provide it,
+ * the legacy Firebase source does not (Explore stays a placeholder there).
+ * Matching is case-insensitive substring matching on usernames, display names
+ * and post text; backends may rank and index however they like.
+ */
+export interface DiscoveryApi {
+  explore(viewerId: string): Promise<ExploreFeed>;
+  searchPeople(query: string, viewerId: string, limit: number): Promise<PersonSummary[]>;
+  searchPosts(
+    query: string,
+    viewerId: string,
+    opts: { order: PostSearchOrder; mediaOnly?: boolean; limit: number },
+  ): Promise<PostPage>;
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
@@ -158,6 +201,8 @@ export interface DataSource {
 
   /** Optional capability — see ProfilesApi. */
   profiles?: ProfilesApi;
+  /** Optional capability — see DiscoveryApi. */
+  discovery?: DiscoveryApi;
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;

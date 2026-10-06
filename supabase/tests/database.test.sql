@@ -222,6 +222,14 @@ select pg_temp.must_fail('legacy lookup not callable by users', :A, $$select * f
 select pg_temp.must_fail('migration import API not callable by users', :A, $$select public.legacy_state()$$, '42501');
 select pg_temp.must_fail('migration import API not callable by anon', null, $$select public.legacy_validation_snapshot()$$, '42501');
 select pg_temp.must_fail('sign-in throttle not callable by users', :A, $$select public.legacy_signin_throttle('a', 'b')$$, '42501');
+select pg_temp.check('no public-schema function is executable by PUBLIC',
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+              where n.nspname = 'public' and has_function_privilege('public', p.oid, 'EXECUTE')
+                and p.proacl is not null and array_to_string(p.proacl, ',') ~ '(^|,)=X'));
+select pg_temp.must_fail('anon cannot call create_post', null, $$select public.create_post('x')$$, '42501');
+select pg_temp.must_fail('anon cannot call set_post_like', null, $$select public.set_post_like(gen_random_uuid(), true)$$, '42501');
+select pg_temp.must_fail('anon cannot call delete_post', null, $$select public.delete_post(gen_random_uuid())$$, '42501');
+select pg_temp.must_fail('anon cannot call suggested_profiles', null, $$select public.suggested_profiles(3)$$, '42501');
 select pg_temp.must_fail('trigger helpers not callable by users', :A, $$select public.generate_username('x')$$, '42501');
 
 -- ---------------------------------------------------------------- storage
