@@ -6,14 +6,9 @@ import { fullTimestamp, timeAgoLong } from "../../lib/time";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Button } from "../../ui/Button";
+import { reportReasonLabel } from "../reports/reasons";
 import { supportErrorText } from "../support/useSupport";
 
-const REASON: Record<MessageReport["reason"], string> = {
-  spam: "Spam or scam",
-  harassment: "Harassment or bullying",
-  inappropriate: "Inappropriate content",
-  other: "Something else",
-};
 
 /**
  * Admin → Reports → Message reports. Messages are end-to-end encrypted, so
@@ -77,7 +72,7 @@ export function AdminMessageReports() {
             <li key={r.id} className="admin-row dm-report">
               <div className="admin-row__main">
                 <p className="dm-report__head">
-                  <strong>{REASON[r.reason]}</strong> — <Link to={`/u/${r.reported.handle}`}>@{r.reported.handle}</Link>, reported by{" "}
+                  <strong>{reportReasonLabel(r.reason)}</strong> — <Link to={`/u/${r.reported.handle}`}>@{r.reported.handle}</Link>, reported by{" "}
                   <Link to={`/u/${r.reporter.handle}`}>@{r.reporter.handle}</Link>
                   <span className="admin-muted"> · <time title={fullTimestamp(r.createdAt)}>{timeAgoLong(r.createdAt)}</time></span>
                 </p>

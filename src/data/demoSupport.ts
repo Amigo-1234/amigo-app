@@ -521,6 +521,8 @@ export function createDemoSupport(ctx: SupportDemoContext) {
   return {
     api,
     admin,
+    /** Shared admin audit log (other features log their admin actions here too). */
+    audit,
     /** Demo persistence (demoPersist.ts). */
     persist: {
       export: (): Saved => ({ requests, visits, ledger, reports, auditLog, seq }),

@@ -78,7 +78,9 @@ npm run build                # typecheck (app + scripts) + production build
   `DataSource` capability (`messages`). See [docs/architecture/MESSAGES.md](docs/architecture/MESSAGES.md).
 - **Demo data persists** in the browser (IndexedDB) across refreshes. Reset it in Settings → Reset
   demo data, or with `?demo=reset`.
-- Moments is a placeholder for a later phase.
+- **Moments**: photo / text / text-over-photo posts that disappear after 24 hours — Home row,
+  full-screen viewer (tap, hold, swipe), reactions, viewer list, replies through Messages,
+  Everyone/Followers, delete, report, admin removal. See [docs/architecture/MOMENTS.md](docs/architecture/MOMENTS.md).
 
 ## Backend (Supabase)
 
@@ -88,7 +90,7 @@ npm run build                # typecheck (app + scripts) + production build
 | Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
 | Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
 | Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
-| Tests | `npm run db:test`: 263 database/RLS checks, rolled back after running · `npm run test:api`: 147 checks through PostgREST · `npm run test:e2e`: 70 end-to-end encryption checks with real crypto devices |
+| Tests | `npm run db:test`: 298 database/RLS checks, rolled back after running · `npm run test:api`: 147 checks through PostgREST · `npm run test:e2e`: 70 end-to-end encryption checks with real crypto devices · `npm run test:moments`: 18 Moments checks |
 
 To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
 [`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied

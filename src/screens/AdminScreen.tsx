@@ -5,6 +5,7 @@ import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/
 import { SupportAdmin } from "../features/admin/SupportAdmin";
 import { AdminUsers } from "../features/admin/AdminUsers";
 import { AdminMessageReports } from "../features/admin/AdminMessageReports";
+import { AdminMomentReports } from "../features/admin/AdminMomentReports";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
@@ -63,6 +64,7 @@ export default function AdminScreen() {
         {section === "users" && <AdminUsers />}
         {section === "reports" && (
           <>
+            <AdminMomentReports />
             <AdminMessageReports />
             <AdminPlaceholder
               title="Other reports"

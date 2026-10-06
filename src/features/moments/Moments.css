@@ -1,0 +1,531 @@
+/* Moments: the Home row, the full-screen viewer, the composer. */
+
+/* ---------- Backgrounds ---------- */
+
+.moment-bg--coral { background: linear-gradient(160deg, #ff7a5c, #e8452a); }
+.moment-bg--sunset { background: linear-gradient(160deg, #ffb35c, #e8452a 55%, #8f2a6b); }
+.moment-bg--ocean { background: linear-gradient(160deg, #3fb6d9, #1f5fa8); }
+.moment-bg--forest { background: linear-gradient(160deg, #6fbf73, #23683f); }
+.moment-bg--night { background: linear-gradient(160deg, #3b3a63, #121226); }
+.moment-bg--plain { background: #1c1a17; }
+
+/* ---------- The Moment itself ---------- */
+
+.moment-visual {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  color: #fff;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.moment-visual__photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  -webkit-user-drag: none;
+}
+
+.moment-visual__text {
+  position: relative;
+  max-width: 86%;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 5.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.moment-visual__text--over {
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(0, 0, 0, 0.42);
+  font-size: clamp(1.1rem, 4.4vw, 1.5rem);
+}
+
+.moment-visual--thumb .moment-visual__text {
+  font-size: 0.8rem;
+}
+
+.moment-visual--thumb .moment-visual__text--over {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+}
+
+/* ---------- Home row ---------- */
+
+.moments-row {
+  display: flex;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.moments-row::-webkit-scrollbar {
+  display: none;
+}
+
+.moment-bubble {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  width: 68px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.moment-bubble__name {
+  width: 100%;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.moment-bubble.is-unseen .moment-bubble__name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The ring around an avatar: coral when there's something new, grey when all seen. */
+.moment-ring {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
+.moment-ring.is-unseen {
+  background: conic-gradient(from 210deg, #ffb35c, #ff5a3c, #e8452a, #8f2a6b, #ffb35c);
+}
+
+.moment-ring > * {
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+}
+
+.moment-ring--none {
+  padding: 0;
+  background: none;
+}
+
+.moment-ring--none > * {
+  border: 0;
+}
+
+.moment-bubble__add {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Profile avatar that opens Moments */
+.moment-avatar-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* ---------- Viewer ---------- */
+
+.moment-viewer {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: #000;
+  color: #fff;
+}
+
+.moment-viewer::backdrop {
+  background: #000;
+}
+
+.moment-viewer__stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.moment-viewer__frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+
+@media (min-width: 640px) {
+  .moment-viewer__frame {
+    width: auto;
+    height: min(92dvh, 900px);
+    aspect-ratio: 9 / 16;
+    border-radius: var(--radius-lg);
+  }
+}
+
+.moment-viewer__top {
+  position: absolute;
+  inset: 0 0 auto 0;
+  z-index: 2;
+  padding: calc(env(safe-area-inset-top) + 10px) 10px 24px;
+  background: linear-gradient(rgba(0, 0, 0, 0.5), transparent);
+}
+
+.moment-viewer__bars {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.moment-viewer__bar {
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+  overflow: hidden;
+}
+
+.moment-viewer__bar > span {
+  display: block;
+  height: 100%;
+  background: #fff;
+  transform-origin: left;
+}
+
+.moment-viewer__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.moment-viewer__who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: #fff;
+  text-decoration: none;
+}
+
+.moment-viewer__name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 650;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.moment-viewer__time {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.moment-viewer__head-actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.moment-viewer .icon-btn {
+  color: #fff;
+}
+
+.moment-viewer .icon-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.moment-viewer__paused {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.5);
+  font-size: var(--text-xs);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.moment-viewer__bottom {
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: 2;
+  display: grid;
+  gap: 8px;
+  padding: 24px 10px calc(env(safe-area-inset-bottom) + 12px);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.55));
+}
+
+.moment-viewer__reactions {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.moment-react {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: transform var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+
+.moment-react:hover {
+  transform: scale(1.08);
+}
+
+.moment-react[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 2px #fff;
+}
+
+.moment-viewer__reply {
+  display: flex;
+  gap: 6px;
+}
+
+.moment-viewer__reply input {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 22px;
+  background: rgba(0, 0, 0, 0.25);
+  color: #fff;
+  font-size: 1rem;
+}
+
+.moment-viewer__reply input::placeholder {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.moment-viewer__seen {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.moment-viewer__nav {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .moment-viewer__nav {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 16px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+    color: #fff;
+    cursor: pointer;
+  }
+
+  .moment-viewer__nav:disabled {
+    visibility: hidden;
+  }
+}
+
+.moment-viewer__expired {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+}
+
+/* ---------- Viewers list (your Moment) ---------- */
+
+.moment-viewers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.moment-viewers li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.moment-viewers__who {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.moment-viewers__who span:last-child {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+.moment-viewers__reaction {
+  font-size: 1.3rem;
+}
+
+/* ---------- Composer ---------- */
+
+.moment-composer {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.moment-composer__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.moment-composer__preview {
+  width: min(100%, 260px);
+  aspect-ratio: 9 / 16;
+  justify-self: center;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
+}
+
+@media (max-height: 760px) {
+  .moment-composer__preview {
+    width: min(100%, 190px);
+  }
+}
+
+.moment-composer__bgs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.moment-swatch {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.moment-swatch input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.moment-swatch:has(input:checked) {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+.moment-swatch:has(input:focus-visible) {
+  box-shadow: var(--focus-ring);
+}
+
+.moment-composer textarea {
+  height: auto;
+  padding: var(--space-3) var(--space-4);
+  resize: none;
+}
+
+.moment-composer__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* ---------- Admin ---------- */
+
+.moment-report {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.moment-report__thumb {
+  width: 72px;
+  height: 128px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.moment-composer__note {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  text-align: center;
+}

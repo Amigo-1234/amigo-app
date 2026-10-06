@@ -571,6 +571,8 @@ export interface AdminApi {
   support: SupportAdminApi;
   /** Message reports (only the evidence reporters submitted — admins can't read conversations). */
   messageReports?: MessageReportsAdminApi;
+  /** Reported Moments: review and remove. */
+  moments?: MomentsAdminApi;
   users: AdminUsersApi;
 }
 
@@ -798,6 +800,112 @@ export interface MessageReportsAdminApi {
   setStatus(adminId: string, reportId: string, status: "open" | "reviewed"): Promise<void>;
 }
 
+// ------------------------------------------------------------------ moments
+
+/** Who can see a Moment. Close friends may come later. */
+export type MomentAudience = "everyone" | "followers";
+
+/** Background styles for text Moments (also behind text over a photo while it loads). */
+export const MOMENT_BACKGROUNDS = ["coral", "sunset", "ocean", "forest", "night", "plain"] as const;
+export type MomentBackground = (typeof MOMENT_BACKGROUNDS)[number];
+
+/** The quick reactions offered on a Moment. */
+export const MOMENT_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👏"] as const;
+
+export const MOMENT_TEXT_MAX_LENGTH = 200;
+export const MOMENT_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+/** A temporary post: a photo, text on a background, or text over a photo. Gone after 24 hours. */
+export interface Moment {
+  id: string;
+  author: Author;
+  text: string;
+  background: MomentBackground;
+  /** The photo, if any. */
+  media: MediaItem | null;
+  audience: MomentAudience;
+  createdAt: Date;
+  expiresAt: Date;
+  /** You've seen it. */
+  seen: boolean;
+  /** Your reaction (emoji), if any. */
+  viewerReaction: string | null;
+  /** Your own Moments only: how many people have seen it. */
+  viewCount?: number;
+}
+
+/** One person's active Moments, oldest first (the viewer plays them in order). */
+export interface MomentGroup {
+  author: Author;
+  moments: Moment[];
+  /** At least one you haven't seen. */
+  hasUnseen: boolean;
+  isViewer: boolean;
+}
+
+/** Your own Moment's viewers (with their reaction). Only the author can list them. */
+export interface MomentViewer {
+  person: Author;
+  viewedAt: Date;
+  reaction: string | null;
+}
+
+export interface NewMomentInput {
+  text: string;
+  background: MomentBackground;
+  image?: NewMediaInput | null;
+  audience: MomentAudience;
+}
+
+export type MomentErrorCode = "empty" | "too-long" | "not-found" | "not-allowed" | "unknown";
+
+export class MomentError extends Error {
+  code: MomentErrorCode;
+  constructor(code: MomentErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/**
+ * Moments. Optional capability (demo and Supabase). Replies are sent through
+ * Messages (MessagesApi), so they're private to the two people — on the
+ * Supabase backend end-to-end encrypted like any message.
+ */
+export interface MomentsApi {
+  /** Everyone whose Moments you can see right now: you first, then unseen, newest first. */
+  subscribeFeed(viewerId: string, sub: Subscription<MomentGroup[]>): Unsubscribe;
+  /** One person's active Moments you can see (empty when none). */
+  forAuthor(authorId: string, viewerId: string): Promise<Moment[]>;
+  create(viewer: Viewer, input: NewMomentInput): Promise<{ id: string }>;
+  /** Your own, before it expires. */
+  delete(viewerId: string, momentId: string): Promise<void>;
+  markSeen(viewerId: string, momentId: string): Promise<void>;
+  /** null removes your reaction. */
+  react(viewerId: string, momentId: string, emoji: string | null): Promise<void>;
+  viewers(viewerId: string, momentId: string): Promise<MomentViewer[]>;
+  report(viewerId: string, momentId: string, input: { reason: MessageReportReason; note: string }): Promise<void>;
+}
+
+/** A reported Moment, as admins see it. Admins see the Moment, never Moment replies (those are Messages). */
+export interface MomentReport {
+  id: string;
+  reporter: { id: string; handle: string };
+  reason: MessageReportReason;
+  note: string;
+  status: "open" | "reviewed";
+  createdAt: Date;
+  /** null once it expired or was deleted. */
+  moment: { id: string; author: Author; text: string; media: MediaItem | null; background: MomentBackground; createdAt: Date; removed: boolean } | null;
+}
+
+export interface MomentsAdminApi {
+  listReports(adminId: string): Promise<MomentReport[]>;
+  /** Takes the Moment down for everyone (audit-logged). */
+  remove(adminId: string, momentId: string, note: string): Promise<void>;
+  setReportStatus(adminId: string, reportId: string, status: "open" | "reviewed"): Promise<void>;
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
@@ -829,6 +937,8 @@ export interface DataSource {
   admin?: AdminApi;
   /** Optional capability — see MessagesApi. */
   messages?: MessagesApi;
+  /** Optional capability — see MomentsApi. */
+  moments?: MomentsApi;
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;

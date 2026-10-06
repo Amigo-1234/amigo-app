@@ -21,4 +21,4 @@ export const dataSource: DataSource =
       : (await import("./firebaseSource")).firebaseSource;
 
 export type * from "./types";
-export { AuthError, BIO_MAX_LENGTH, HANDLE_PATTERN, MESSAGE_MAX_LENGTH, MessageError, SecurityError, NAME_MAX_LENGTH, POST_MAX_LENGTH, ProfileError, SUPPORT_LIMITS, SupportError, WORLD_CHAT_MAX_LENGTH, WorldError } from "./types";
+export { AuthError, BIO_MAX_LENGTH, HANDLE_PATTERN, MESSAGE_MAX_LENGTH, MessageError, SecurityError, MOMENT_BACKGROUNDS, MOMENT_LIFETIME_MS, MOMENT_REACTIONS, MOMENT_TEXT_MAX_LENGTH, MomentError, NAME_MAX_LENGTH, POST_MAX_LENGTH, ProfileError, SUPPORT_LIMITS, SupportError, WORLD_CHAT_MAX_LENGTH, WorldError } from "./types";

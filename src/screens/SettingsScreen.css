@@ -50,31 +50,6 @@
   font-size: var(--text-sm);
 }
 
-.segmented {
-  display: inline-flex;
-  padding: 3px;
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-}
-
-.segmented__opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 var(--space-3);
-  border-radius: 9px;
-  color: var(--text-2);
-  font-size: var(--text-sm);
-  font-weight: 600;
-}
-
-.segmented__opt[aria-checked="true"] {
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
-}
-
 @media (min-width: 768px) {
   .profile-head,
   .settings-group {

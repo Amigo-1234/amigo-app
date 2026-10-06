@@ -16,6 +16,7 @@ import { StateMessage } from "../../ui/StateMessage";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
 import { describeError } from "../feed/errors";
 import { clockTime, dayLabel, sameDay, STATUS_LABEL } from "./format";
+import { REPORT_REASONS } from "../reports/reasons";
 import { MessageComposer } from "./MessageComposer";
 import { useConversation, type PendingMessage } from "./useMessages";
 import "./Security.css";
@@ -454,12 +455,6 @@ function BlockSheet({ conversation, viewerId, onDone }: { conversation: Conversa
   );
 }
 
-const REASONS: { id: MessageReportReason; label: string }[] = [
-  { id: "spam", label: "Spam or scam" },
-  { id: "harassment", label: "Harassment or bullying" },
-  { id: "inappropriate", label: "Inappropriate content" },
-  { id: "other", label: "Something else" },
-];
 
 function ReportSheet({ conversation, messages, viewerId, onDone }: { conversation: Conversation; messages: DirectMessage[]; viewerId: string; onDone: () => void }) {
   const api = dataSource.messages!;
@@ -497,7 +492,7 @@ function ReportSheet({ conversation, messages, viewerId, onDone }: { conversatio
       <h2 className="sheet-form__title">Report @{conversation.peer.handle}</h2>
       <fieldset className="sheet-form__choices">
         <legend className="sheet-form__body">What's wrong?</legend>
-        {REASONS.map((r) => (
+        {REPORT_REASONS.map((r) => (
           <label key={r.id} className="choice">
             <input type="radio" name="report-reason" checked={reason === r.id} onChange={() => setReason(r.id)} />
             {r.label}

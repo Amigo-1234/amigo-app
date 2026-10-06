@@ -7,11 +7,13 @@ import { useFeed, type FeedTab } from "../features/feed/useFeed";
 import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { FeedFooter } from "../features/feed/FeedFooter";
+import { MomentsRow } from "../features/moments/MomentsRow";
 import { messagesInBottomBar } from "../shell/nav";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
 import { pendingAsPost, usePublishing } from "../state/publishing";
 import { messagesEnabled, messagesLabel, useUnreadMessages } from "../state/messages";
+import { momentsEnabled } from "../state/moments";
 import { badgeText, notificationsEnabled, notificationsLabel, useUnread } from "../state/notifications";
 import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
@@ -90,6 +92,8 @@ export default function HomeScreen() {
           ))}
         </div>
       </ScreenHeader>
+
+      {momentsEnabled && <MomentsRow />}
 
       <div className="home-composer">
         <Composer variant="inline" />

@@ -97,7 +97,7 @@ Function execute rights are explicit: PostgreSQL's built-in `PUBLIC` execute def
 (migration `20261006140000`), and the test suite fails if any `public` function is executable by
 `PUBLIC`. **Every migration that adds a function must `revoke … from public` and grant explicitly.**
 
-Tested by `supabase/tests/database.test.sql` (263 checks) and
+Tested by `supabase/tests/database.test.sql` (298 checks) and
 `scripts/test/supabase-api.test.mjs` (147 checks through PostgREST). Messages / E2E: see [MESSAGES.md](MESSAGES.md).
 
 ## Realtime
@@ -134,17 +134,5 @@ create table public.bookmarks (
 
 -- Messages: built (end-to-end encrypted) — see MESSAGES.md and 20261006200000_messages.sql.
 
-create table public.moments (
-  id uuid primary key default gen_random_uuid(),
-  author_id uuid references public.profiles on delete cascade,
-  media_path text not null, caption text,
-  created_at timestamptz default now(),
-  expires_at timestamptz not null default now() + interval '24 hours');
-create table public.moment_views (
-  moment_id uuid references public.moments on delete cascade,
-  viewer_id uuid references public.profiles on delete cascade,
-  viewed_at timestamptz default now(),
-  primary key (moment_id, viewer_id));
--- RLS: moments visible while expires_at > now() to followers; views readable by the moment's author only.
--- Expiry cleanup via pg_cron; media in a private bucket with short-lived signed URLs.
+-- Moments: built — see MOMENTS.md and 20261006220000_moments.sql.
 ```

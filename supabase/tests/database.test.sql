@@ -810,6 +810,94 @@ select pg_temp.check('admin marks a report reviewed (audit-logged)',
 select pg_temp.check('admins still can''t read any conversation',
   pg_temp.q(:D, $$select (select count(*) from public.dm_messages) + (select count(*) from public.dm_conversations) + (select count(*) from public.e2e_to_device)$$)::int = 0);
 
+-- ----------------------------------------------------------------- moments
+
+-- A posts; B follows A; C doesn't; D is an admin.
+delete from public.follows where follower_id in (:B, :C) and followee_id = :A;
+insert into public.follows (follower_id, followee_id) values (:B, :A);
+delete from public.user_blocks;
+create temp table mo_t (k text primary key, v text);
+grant all on mo_t to authenticated, anon;
+select pg_temp.must_fail('anon cannot post Moments', null, $$select public.create_moment('hi', 'coral', null, null, null, 'everyone')$$, '42501');
+select pg_temp.must_fail('empty Moment rejected', :A, $$select public.create_moment('  ', 'coral', null, null, null, 'everyone')$$, 'MO001');
+select pg_temp.must_fail('unknown background rejected', :A, $$select public.create_moment('hi', 'neon', null, null, null, 'everyone')$$, 'MO001');
+select pg_temp.must_fail('photo must be in your own folder', :A, $$select public.create_moment('', 'coral', '00000000-0000-0000-0000-00000000000b/x.jpg', 10, 10, 'everyone')$$, 'MO003');
+insert into mo_t values ('pub', pg_temp.q(:A, $$select public.create_moment('hello everyone', 'ocean', null, null, null, 'everyone')$$));
+insert into mo_t values ('fol', pg_temp.q(:A, $$select public.create_moment('', 'coral', '00000000-0000-0000-0000-00000000000a/m.jpg', 1080, 1920, 'followers')$$));
+select pg_temp.check('Moments expire 24 hours after posting', (select expires_at - created_at = interval '24 hours' from public.moments where id = (select v::uuid from mo_t where k = 'pub')));
+select pg_temp.check('a follower sees both', pg_temp.q(:B, $$select count(*) from public.moments_feed() where author_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 2);
+select pg_temp.check('a non-follower sees only the public one',
+  pg_temp.q(:C, $$select count(*) from public.moments_feed() where author_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 1
+  and pg_temp.q(:C, $$select count(*) from public.moments where author_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 1);
+select pg_temp.must_fail('anon sees no Moments', null, $$select count(*) from public.moments$$, '42501');
+select pg_temp.must_fail('no direct writes', :A, $$update public.moments set expires_at = now() + interval '10 days'$$, '42501');
+select pg_temp.must_fail('non-follower can''t mark a followers-only Moment seen', :C,
+  format($$select public.mark_moment_seen(%L)$$, (select v from mo_t where k = 'fol')), 'MO002');
+
+-- Views, reactions, viewers
+select pg_temp.q(:B, format($$select public.mark_moment_seen(%L)::text$$, (select v from mo_t where k = 'pub')));
+select pg_temp.q(:B, format($$select public.mark_moment_seen(%L)::text$$, (select v from mo_t where k = 'pub')));
+select pg_temp.check('seen once (and shows as seen)', pg_temp.q(:B, format($$select seen::text from public.moments_feed() where id = %L$$, (select v from mo_t where k = 'pub'))) = 'true'
+  and (select count(*) = 1 from public.moment_views where moment_id = (select v::uuid from mo_t where k = 'pub')));
+select pg_temp.must_fail('only the listed reactions', :B, format($$select public.react_to_moment(%L, '💩')$$, (select v from mo_t where k = 'pub')), 'MO001');
+select pg_temp.q(:B, format($$select public.react_to_moment(%L, '🔥')::text$$, (select v from mo_t where k = 'pub')));
+select pg_temp.q(:C, format($$select public.react_to_moment(%L, '❤️')::text$$, (select v from mo_t where k = 'pub')));
+select pg_temp.must_fail('can''t react to your own', :A, format($$select public.react_to_moment(%L, '❤️')$$, (select v from mo_t where k = 'pub')), 'MO003');
+select pg_temp.check('author sees view count', pg_temp.q(:A, format($$select view_count from public.moments_feed() where id = %L$$, (select v from mo_t where k = 'pub')))::int = 2);
+select pg_temp.check('others don''t see view counts', pg_temp.q(:B, format($$select coalesce(view_count::text, 'none') from public.moments_feed() where id = %L$$, (select v from mo_t where k = 'pub'))) = 'none');
+select pg_temp.check('author lists viewers with reactions',
+  pg_temp.q(:A, format($$select string_agg(reaction, '' order by reaction) from public.moment_viewers(%L)$$, (select v from mo_t where k = 'pub'))) = '❤️🔥');
+select pg_temp.must_fail('only the author lists viewers', :B, format($$select * from public.moment_viewers(%L)$$, (select v from mo_t where k = 'pub')), 'MO003');
+select pg_temp.must_fail('views/reactions not directly readable', :A, $$select count(*) from public.moment_views$$, '42501');
+select pg_temp.q(:B, format($$select public.react_to_moment(%L, null)::text$$, (select v from mo_t where k = 'pub')));
+select pg_temp.check('reaction can be removed', pg_temp.q(:B, format($$select coalesce(my_reaction, 'none') from public.moments_feed() where id = %L$$, (select v from mo_t where k = 'pub'))) = 'none');
+
+-- Blocking hides Moments both ways
+select pg_temp.q(:C, $$select public.dm_block('00000000-0000-0000-0000-00000000000a')::text$$);
+select pg_temp.check('blocked: neither sees the other''s Moments', pg_temp.q(:C, $$select count(*) from public.moments_feed() where author_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 0);
+select pg_temp.q(:C, $$select public.dm_unblock('00000000-0000-0000-0000-00000000000a')::text$$);
+
+-- Expiry
+update public.moments set created_at = now() - interval '25 hours', expires_at = now() - interval '1 hour' where id = (select v::uuid from mo_t where k = 'pub');
+select pg_temp.check('expired Moments disappear for everyone, author included',
+  pg_temp.q(:B, $$select count(*) from public.moments_feed() where author_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 1
+  and pg_temp.q(:A, $$select count(*) from public.moments_feed() where author_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 1);
+select pg_temp.must_fail('expired: can''t react any more', :B, format($$select public.react_to_moment(%L, '🔥')$$, (select v from mo_t where k = 'pub')), 'MO002');
+update public.moments set created_at = now(), expires_at = now() + interval '24 hours' where id = (select v::uuid from mo_t where k = 'pub');
+
+-- Reports + admin removal
+select pg_temp.must_fail('can''t report your own', :A, format($$select public.report_moment(%L, 'spam', '')$$, (select v from mo_t where k = 'pub')), 'MO003');
+select pg_temp.q(:C, format($$select public.report_moment(%L, 'spam', 'buy now')::text$$, (select v from mo_t where k = 'pub')));
+select pg_temp.must_fail('reports are admin-only', :B, $$select count(*) from public.admin_moment_reports()$$, '42501');
+select pg_temp.check('admin sees the reported Moment', pg_temp.q(:D, $$select body from public.admin_moment_reports() limit 1$$) = 'hello everyone');
+select pg_temp.must_fail('only admins remove Moments', :B, format($$select public.admin_remove_moment(%L, '')$$, (select v from mo_t where k = 'pub')), '42501');
+select pg_temp.q(:D, format($$select public.admin_remove_moment(%L, 'spam link')::text$$, (select v from mo_t where k = 'pub')));
+select pg_temp.check('removed Moment is gone for everyone', pg_temp.q(:B, format($$select count(*) from public.moments_feed() where id = %L$$, (select v from mo_t where k = 'pub')))::int = 0
+  and pg_temp.q(:A, format($$select count(*) from public.moments_feed() where id = %L$$, (select v from mo_t where k = 'pub')))::int = 0);
+select pg_temp.check('removal is audit-logged and closes the report',
+  exists (select 1 from public.admin_audit_log where action = 'moment.remove' and summary like 'removed a Moment by @% — spam link')
+  and pg_temp.q(:D, $$select status || '/' || removed from public.admin_moment_reports() limit 1$$) = 'reviewed/true');
+select pg_temp.check('admins get no path to Moment replies (they are direct messages)',
+  pg_temp.q(:D, $$select count(*) from public.dm_messages$$)::int = 0);
+
+-- Delete your own
+select pg_temp.must_fail('can''t delete someone else''s Moment', :B, format($$select public.delete_moment(%L)$$, (select v from mo_t where k = 'fol')), 'MO003');
+insert into mo_t values ('delpath', pg_temp.q(:A, format($$select public.delete_moment(%L)$$, (select v from mo_t where k = 'fol'))));
+select pg_temp.check('author deletes their Moment (returns the photo path for cleanup)',
+  (select v = '00000000-0000-0000-0000-00000000000a/m.jpg' from mo_t where k = 'delpath')
+  and not exists (select 1 from public.moments where id = (select v::uuid from mo_t where k = 'fol')));
+
+-- Storage
+select pg_temp.check('moment-media bucket is private', (select not public from storage.buckets where id = 'moment-media'));
+insert into mo_t values ('ph', pg_temp.q(:A, $$select public.create_moment('', 'coral', '00000000-0000-0000-0000-00000000000a/f.jpg', 10, 10, 'followers')$$));
+insert into storage.objects (bucket_id, name) values ('moment-media', '00000000-0000-0000-0000-00000000000a/f.jpg');
+select pg_temp.check('followers can fetch the photo; others can''t',
+  pg_temp.q(:B, $$select count(*) from storage.objects where bucket_id = 'moment-media'$$)::int = 1
+  and pg_temp.q(:C, $$select count(*) from storage.objects where bucket_id = 'moment-media'$$)::int = 0);
+select pg_temp.must_fail('upload only into your own folder', :B,
+  $$insert into storage.objects (bucket_id, name) values ('moment-media', '00000000-0000-0000-0000-00000000000a/evil.jpg')$$, '42501');
+select pg_temp.must_fail('purge is not callable by users', :A, $$select public.purge_expired_moments()$$, '42501');
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');

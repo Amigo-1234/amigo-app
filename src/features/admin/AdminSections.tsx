@@ -8,7 +8,7 @@ import { worldStatus } from "../worlds/time";
 /** Real counts only — things that need an admin's attention, and what admins did recently. */
 export function AdminOverview() {
   const viewer = useViewer();
-  const [counts, setCounts] = useState<{ pending: number; reports: number; flags: number; messageReports: number } | null>(null);
+  const [counts, setCounts] = useState<{ pending: number; reports: number; flags: number; messageReports: number; momentReports: number } | null>(null);
   const [audit, setAudit] = useState<AdminAuditEntry[] | null>(null);
   useEffect(() => {
     const a = dataSource.admin!.support;
@@ -19,9 +19,16 @@ export function AdminOverview() {
       a.suspicious(viewer.id),
       a.audit(viewer.id, 8),
       dm ? dm.list(viewer.id).catch(() => []) : Promise.resolve([]),
+      dataSource.admin!.moments ? dataSource.admin!.moments.listReports(viewer.id).catch(() => []) : Promise.resolve([]),
     ]).then(
-      ([pending, reports, flags, log, dms]) => {
-        setCounts({ pending: pending.length, reports: reports.length, flags: flags.length, messageReports: dms.filter((r) => r.status === "open").length });
+      ([pending, reports, flags, log, dms, moments]) => {
+        setCounts({
+          pending: pending.length,
+          reports: reports.length,
+          flags: flags.length,
+          messageReports: dms.filter((r) => r.status === "open").length,
+          momentReports: moments.filter((r) => r.status === "open").length,
+        });
         setAudit(log);
       },
     );
@@ -32,6 +39,7 @@ export function AdminOverview() {
         { n: counts.reports, label: "Open reports on Support requests", to: "/admin/support?tab=reports" },
         { n: counts.flags, label: "Support activity flagged for a look", to: "/admin/support?tab=activity" },
         ...(dataSource.admin!.messageReports ? [{ n: counts.messageReports, label: "Open message reports", to: "/admin/reports" }] : []),
+        ...(dataSource.admin!.moments ? [{ n: counts.momentReports, label: "Reported Moments", to: "/admin/reports" }] : []),
       ]
     : [];
   return (

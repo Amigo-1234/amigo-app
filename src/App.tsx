@@ -7,6 +7,7 @@ import { ComingSoonScreen } from "./screens/ComingSoonScreen";
 import { AppShell } from "./shell/AppShell";
 import { ComposerProvider } from "./state/composer";
 import { MessagesProvider } from "./state/messages";
+import { MomentsProvider } from "./state/moments";
 import { SecurityProvider } from "./state/security";
 import { NotificationsProvider, notificationsEnabled } from "./state/notifications";
 import { PublishingProvider } from "./state/publishing";
@@ -69,7 +70,9 @@ function Root() {
           <MessagesProvider>
             <SecurityProvider>
               <MediaViewerProvider>
-                <AppShell />
+                <MomentsProvider>
+                  <AppShell />
+                </MomentsProvider>
               </MediaViewerProvider>
             </SecurityProvider>
           </MessagesProvider>

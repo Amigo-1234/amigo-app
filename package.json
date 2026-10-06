@@ -14,6 +14,7 @@
     "db:types": "supabase gen types typescript --local --schema public > src/data/supabase/database.types.ts",
     "test:api": "node scripts/test/supabase-api.test.mjs",
     "test:e2e": "node scripts/test/supabase-e2e.test.mjs",
+    "test:moments": "node scripts/test/supabase-moments.test.mjs",
     "migrate:extract": "node scripts/migration/extract.ts",
     "migrate:audit": "node scripts/migration/audit.ts",
     "migrate:plan": "node scripts/migration/migrate.ts --plan-only",

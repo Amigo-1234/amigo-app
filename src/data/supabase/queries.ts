@@ -943,3 +943,12 @@ export async function adminSetMessageReportStatus(db: Db, reportId: string, stat
   const { error } = await db.rpc("admin_dm_report_set_status", { p_report: reportId, p_status: status });
   if (error) throw new SupportError(error.code === "42501" ? "not-admin" : "unknown", error.message);
 }
+
+/** Public profile fields (+ verified) for a set of people, keyed by id. */
+export async function fetchAuthors(db: Db, ids: string[]) {
+  const unique = [...new Set(ids)];
+  if (!unique.length) return new Map<string, ReturnType<typeof toAuthor>>();
+  const { data, error } = await db.from("profiles").select(PERSON).in("id", unique);
+  if (error) throw error;
+  return new Map((data ?? []).map((p) => [p.id, toAuthor(p as ProfileRow)]));
+}

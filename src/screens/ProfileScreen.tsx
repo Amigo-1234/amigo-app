@@ -15,6 +15,8 @@ import { formatCount } from "../lib/format";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
 import { messagesEnabled } from "../state/messages";
+import { useMoments } from "../state/moments";
+import "../features/moments/Moments.css";
 import { useViewer } from "../state/session";
 import { useToast } from "../state/toast";
 import { Avatar } from "../ui/Avatar";
@@ -109,6 +111,19 @@ export default function ProfileScreen() {
   );
 }
 
+/** The profile photo; with a ring (and opens them) when the person has active Moments you can see. */
+function ProfileAvatar({ profile }: { profile: Profile }) {
+  const { groups, open } = useMoments();
+  const group = groups?.find((g) => g.author.id === profile.id);
+  const avatar = <Avatar name={profile.name} src={profile.avatarUrl} seed={profile.id} size="xl" />;
+  if (!group) return avatar;
+  return (
+    <button type="button" className="moment-avatar-btn" onClick={() => open(profile.id, [group])} aria-label={`View ${profile.name}'s Moments`}>
+      <span className={`moment-ring${group.hasUnseen ? " is-unseen" : ""}`}>{avatar}</span>
+    </button>
+  );
+}
+
 /** Opens (or starts) the one-to-one conversation with this person. */
 function MessageButton({ profile }: { profile: Profile }) {
   const viewer = useViewer();
@@ -142,7 +157,7 @@ function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; 
   return (
     <section className="profile" aria-label={`${profile.name}'s profile`}>
       <div className="profile__top">
-        <Avatar name={profile.name} src={profile.avatarUrl} seed={profile.id} size="xl" />
+        <ProfileAvatar profile={profile} />
         <div className="profile__action">
           {profile.isViewer ? (
             <Button variant="secondary" size="sm" onClick={onEdit}>

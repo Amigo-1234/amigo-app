@@ -14,6 +14,7 @@
 import type { AuthError as SupabaseAuthError, RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase/client";
 import { createSupabaseMessages } from "./supabase/messages";
+import { createSupabaseMoments } from "./supabase/moments";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
@@ -135,6 +136,8 @@ supabase.auth.onAuthStateChange((event, session) => {
 });
 
 // ------------------------------------------------------------------- source
+
+const moments = createSupabaseMoments(supabase, liveQuery, invalidate);
 
 export const supabaseSource: DataSource = {
   kind: "supabase",
@@ -397,6 +400,7 @@ export const supabaseSource: DataSource = {
   // The admin UI is only a convenience: every call below is re-checked by is_admin() in the database.
   admin: {
     isAdmin: () => q.fetchIsAdmin(supabase),
+    moments: moments.admin,
     messageReports: {
       list: () => q.adminMessageReports(supabase),
       async setStatus(_adminId, reportId, status) {
@@ -431,6 +435,8 @@ export const supabaseSource: DataSource = {
       listVerified: (adminId) => q.adminVerifiedUsers(supabase, adminId),
     },
   },
+
+  moments: moments.api,
 
   // End-to-end encrypted; the crypto library loads on first use.
   messages: createSupabaseMessages(supabase, liveQuery, invalidate),
