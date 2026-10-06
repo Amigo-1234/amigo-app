@@ -100,8 +100,13 @@ export const demoSource: DataSource = {
     return () => viewerListeners.delete(cb);
   },
   signIn: () => later(() => setViewer(me)),
-  signUp: (_e, _p, name) => later(() => setViewer({ ...me, name, handle: toHandle(name) })),
+  signUp: (_e, _p, name) =>
+    later(() => {
+      setViewer({ ...me, name, handle: toHandle(name) });
+      return { needsEmailConfirmation: false };
+    }),
   sendPasswordReset: () => later(() => undefined),
+  updatePassword: () => later(() => undefined),
   signOut: () => later(() => setViewer(null), 100),
   updateDisplayName: (name) => later(() => void (viewer && setViewer({ ...viewer, name, handle: toHandle(name) }))),
 

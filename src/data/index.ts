@@ -1,10 +1,24 @@
 import type { DataSource } from "./types";
 
-// Statically resolved by Vite, so production bundles never include demo data
-// and demo builds never initialise Firebase.
+/**
+ * Which backend the app talks to. Resolved at build time, so each build only
+ * bundles the SDK it uses.
+ *
+ *   VITE_DATA_SOURCE=supabase   the new backend
+ *   VITE_DATA_SOURCE=firebase   legacy — kept as the rollback path until cutover is final
+ *   VITE_DATA_SOURCE=demo       in-memory demo data for UI work
+ *
+ * Unset means firebase, so nothing changes in production until the cutover
+ * sets it explicitly.
+ */
+const source = import.meta.env.VITE_DATA_SOURCE ?? "firebase";
+
 export const dataSource: DataSource =
-  import.meta.env.VITE_DATA_SOURCE === "demo"
+  source === "demo"
     ? (await import("./demoSource")).demoSource
-    : (await import("./firebaseSource")).firebaseSource;
+    : source === "supabase"
+      ? (await import("./supabaseSource")).supabaseSource
+      : (await import("./firebaseSource")).firebaseSource;
 
 export type * from "./types";
+export { AuthError } from "./types";

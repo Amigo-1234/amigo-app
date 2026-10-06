@@ -64,9 +64,9 @@ export function useFeed(tab: FeedTab) {
         setStatus("error");
         setLoadingMore(false);
       },
-    });
+    }, tab);
     return unsub;
-  }, [viewer.id, limit, retryKey]);
+  }, [viewer.id, limit, retryKey, tab]);
 
   // First successful load marks everything currently present as seen.
   useEffect(() => {

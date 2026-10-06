@@ -15,6 +15,7 @@ const PostScreen = lazy(() => import("./screens/PostScreen"));
 const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
+const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
 
 function Splash() {
   return (
@@ -28,6 +29,13 @@ function Splash() {
 function Root() {
   const session = useSession();
   if (session.status === "loading") return <Splash />;
+  if (session.status === "recovery") {
+    return (
+      <Suspense fallback={<Splash />}>
+        <SetPasswordScreen />
+      </Suspense>
+    );
+  }
   if (session.status === "signedOut") {
     return (
       <Suspense fallback={<Splash />}>

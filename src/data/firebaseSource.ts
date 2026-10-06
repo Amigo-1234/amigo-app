@@ -25,6 +25,8 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
+// LEGACY: kept only as the rollback path until the Supabase cutover is final.
+// Do not add features here.
 import { auth, db } from "../lib/firebase";
 import { toHandle } from "../lib/handle";
 import {
@@ -35,7 +37,28 @@ import {
   type LegacyCommentDoc,
   type LegacyPostDoc,
 } from "./legacy";
-import type { DataSource, PersonSummary, Viewer } from "./types";
+import { AuthError, type AuthErrorCode, type DataSource, type PersonSummary, type Viewer } from "./types";
+
+const FIREBASE_AUTH_CODES: Record<string, AuthErrorCode> = {
+  "auth/invalid-credential": "invalid-credentials",
+  "auth/wrong-password": "invalid-credentials",
+  "auth/user-not-found": "invalid-credentials",
+  "auth/invalid-email": "invalid-email",
+  "auth/email-already-in-use": "email-in-use",
+  "auth/weak-password": "weak-password",
+  "auth/too-many-requests": "rate-limited",
+  "auth/network-request-failed": "network",
+};
+
+/** Run an auth call and translate Firebase error codes to AuthError. */
+async function authCall<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    const code = (e as { code?: string })?.code ?? "";
+    throw new AuthError(FIREBASE_AUTH_CODES[code] ?? "unknown", code);
+  }
+}
 
 const SERVER_WAIT_MS = 12_000;
 
@@ -68,17 +91,23 @@ export const firebaseSource: DataSource = {
   },
 
   async signIn(email, password) {
-    await signInWithEmailAndPassword(auth, email, password);
+    await authCall(() => signInWithEmailAndPassword(auth, email, password));
   },
 
   async signUp(email, password, name) {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    const cred = await authCall(() => createUserWithEmailAndPassword(auth, email, password));
     await updateProfile(cred.user, { displayName: name.trim() || email.split("@")[0] });
     await upsertUserDoc(cred.user);
+    return { needsEmailConfirmation: false };
   },
 
   async sendPasswordReset(email) {
-    await sendPasswordResetEmail(auth, email);
+    await authCall(() => sendPasswordResetEmail(auth, email));
+  },
+
+  async updatePassword() {
+    // Firebase handles resets on its own hosted page; nothing to do in-app.
+    throw new AuthError("unknown", "Password updates happen on the Firebase reset page");
   },
 
   async signOut() {

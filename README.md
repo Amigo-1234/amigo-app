@@ -2,28 +2,63 @@
 
 A social network for posts, moments and conversations with your people.
 
-This is the Phase 1 rebuild: a new design system, app shell and Home feed on top of
-the prototype's existing Firebase project. Accounts, posts, likes, replies and the
-follow graph from the prototype keep working.
+- **Phase 1:** the design system, app shell and Home feed.
+- **Phase 2 (this branch):** the Supabase backend (Postgres, Auth, Storage, Realtime, RLS) and
+  a verified, repeatable migration from the legacy Firebase project.
+
+Production stays on Firebase until the [cutover runbook](docs/migration/RUNBOOK.md) is
+complete. Firebase data is never modified by any of this.
 
 ## Running it
 
 ```bash
 npm install
-npm run dev        # real Firebase project (amigo-world-ebfab)
-npm run dev:demo   # in-memory demo data, no Firebase reads/writes
-npm run build      # typecheck + production build → dist/
+cp .env.example .env.local   # fill in your Supabase project
+npm run dev                  # backend chosen by VITE_DATA_SOURCE
+npm run dev:demo             # in-memory demo data, no backend at all
+npm run build                # typecheck (app + scripts) + production build
 ```
 
-To preview UI states in demo mode, add `?demo=loading`, `?demo=empty`, `?demo=error`,
-`?demo=slow` or `?demo=signedout` to the URL.
+| `VITE_DATA_SOURCE` | Backend |
+| --- | --- |
+| `supabase` | the new backend |
+| `firebase` *(default when unset)* | legacy, kept as the rollback path. No new features. |
+| `demo` | in-memory sample data (`?demo=loading\|empty\|error\|slow\|signedout`) |
 
-Deploys on Vercel use `vercel.json` (Vite preset, `dist/`, SPA rewrites).
+## Backend (Supabase)
+
+| | |
+| --- | --- |
+| Schema, RLS, functions, Storage | [`supabase/migrations`](supabase/migrations) · design notes in [docs/architecture/DATABASE.md](docs/architecture/DATABASE.md) |
+| Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
+| Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
+| Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
+| Tests | `npm run db:test`: 60 database/RLS checks, rolled back after running · `npm run test:api`: 29 checks through PostgREST |
+
+To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
+[`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied
+before the migrations (test-only stand-ins for `auth`/`storage`).
+
+## Migration (Firebase → Supabase)
+
+```bash
+npm run migrate:extract     # read-only snapshot of Firebase → migration-data/ (git-ignored, contains emails)
+npm run migrate:audit       # field shapes and data quality, no personal data printed
+npm run migrate:plan        # normalise every legacy format; list what would be skipped and why
+npm run migrate:run         # load into Supabase (idempotent) + validation report
+npm run migrate:validate    # re-check counts, counters, image checksums and a random sample
+```
+
+- [Firebase audit](docs/migration/AUDIT.md)
+- [Auth migration](docs/migration/AUTH.md)
+- [Cutover runbook](docs/migration/RUNBOOK.md)
+- [Local dry-run report](docs/migration/dry-run-report-local.md)
+- [Proposed Firebase rules](docs/migration/firebase-rules-proposal.md)
 
 ## Stack
 
 - Vite + React 19 + TypeScript, React Router
-- Firebase Auth (email/password) and Cloud Firestore through the modular SDK
+- Supabase (`@supabase/supabase-js`). Firebase SDK only in the legacy source.
 - Plain CSS with design tokens. No CSS framework.
 - Self-hosted variable fonts: Geist (UI text), Bricolage Grotesque (display)
 - Icons: lucide-react
@@ -34,8 +69,9 @@ Deploys on Vercel use `vercel.json` (Vite preset, `dist/`, SPA rewrites).
 src/
   data/          backend boundary — screens never touch Firestore directly
     types.ts         normalized models + DataSource interface
-    legacy.ts        adapters for every post shape the prototype ever wrote
-    firebaseSource.ts
+    supabase/        client, generated types, queries
+    supabaseSource.ts
+    firebaseSource.ts + legacy.ts   legacy backend (rollback path)
     demoSource.ts    used only when VITE_DATA_SOURCE=demo
   state/         session, theme, toasts, composer
   ui/            primitives: Button, Avatar, Sheet, Skeleton, StateMessage, Brand
@@ -44,6 +80,9 @@ src/
   screens/       Home, Post, Profile, Auth, placeholders
   styles/        tokens.css, base.css
 legacy/          the prototype's index.html, kept for reference (not built)
+supabase/        config, migrations, Edge Functions, database tests
+scripts/         migration (extract/audit/migrate) and API tests
+docs/            architecture and migration docs
 ```
 
 ## Design system
@@ -61,14 +100,7 @@ legacy/          the prototype's index.html, kept for reference (not built)
 - **Rules:** no decorative emoji, glows, gradients or floating ornaments in the UI
   chrome. Content carries the colour.
 
-## Data model (unchanged Firestore schema)
+## Legacy Firestore model
 
-| Path | Used for |
-| --- | --- |
-| `posts/{id}` | `text, authorId, authorName, createdAt, reactions{heart,…}, reacted{heart:[uid]}, commentsCount, imageDataUrl` (+ `imageWidth/imageHeight` from the new composer) |
-| `posts/{id}/comments/{id}` | replies |
-| `users/{uid}` | `displayName, avatarUrl, updatedAt` (old docs also have `email, mood, xp, streak`) |
-| `users/{uid}/following/{uid}`, `users/{uid}/followers/{uid}` | follow graph |
-| `globalChat/{id}` | prototype's public chat room. Not shown in the new UI yet; data is untouched. |
-
-The ❤️ reaction is the like. Other legacy reactions are kept but not shown.
+See [docs/migration/AUDIT.md](docs/migration/AUDIT.md) for every collection and
+historical document shape, and how each maps to the new schema.

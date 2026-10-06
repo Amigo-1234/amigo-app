@@ -6,14 +6,23 @@
   "scripts": {
     "dev": "vite",
     "dev:demo": "vite --mode demo",
-    "build": "tsc --noEmit -p . && vite build",
+    "build": "tsc --noEmit -p . && tsc -p scripts && vite build",
     "build:demo": "tsc --noEmit -p . && vite build --mode demo",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit -p ."
+    "typecheck": "tsc --noEmit -p . && tsc -p scripts",
+    "db:test": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/database.test.sql",
+    "db:types": "supabase gen types typescript --local --schema public > src/data/supabase/database.types.ts",
+    "test:api": "node scripts/test/supabase-api.test.mjs",
+    "migrate:extract": "node scripts/migration/extract.ts",
+    "migrate:audit": "node scripts/migration/audit.ts",
+    "migrate:plan": "node scripts/migration/migrate.ts --plan-only",
+    "migrate:run": "node scripts/migration/migrate.ts --target supabase",
+    "migrate:validate": "node scripts/migration/migrate.ts --target supabase --validate-only"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/geist": "^5.3.0",
+    "@supabase/supabase-js": "^2.117.2",
     "firebase": "^12.19.0",
     "lucide-react": "^1.52.0",
     "react": "^19.3.0",
@@ -21,9 +30,14 @@
     "react-router": "^8.4.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "firebase-admin": "^14.5.0",
+    "pg": "^8.23.1",
+    "supabase": "^2.119.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"
   }

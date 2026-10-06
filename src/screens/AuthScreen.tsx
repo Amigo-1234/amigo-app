@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { dataSource } from "../data";
+import { AuthError, dataSource } from "../data";
 import { Wordmark } from "../ui/Brand";
 import { Button } from "../ui/Button";
 import "./AuthScreen.css";
@@ -7,21 +7,21 @@ import "./AuthScreen.css";
 type Mode = "signIn" | "signUp" | "reset";
 
 function authMessage(error: unknown): string {
-  const code = (error as { code?: string })?.code ?? "";
+  const code = error instanceof AuthError ? error.code : "unknown";
   switch (code) {
-    case "auth/invalid-credential":
-    case "auth/wrong-password":
-    case "auth/user-not-found":
+    case "invalid-credentials":
       return "That email and password don't match. Try again or reset your password.";
-    case "auth/invalid-email":
+    case "invalid-email":
       return "That doesn't look like a valid email address.";
-    case "auth/email-already-in-use":
+    case "email-in-use":
       return "There's already an account with this email. Sign in instead.";
-    case "auth/weak-password":
+    case "weak-password":
       return "Use at least 6 characters for your password.";
-    case "auth/too-many-requests":
+    case "email-not-confirmed":
+      return "Confirm your email first — check your inbox for the link we sent.";
+    case "rate-limited":
       return "Too many attempts. Wait a moment and try again.";
-    case "auth/network-request-failed":
+    case "network":
       return "Can't reach Amigo right now. Check your connection.";
     default:
       return "Something went wrong. Please try again.";
@@ -50,7 +50,13 @@ export default function AuthScreen() {
     setNotice(null);
     try {
       if (mode === "signIn") await dataSource.signIn(email.trim(), password);
-      else if (mode === "signUp") await dataSource.signUp(email.trim(), password, name);
+      else if (mode === "signUp") {
+        const { needsEmailConfirmation } = await dataSource.signUp(email.trim(), password, name);
+        if (needsEmailConfirmation) {
+          setMode("signIn");
+          setNotice("Check your inbox — confirm your email, then sign in.");
+        }
+      }
       else {
         await dataSource.sendPasswordReset(email.trim());
         setNotice("If there's an account for that email, a reset link is on its way.");

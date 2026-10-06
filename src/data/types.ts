@@ -62,6 +62,27 @@ export interface NewPostInput {
 
 export type Unsubscribe = () => void;
 
+export type FeedScope = "latest" | "following";
+
+/** Backend-neutral auth failures, so screens never depend on SDK error strings. */
+export type AuthErrorCode =
+  | "invalid-credentials"
+  | "email-in-use"
+  | "weak-password"
+  | "invalid-email"
+  | "email-not-confirmed"
+  | "rate-limited"
+  | "network"
+  | "unknown";
+
+export class AuthError extends Error {
+  code: AuthErrorCode;
+  constructor(code: AuthErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
@@ -69,18 +90,23 @@ export interface Subscription<T> {
 
 /** Everything the UI needs from a backend. Implemented by Firebase and demo sources. */
 export interface DataSource {
-  kind: "firebase" | "demo";
+  kind: "firebase" | "supabase" | "demo";
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;
   signIn(email: string, password: string): Promise<void>;
-  signUp(email: string, password: string, name: string): Promise<void>;
+  /** needsEmailConfirmation: the account exists but the person must click the emailed link first. */
+  signUp(email: string, password: string, name: string): Promise<{ needsEmailConfirmation: boolean }>;
   sendPasswordReset(email: string): Promise<void>;
+  /** Fires when someone arrives through a password-reset link and must choose a new password. */
+  onPasswordRecovery?(cb: () => void): Unsubscribe;
+  updatePassword(newPassword: string): Promise<void>;
   signOut(): Promise<void>;
   updateDisplayName(name: string): Promise<void>;
 
   // posts
-  subscribeLatestPosts(viewerId: string | null, limit: number, sub: Subscription<{ posts: Post[]; hasMore: boolean }>): Unsubscribe;
+  /** scope is a hint: backends that can filter server-side do; the feed hook filters again regardless. */
+  subscribeLatestPosts(viewerId: string | null, limit: number, sub: Subscription<{ posts: Post[]; hasMore: boolean }>, scope?: FeedScope): Unsubscribe;
   subscribePost(postId: string, viewerId: string | null, sub: Subscription<Post | null>): Unsubscribe;
   createPost(viewer: Viewer, input: NewPostInput): Promise<void>;
   setLiked(postId: string, viewerId: string, liked: boolean): Promise<void>;
