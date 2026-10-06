@@ -19,11 +19,14 @@ import type {
   MediaItem,
   MessageReportReason,
   MessagesApi,
+  MessageReport,
+  MessageReportsAdminApi,
   MessageStatus,
   NewMediaInput,
+  PeerTrust,
   Subscription,
 } from "./types";
-import { MESSAGE_MAX_LENGTH, MessageError } from "./types";
+import { MESSAGE_MAX_LENGTH, MessageError, SupportError } from "./types";
 
 export interface MessagesContext {
   author: (id: string) => Author;
@@ -34,6 +37,10 @@ export interface MessagesContext {
   img: (seed: string, w: number, h: number) => MediaItem;
   /** Turns an upload into a blob: URL the demo can also save. */
   upload: (m: NewMediaInput) => MediaItem;
+  /** Simulated security state (demoSecurity.ts): sending pauses on a changed key or an unapproved device. */
+  security: { trustOf: (peerId: string) => PeerTrust; deviceVerified: () => boolean };
+  isAdmin: (id: string) => boolean;
+  handleOf: (id: string) => string;
 }
 
 interface MessageRecord {
@@ -64,6 +71,9 @@ interface ReportRecord {
   note: string;
   messages: { id: string; senderId: string; text: string; createdAt: Date }[];
   createdAt: Date;
+  status?: "open" | "reviewed";
+  reviewedBy?: string | null;
+  reviewedAt?: Date | null;
 }
 
 const MIN = 60_000;
@@ -268,6 +278,8 @@ export function createDemoMessages(ctx: MessagesContext) {
         if (!c) throw new MessageError("not-found");
         const peer = peerOf(c, viewerId);
         if (blockedEither(viewerId, peer)) throw new MessageError("blocked");
+        if (!ctx.security.deviceVerified()) throw new MessageError("device-unverified");
+        if (ctx.security.trustOf(peer) === "changed-verified") throw new MessageError("identity-changed");
         const text = input.text.trim();
         if (!text && !input.image) throw new MessageError("empty");
         if (text.length > MESSAGE_MAX_LENGTH) throw new MessageError("too-long");
@@ -330,11 +342,48 @@ export function createDemoMessages(ctx: MessagesContext) {
             .map(({ id, senderId, text, createdAt }) => ({ id, senderId, text, createdAt })),
           createdAt: new Date(),
         });
+        ctx.emit();
       }, 400),
+  };
+
+  const requireAdmin = (id: string) => {
+    if (!ctx.isAdmin(id)) throw new SupportError("not-admin", "Admins only");
+  };
+  /** Admin review: only what reporters submitted. There is no admin view of conversations. */
+  const adminReports: MessageReportsAdminApi = {
+    list: (adminId) =>
+      ctx.later((): MessageReport[] => {
+        requireAdmin(adminId);
+        return [...reports]
+          .sort((a, b) => Number((b.status ?? "open") === "open") - Number((a.status ?? "open") === "open") || b.createdAt.getTime() - a.createdAt.getTime())
+          .map((r) => ({
+            id: r.id,
+            reporter: { id: r.reporterId, handle: ctx.handleOf(r.reporterId) },
+            reported: { id: r.reportedId, handle: ctx.handleOf(r.reportedId) },
+            reason: r.reason,
+            note: r.note,
+            evidence: r.messages.map((m) => ({ id: m.id, fromReported: m.senderId === r.reportedId, text: m.text, createdAt: m.createdAt })),
+            status: r.status ?? "open",
+            createdAt: r.createdAt,
+            reviewedBy: r.reviewedBy ?? null,
+            reviewedAt: r.reviewedAt ?? null,
+          }));
+      }),
+    setStatus: (adminId, reportId, status) =>
+      ctx.later(() => {
+        requireAdmin(adminId);
+        const r = reports.find((x) => x.id === reportId);
+        if (!r) throw new SupportError("invalid", "No such report");
+        r.status = status;
+        r.reviewedBy = status === "reviewed" ? ctx.handleOf(adminId) : null;
+        r.reviewedAt = status === "reviewed" ? new Date() : null;
+        ctx.emit();
+      }, 300),
   };
 
   return {
     api,
+    adminReports,
     /** Test/demo hooks (window.__amigoDemo.messages). */
     hooks: {
       /** Someone sends you a message (creating the conversation if needed). */

@@ -73,6 +73,9 @@
   --accent-soft: rgba(255, 90, 60, 0.12);
   --danger: #c62b2b;
   --danger-soft: rgba(198, 43, 43, 0.1);
+  --success: #1f7a45;
+  --warning: #92580a;
+  --warning-soft: rgba(202, 138, 4, 0.13);
   --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--coral-500);
   --shadow-sm: 0 1px 2px rgba(24, 20, 14, 0.06);
   --shadow-lg: 0 12px 40px rgba(24, 20, 14, 0.16), 0 2px 6px rgba(24, 20, 14, 0.06);
@@ -99,6 +102,9 @@
     --accent-soft: rgba(255, 90, 60, 0.16);
     --danger: #ff6b6b;
     --danger-soft: rgba(255, 107, 107, 0.12);
+    --success: #5ccf8b;
+    --warning: #f2b544;
+    --warning-soft: rgba(242, 181, 68, 0.14);
     --shadow-sm: none;
     --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
     --scrim: rgba(0, 0, 0, 0.65);
@@ -124,6 +130,9 @@
   --accent-soft: rgba(255, 90, 60, 0.16);
   --danger: #ff6b6b;
   --danger-soft: rgba(255, 107, 107, 0.12);
+  --success: #5ccf8b;
+  --warning: #f2b544;
+  --warning-soft: rgba(242, 181, 68, 0.14);
   --shadow-sm: none;
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
   --scrim: rgba(0, 0, 0, 0.65);

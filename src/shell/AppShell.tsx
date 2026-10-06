@@ -6,7 +6,9 @@ import { useIsAdmin } from "../features/admin/useAdmin";
 import { Composer, type ComposerHandle } from "../features/composer/Composer";
 import { PublishStatusBar } from "./PublishStatusBar";
 import { useComposer } from "../state/composer";
+import { SignInNotice } from "../features/messages/SignInNotice";
 import { messagesLabel, useUnreadMessages } from "../state/messages";
+import { securityApi } from "../state/security";
 import { badgeText, notificationsLabel, useUnread } from "../state/notifications";
 import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
@@ -118,6 +120,7 @@ export function AppShell() {
       </aside>
 
       <main id="main" className="main" tabIndex={-1}>
+        {securityApi && !inMessages && <SignInNotice />}
         <Suspense fallback={null}>
           <Outlet />
         </Suspense>

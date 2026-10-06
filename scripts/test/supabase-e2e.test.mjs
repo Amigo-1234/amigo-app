@@ -210,6 +210,8 @@ try {
   ok("backup status: exists, this device has the key", (await amaPhone.backupState()).thisDeviceHasKey);
   await amaLaptop.refresh(); await amaLaptop.refresh();
   ok("verified laptop received the backup key from the phone (Olm-encrypted)", (await amaLaptop.backupState()).thisDeviceHasKey);
+  const fromBackup = await amaLaptop.decrypt(stored[0]);
+  ok("…and reads history from before it was approved, via the backup", fromBackup.ok && fromBackup.payload.body === SECRET);
 
   // ---- password-reset attacker signs in as Ama on a new device
   const attacker = await start(ids.ama, ama, "Unknown browser");
@@ -247,7 +249,8 @@ try {
   await send(leoPhone, leo, conversationId, ids.ama, { msgtype: "m.text", body: LATER });
   const after = (await rows(ama, conversationId)).at(-1);
   ok("tablet reads new messages", (await amaTablet.decrypt(after)).ok);
-  ok("the phone (old identity, now unverified) doesn't get new keys", !(await amaPhone.decrypt(after)).ok);
+  ok("the phone (old identity, now unverified) can't send until it's approved again",
+    (await errCode(() => send(amaPhone, ama, conversationId, ids.leo, { msgtype: "m.text", body: "x" }))) === "device-unverified");
   const ampeople = await verify(amaTablet, leoPhone, ids.leo);
   ok("they can verify again after the change", ampeople.ok && (await leoPhone.peerTrust(ids.ama)) === "verified");
 

@@ -1,10 +1,11 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, Ban, CircleAlert, Flag, Info, Lock, MoreHorizontal, Reply, RotateCcw, UserRound, X } from "lucide-react";
-import { dataSource, MessageError, type Conversation, type DirectMessage, type MessageQuote, type MessageReportReason } from "../../data";
+import { ArrowLeft, Ban, CircleAlert, Flag, Info, Lock, MoreHorizontal, Reply, RotateCcw, ShieldAlert, ShieldCheck, UserRound, X } from "lucide-react";
+import { dataSource, MessageError, type Conversation, type DirectMessage, type MessageQuote, type MessageReportReason, type PeerTrust } from "../../data";
 import { fullTimestamp } from "../../lib/time";
 import { useMediaViewer } from "../posts/MediaViewer";
 import { profileHref } from "../profile/links";
+import { useSecurity } from "../../state/security";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Avatar } from "../../ui/Avatar";
@@ -17,10 +18,11 @@ import { describeError } from "../feed/errors";
 import { clockTime, dayLabel, sameDay, STATUS_LABEL } from "./format";
 import { MessageComposer } from "./MessageComposer";
 import { useConversation, type PendingMessage } from "./useMessages";
+import "./Security.css";
 
 /** Messages closer together than this from the same person share one timestamp. */
 const RUN_GAP_MS = 5 * 60_000;
-const REPORT_CONTEXT = 10;
+const REPORT_CONTEXT = 12;
 
 type Row =
   | { kind: "message"; m: DirectMessage }
@@ -36,6 +38,21 @@ export function ConversationPane({ conversationId }: { conversationId: string })
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const conversation = c.view?.conversation;
+  const security = dataSource.messages?.security;
+  const { setup, verify } = useSecurity();
+  const [trust, setTrust] = useState<PeerTrust | null>(null);
+  const [trustKey, setTrustKey] = useState(0);
+  const peerId = conversation?.peer.id;
+
+  // How this person's identity looks from here; re-checked after any verification finishes.
+  useEffect(() => {
+    if (!security || !peerId) return;
+    let cancelled = false;
+    security.peerTrust(viewer.id, peerId).then((t) => !cancelled && setTrust(t), () => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [security, peerId, viewer.id, setup, trustKey]);
 
   // Stay pinned to the newest message unless you've scrolled up to read.
   const rowsKey = `${c.messages.length}:${c.pending.length}:${c.peerTyping}`;
@@ -99,7 +116,13 @@ export function ConversationPane({ conversationId }: { conversationId: string })
     stick.current = true;
     const err = await c.send(input);
     if (err) toast(sendErrorText(err, peer.name), "error");
+    if (err instanceof MessageError && err.code === "identity-changed") setTrustKey((k) => k + 1);
   };
+  const acceptChange = async () => {
+    await security?.acceptIdentityChange(viewer.id, peer.id).catch(() => undefined);
+    setTrustKey((k) => k + 1);
+  };
+  const keyChanged = trust === "changed" || trust === "changed-verified";
 
   return (
     <div className="convo">
@@ -111,6 +134,16 @@ export function ConversationPane({ conversationId }: { conversationId: string })
             <span className="convo__peer-name">
               {peer.name}
               <VerifiedBadge verified={peer.verified} size={15} />
+              {trust === "verified" && (
+                <span className="trust trust--verified" title="You verified their security key">
+                  <ShieldCheck size={13} aria-hidden="true" /> Verified
+                </span>
+              )}
+              {keyChanged && (
+                <span className="trust trust--changed" title="Their security key changed">
+                  <ShieldAlert size={13} aria-hidden="true" /> Key changed
+                </span>
+              )}
             </span>
             <span className="convo__peer-sub" aria-live="polite">
               {c.peerTyping ? <span className="convo__typing-label">typing…</span> : `@${peer.handle}`}
@@ -136,6 +169,19 @@ export function ConversationPane({ conversationId }: { conversationId: string })
             </Link>
           )}
           <EncryptionNote />
+          {security && trust === "unverified" && (
+            <p className="convo__note">
+              <span>
+                Want extra certainty? <button type="button" className="link-btn" onClick={() => verify(peer.id)}>Verify {peer.name}</button> by
+                comparing emoji, in person or on a call.
+              </span>
+            </p>
+          )}
+          {trust === "verified" && (
+            <p className="convo__note">
+              <ShieldCheck size={14} aria-hidden="true" /> You verified {peer.name}'s security key.
+            </p>
+          )}
         </div>
 
         <ol className="msgs" aria-label={`Messages with ${peer.name}`}>
@@ -183,7 +229,25 @@ export function ConversationPane({ conversationId }: { conversationId: string })
         </ol>
       </div>
 
-      {conversation.canSend ? (
+      {keyChanged && conversation.canSend && (
+        <div className={`sec-banner${trust === "changed-verified" ? " sec-banner--warn" : ""}`} role="status">
+          <ShieldAlert size={18} aria-hidden="true" />
+          <div className="sec-banner__text">
+            <strong>{peer.name}'s security key changed.</strong> This usually means they set up a new phone or reset their account.
+            {trust === "changed-verified" ? " You'd verified them before — verify again to be sure it's really them." : ""}
+            <div className="sec-banner__actions">
+              <Button size="sm" variant={trust === "changed-verified" ? "primary" : "secondary"} onClick={() => verify(peer.id)}>
+                {trust === "changed-verified" ? "Verify again" : "Verify"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={acceptChange}>
+                {trust === "changed-verified" ? "Continue without verifying" : "OK"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {conversation.canSend && trust === "changed-verified" ? null : conversation.canSend ? (
         <MessageComposer conversationId={conversationId} peerName={peer.name} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSend={send} />
       ) : (
         <div className="convo__blocked" role="status">
@@ -206,6 +270,17 @@ export function ConversationPane({ conversationId }: { conversationId: string })
             <Link to={href} className="sheet-menu__item" onClick={() => setSheet(null)}>
               <UserRound size={20} aria-hidden="true" /> View profile
             </Link>
+          )}
+          {security && trust !== "verified" && (
+            <button
+              className="sheet-menu__item"
+              onClick={() => {
+                setSheet(null);
+                void verify(peer.id);
+              }}
+            >
+              <ShieldCheck size={20} aria-hidden="true" /> {keyChanged ? `Verify @${peer.handle} again` : `Verify @${peer.handle}`}
+            </button>
           )}
           <button className="sheet-menu__item" onClick={() => setSheet("block")}>
             <Ban size={20} aria-hidden="true" /> {conversation.blockedByViewer ? `Unblock @${peer.handle}` : `Block @${peer.handle}`}
@@ -234,6 +309,8 @@ function sendErrorText(e: Error, peerName: string) {
   if (e instanceof MessageError && e.code === "blocked") return `You can't message ${peerName} right now.`;
   if (e instanceof MessageError && e.code === "too-long") return "That message is too long.";
   if (e instanceof MessageError && e.code === "peer-unavailable") return `${peerName} can't receive encrypted messages yet — they need to open Amigo World once.`;
+  if (e instanceof MessageError && e.code === "identity-changed") return `${peerName}'s security key changed. Check the notice above, then send again.`;
+  if (e instanceof MessageError && e.code === "device-unverified") return "Approve this device from another of your devices before sending.";
   return "Your message wasn't sent. Tap Retry to try again.";
 }
 
@@ -298,6 +375,7 @@ function MessageBubble({ m, peerName, showMeta, showStatus, onReply }: { m: Dire
             {clockTime(m.createdAt)}
           </time>
           {showStatus && <span className={`msg__status msg__status--${m.status}`}>· {STATUS_LABEL[m.status]}</span>}
+          {m.unverifiedDevice && <span className="msg__status"> · from a device they haven't verified</span>}
         </p>
       )}
     </li>
@@ -388,16 +466,23 @@ function ReportSheet({ conversation, messages, viewerId, onDone }: { conversatio
   const toast = useToast();
   const [reason, setReason] = useState<MessageReportReason | null>(null);
   const [note, setNote] = useState("");
-  const [share, setShare] = useState(true);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const theirs = messages.filter((m) => !m.fromViewer && !m.undecryptable).slice(-REPORT_CONTEXT);
-  const encrypted = api.encryption === "e2e";
+  const theirs = messages.filter((m) => !m.fromViewer && !m.undecryptable && (m.text || m.media.length)).slice(-REPORT_CONTEXT);
+  const toggle = (id: string) =>
+    setPicked((p) => {
+      const next = new Set(p);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   async function submit() {
     if (!reason) return;
     setBusy(true);
     try {
-      await api.report(viewerId, conversation.id, { reason, note, messageIds: share ? theirs.map((m) => m.id) : [] });
+      // Only the messages you ticked are shared — nothing else from the conversation.
+      await api.report(viewerId, conversation.id, { reason, note, messageIds: theirs.filter((m) => picked.has(m.id)).map((m) => m.id) });
       toast("Thanks — your report was sent to the Amigo team");
       onDone();
     } catch {
@@ -419,25 +504,33 @@ function ReportSheet({ conversation, messages, viewerId, onDone }: { conversatio
           </label>
         ))}
       </fieldset>
+      {theirs.length > 0 && (
+        <fieldset className="sheet-form__choices report-pick">
+          <legend className="sheet-form__body">
+            Choose messages to include (optional). Only what you select is shared with the Amigo team — they can't see the rest of this
+            conversation.
+          </legend>
+          {theirs.map((m) => (
+            <label key={m.id} className="choice report-pick__item">
+              <input type="checkbox" checked={picked.has(m.id)} onChange={() => toggle(m.id)} />
+              <span>
+                <span className="report-pick__text">{m.text || "Photo"}</span>
+                <span className="report-pick__time">{clockTime(m.createdAt)}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      )}
       <label className="field">
         <span className="field__label">Anything else? (optional)</span>
         <textarea className="field__input" rows={2} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
       </label>
-      {theirs.length > 0 && (
-        <label className="choice">
-          <input type="checkbox" checked={share} onChange={(e) => setShare(e.target.checked)} />
-          <span>
-            Include their last {theirs.length === 1 ? "message" : `${theirs.length} messages`} so the Amigo team can review them
-            {encrypted ? " (your device shares them; the team can't read your messages otherwise)" : ""}
-          </span>
-        </label>
-      )}
       <div className="sheet-form__actions">
         <Button variant="ghost" onClick={onDone}>
           Cancel
         </Button>
         <Button variant="danger" disabled={!reason} loading={busy} onClick={submit}>
-          Send report
+          {picked.size ? `Send report with ${picked.size} message${picked.size === 1 ? "" : "s"}` : "Send report"}
         </Button>
       </div>
     </div>

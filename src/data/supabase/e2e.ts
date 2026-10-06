@@ -730,14 +730,33 @@ export class E2EDevice {
     });
   }
 
-  /** Decrypts a stored message. Missing keys are fetched once before giving up. */
+  /**
+   * Decrypts a stored message. A missing key is looked for in new mail first,
+   * then in the key backup (if this device holds the backup key — e.g. it was
+   * just approved by another of your devices, or you entered the recovery key).
+   */
   decrypt(m: StoredMessage): Promise<DecryptResult> {
     return this.serial(async () => {
       const first = await this.tryDecrypt(m);
       if (first.ok || first.reason !== "missing-key") return first;
       await this.sync();
-      return this.tryDecrypt(m);
+      const second = await this.tryDecrypt(m);
+      if (second.ok || second.reason !== "missing-key") return second;
+      return (await this.importHeldBackup()) ? this.tryDecrypt(m) : second;
     });
+  }
+
+  private lastBackupImport = 0;
+
+  /** Pulls keys from the backup with the key this device holds. At most once a minute. */
+  private async importHeldBackup(): Promise<boolean> {
+    if (Date.now() - this.lastBackupImport < 60_000) return false;
+    const info = await this.rpc<{ version: string; auth_data: { public_key: string } } | null>("e2e_backup_current", {});
+    const key = (await this.machine.getBackupKeys()).decryptionKey;
+    if (!info || !key || key.megolmV1PublicKey.publicKeyBase64 !== info.auth_data.public_key) return false;
+    this.lastBackupImport = Date.now();
+    const { imported } = await this.importFromBackup(key, info.version);
+    return imported > 0;
   }
 
   private async tryDecrypt(m: StoredMessage): Promise<DecryptResult> {

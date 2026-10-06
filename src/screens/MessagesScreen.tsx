@@ -3,8 +3,10 @@ import { useParams } from "react-router";
 import { MessagesSquare, SquarePen } from "lucide-react";
 import { ConversationList } from "../features/messages/ConversationList";
 import { ConversationPane } from "../features/messages/ConversationPane";
+import { DeviceGate } from "../features/messages/DeviceGate";
 import { NewMessageSheet } from "../features/messages/NewMessageSheet";
 import { ScreenHeader } from "../shell/ScreenHeader";
+import { useSecurity } from "../state/security";
 import { Button, IconButton } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 import { StateMessage } from "../ui/StateMessage";
@@ -18,6 +20,17 @@ import "../features/messages/Messages.css";
 export default function MessagesScreen() {
   const { conversationId } = useParams();
   const [composing, setComposing] = useState(false);
+  const { setup } = useSecurity();
+
+  // A device that isn't approved yet can't read or send: ask it to confirm first.
+  if (setup && !setup.deviceVerified) {
+    return (
+      <>
+        <ScreenHeader title="Messages" />
+        <DeviceGate />
+      </>
+    );
+  }
 
   return (
     <div className={`messages${conversationId ? " messages--open" : ""}`}>

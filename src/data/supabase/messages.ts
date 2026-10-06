@@ -27,6 +27,7 @@ import type { DecryptResult, E2EBackend, E2EDevice, MessagePayload, StoredMessag
 import type { Db } from "./queries";
 import { toAuthor, VERIFICATION_EMBED } from "./queries";
 import type { Json } from "./database.types";
+import { describeDevice } from "../../lib/device";
 
 type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel) => () => void;
 
@@ -48,14 +49,6 @@ function translate(e: unknown): never {
   if (code === "bad-recovery-key" || code === "wrong-recovery-key" || code === "no-backup" || code === "no-other-device") throw new SecurityError(code);
   if (code && ERRORS[code]) throw new MessageError(ERRORS[code], (e as Error).message);
   throw e;
-}
-
-/** "Chrome on Windows" — shown in Your devices. Only the owner sees it. */
-export function describeDevice(ua = globalThis.navigator?.userAgent ?? ""): string {
-  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
-  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "macOS"
-    : /Windows/.test(ua) ? "Windows" : /CrOS/.test(ua) ? "ChromeOS" : /Linux/.test(ua) ? "Linux" : null;
-  return os ? `${browser} on ${os}` : browser;
 }
 
 const CANCEL: Record<string, VerificationFlow["cancelReason"]> = {

@@ -4,6 +4,7 @@ import { useIsAdmin } from "../features/admin/useAdmin";
 import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
 import { AdminUsers } from "../features/admin/AdminUsers";
+import { AdminMessageReports } from "../features/admin/AdminMessageReports";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
@@ -61,11 +62,14 @@ export default function AdminScreen() {
         {section === "worlds" && <AdminWorlds />}
         {section === "users" && <AdminUsers />}
         {section === "reports" && (
-          <AdminPlaceholder
-            title="Reports"
-            body="Reporting posts and people isn't built yet. Reports on Support Hub requests are reviewed in Support Hub → Reports."
-            link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
-          />
+          <>
+            <AdminMessageReports />
+            <AdminPlaceholder
+              title="Other reports"
+              body="Reporting posts and people isn't built yet. Reports on Support Hub requests are reviewed in Support Hub → Reports."
+              link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
+            />
+          </>
         )}
       </div>
     </>

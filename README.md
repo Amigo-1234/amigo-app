@@ -72,7 +72,9 @@ npm run build                # typecheck (app + scripts) + production build
   [docs/architecture/SUPPORT_HUB.md](docs/architecture/SUPPORT_HUB.md).
 - **Messages** (`/messages`): one-to-one conversations with unread counts, receipts, typing,
   replies, photos, block and report. On Supabase they're **end-to-end encrypted** (Olm/Megolm via
-  vodozemac); the demo keeps them in the browser and says it isn't encrypted. Optional
+  vodozemac), with device approval, emoji verification, Your devices, new-sign-in notices and
+  encrypted key backup with a recovery key; admins review only what reporters submit. The demo
+  keeps messages in the browser, says it isn't encrypted, and simulates the security screens. Optional
   `DataSource` capability (`messages`). See [docs/architecture/MESSAGES.md](docs/architecture/MESSAGES.md).
 - **Demo data persists** in the browser (IndexedDB) across refreshes. Reset it in Settings → Reset
   demo data, or with `?demo=reset`.
@@ -86,7 +88,7 @@ npm run build                # typecheck (app + scripts) + production build
 | Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
 | Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
 | Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
-| Tests | `npm run db:test`: 235 database/RLS checks, rolled back after running · `npm run test:api`: 147 checks through PostgREST · `npm run test:e2e`: 42 end-to-end encryption checks with real crypto devices |
+| Tests | `npm run db:test`: 263 database/RLS checks, rolled back after running · `npm run test:api`: 147 checks through PostgREST · `npm run test:e2e`: 70 end-to-end encryption checks with real crypto devices |
 
 To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
 [`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied

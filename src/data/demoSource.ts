@@ -7,6 +7,7 @@
 import { mentionedHandles } from "../lib/mentions";
 import { clearDemoState, loadDemoState, saveDemoState } from "./demoPersist";
 import { createDemoMessages } from "./demoMessages";
+import { createDemoSecurity } from "./demoSecurity";
 import { createDemoSupport } from "./demoSupport";
 import { createDemoWorlds } from "./demoWorlds";
 import type {
@@ -384,6 +385,8 @@ const demoSupport = createDemoSupport({
   scenario,
 });
 
+const demoSecurity = createDemoSecurity({ author, watch, later, emit, newDevice: scenario === "newdevice" });
+
 const demoMessages = createDemoMessages({
   author,
   exists: (id) => people.has(id),
@@ -392,7 +395,14 @@ const demoMessages = createDemoMessages({
   later,
   img,
   upload: uploadMedia,
+  security: demoSecurity,
+  // Same rule as demoSupport: the owner account is the admin unless ?demo=member.
+  isAdmin: (id) => id === "me" && scenario !== "member",
+  handleOf: (id) => people.get(id)?.handle ?? "unknown",
 });
+
+const demoAdmin = { ...demoSupport.admin, messageReports: demoMessages.adminReports };
+const demoMessagesApi = { ...demoMessages.api, security: demoSecurity.api };
 
 // ------------------------------------------------------------- persistence
 
@@ -410,6 +420,7 @@ interface SavedState {
   worlds: ReturnType<typeof demoWorlds.persist.export>;
   support: ReturnType<typeof demoSupport.persist.export>;
   messages: ReturnType<typeof demoMessages.persist.export>;
+  security?: ReturnType<typeof demoSecurity.persist.export>;
 }
 
 const saveMedia = (m: MediaItem): SavedMedia => (mediaBlobs.has(m.url) ? { ...m, url: "", blob: mediaBlobs.get(m.url) } : m);
@@ -433,6 +444,7 @@ function exportState(): SavedState {
     worlds: demoWorlds.persist.export(),
     support: demoSupport.persist.export(),
     messages: demoMessages.persist.export(saveMedia),
+    security: demoSecurity.persist.export(),
   };
 }
 
@@ -449,6 +461,7 @@ function importState(s: SavedState) {
   demoWorlds.persist.import(s.worlds);
   demoSupport.persist.import(s.support);
   if (s.messages) demoMessages.persist.import(s.messages as never, loadMedia as never);
+  if (s.security) demoSecurity.persist.import(s.security);
 }
 
 if (persistOn) {
@@ -487,6 +500,7 @@ if (persistOn) {
   worlds: demoWorlds.hooks,
   support: demoSupport.hooks,
   messages: demoMessages.hooks,
+  security: demoSecurity.hooks,
 };
 
 // -------------------------------------------------------------------- auth
@@ -604,11 +618,11 @@ export const demoSource: DataSource = {
   },
 
   get admin() {
-    return demoSupport.admin;
+    return demoAdmin;
   },
 
   get messages() {
-    return demoMessages.api;
+    return demoMessagesApi;
   },
 
   discovery: {

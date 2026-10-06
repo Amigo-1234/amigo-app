@@ -7,6 +7,7 @@ import { ComingSoonScreen } from "./screens/ComingSoonScreen";
 import { AppShell } from "./shell/AppShell";
 import { ComposerProvider } from "./state/composer";
 import { MessagesProvider } from "./state/messages";
+import { SecurityProvider } from "./state/security";
 import { NotificationsProvider, notificationsEnabled } from "./state/notifications";
 import { PublishingProvider } from "./state/publishing";
 import { SessionProvider, useSession, useViewer } from "./state/session";
@@ -27,6 +28,8 @@ const WorldScreen = lazy(() => import("./screens/WorldScreen"));
 const SupportScreen = lazy(() => import("./screens/SupportScreen"));
 const SupportRequestScreen = lazy(() => import("./screens/SupportRequestScreen"));
 const SupportNewScreen = lazy(() => import("./screens/SupportNewScreen"));
+const DevicesScreen = lazy(() => import("./screens/DevicesScreen"));
+const BackupScreen = lazy(() => import("./screens/BackupScreen"));
 const MessagesScreen = lazy(() => import("./screens/MessagesScreen"));
 const AdminScreen = lazy(() => import("./screens/AdminScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
@@ -64,9 +67,11 @@ function Root() {
       <PublishingProvider>
         <NotificationsProvider>
           <MessagesProvider>
-            <MediaViewerProvider>
-              <AppShell />
-            </MediaViewerProvider>
+            <SecurityProvider>
+              <MediaViewerProvider>
+                <AppShell />
+              </MediaViewerProvider>
+            </SecurityProvider>
           </MessagesProvider>
         </NotificationsProvider>
       </PublishingProvider>
@@ -88,6 +93,12 @@ const router = createBrowserRouter([
       { path: "post/:postId", element: <PostScreen /> },
       { path: "profile", element: <MeRedirect /> },
       { path: "settings", element: <SettingsScreen /> },
+      ...(dataSource.messages?.security
+        ? [
+            { path: "settings/devices", element: <DevicesScreen /> },
+            { path: "settings/backup", element: <BackupScreen /> },
+          ]
+        : []),
       ...(profilesEnabled
         ? [
             { path: "u/:handle", element: <ProfileScreen /> },

@@ -8,13 +8,20 @@ import { worldStatus } from "../worlds/time";
 /** Real counts only — things that need an admin's attention, and what admins did recently. */
 export function AdminOverview() {
   const viewer = useViewer();
-  const [counts, setCounts] = useState<{ pending: number; reports: number; flags: number } | null>(null);
+  const [counts, setCounts] = useState<{ pending: number; reports: number; flags: number; messageReports: number } | null>(null);
   const [audit, setAudit] = useState<AdminAuditEntry[] | null>(null);
   useEffect(() => {
     const a = dataSource.admin!.support;
-    void Promise.all([a.listRequests(viewer.id, "pending"), a.listReports(viewer.id, "open"), a.suspicious(viewer.id), a.audit(viewer.id, 8)]).then(
-      ([pending, reports, flags, log]) => {
-        setCounts({ pending: pending.length, reports: reports.length, flags: flags.length });
+    const dm = dataSource.admin!.messageReports;
+    void Promise.all([
+      a.listRequests(viewer.id, "pending"),
+      a.listReports(viewer.id, "open"),
+      a.suspicious(viewer.id),
+      a.audit(viewer.id, 8),
+      dm ? dm.list(viewer.id).catch(() => []) : Promise.resolve([]),
+    ]).then(
+      ([pending, reports, flags, log, dms]) => {
+        setCounts({ pending: pending.length, reports: reports.length, flags: flags.length, messageReports: dms.filter((r) => r.status === "open").length });
         setAudit(log);
       },
     );
@@ -24,6 +31,7 @@ export function AdminOverview() {
         { n: counts.pending, label: "Support requests waiting for review", to: "/admin/support?status=pending" },
         { n: counts.reports, label: "Open reports on Support requests", to: "/admin/support?tab=reports" },
         { n: counts.flags, label: "Support activity flagged for a look", to: "/admin/support?tab=activity" },
+        ...(dataSource.admin!.messageReports ? [{ n: counts.messageReports, label: "Open message reports", to: "/admin/reports" }] : []),
       ]
     : [];
   return (

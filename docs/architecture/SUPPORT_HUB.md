@@ -46,8 +46,8 @@ per-viewer rotation. Your own requests, ones you already supported, and non-open
 ## Admin (`/admin`)
 
 Navigation: Overview · Support Hub · Worlds · Users · Reports. Support Hub is fully built; Users has
-verification (below); Worlds lists Worlds read-only (created with SQL); Reports says plainly what
-isn't built yet.
+verification (below); Worlds lists Worlds read-only (created with SQL); Reports reviews message reports
+(only what reporters submit — see MESSAGES.md) and says plainly what isn't built yet.
 
 ### Verification (Admin → Users)
 

@@ -1,16 +1,18 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, LogOut, Monitor, Moon, RotateCcw, ShieldCheck, Sun } from "lucide-react";
+import { ArrowLeft, ChevronRight, KeyRound, LogOut, Monitor, MonitorSmartphone, Moon, RotateCcw, ShieldCheck, Sun } from "lucide-react";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { profilesEnabled } from "../features/profile/links";
 import { dataSource } from "../data";
 import { ScreenHeader } from "../shell/ScreenHeader";
+import { securityApi, useSecurity } from "../state/security";
 import { useViewer } from "../state/session";
 import { useTheme, type ThemePreference } from "../state/theme";
 import { useToast } from "../state/toast";
 import { Avatar } from "../ui/Avatar";
 import { Button, IconButton } from "../ui/Button";
 import "./SettingsScreen.css";
+import "../features/messages/Security.css";
 
 const THEMES: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
   { id: "system", label: "System", icon: Monitor },
@@ -28,6 +30,7 @@ export default function SettingsScreen() {
   const toast = useToast();
   const navigate = useNavigate();
   const { preference, setPreference } = useTheme();
+  const { devices, newDevices } = useSecurity();
   const [name, setName] = useState(viewer.name);
   const [saving, setSaving] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -92,6 +95,37 @@ export default function SettingsScreen() {
           ))}
         </div>
       </section>
+
+      {securityApi && (
+        <section className="settings-group" aria-labelledby="set-security">
+          <h3 id="set-security" className="settings-group__title">Messages security</h3>
+          <ul className="sec-link-list">
+            <li>
+              <Link to="/settings/devices" className="sec-link">
+                <MonitorSmartphone size={20} aria-hidden="true" />
+                <span className="sec-link__text">
+                  <span>Your devices</span>
+                  <span>
+                    {devices ? `${devices.length} device${devices.length === 1 ? "" : "s"}` : "Devices that can read your messages"}
+                    {newDevices.length ? ` · ${newDevices.length} new` : ""}
+                  </span>
+                </span>
+                <ChevronRight size={18} aria-hidden="true" />
+              </Link>
+            </li>
+            <li>
+              <Link to="/settings/backup" className="sec-link">
+                <KeyRound size={20} aria-hidden="true" />
+                <span className="sec-link__text">
+                  <span>Message backup</span>
+                  <span>Restore your message history with a recovery key</span>
+                </span>
+                <ChevronRight size={18} aria-hidden="true" />
+              </Link>
+            </li>
+          </ul>
+        </section>
+      )}
 
       {isAdmin && (
         <section className="settings-group">
