@@ -9,7 +9,20 @@
  * the server does see (see docs/architecture/MESSAGES.md).
  */
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { MessageError, type Author, type Conversation, type ConversationView, type DirectMessage, type MediaItem, type MessagesApi, type MessageStatus, type Subscription } from "../types";
+import {
+  MessageError,
+  SecurityError,
+  type Author,
+  type Conversation,
+  type ConversationView,
+  type DirectMessage,
+  type MediaItem,
+  type MessagesApi,
+  type MessageStatus,
+  type MessagingSecurityApi,
+  type Subscription,
+  type VerificationFlow,
+} from "../types";
 import type { DecryptResult, E2EBackend, E2EDevice, MessagePayload, StoredMessage } from "./e2e";
 import type { Db } from "./queries";
 import { toAuthor, VERIFICATION_EMBED } from "./queries";
@@ -26,6 +39,32 @@ function fail(error: { code?: string; message: string }): never {
   throw new MessageError(ERRORS[error.code ?? ""] ?? "unknown", error.message);
 }
 
+/** Crypto-layer errors (E2EError, or raw DM codes) as the app's MessageError / SecurityError. */
+function translate(e: unknown): never {
+  const code = (e as { code?: string })?.code;
+  if (e instanceof MessageError || e instanceof SecurityError) throw e;
+  if (code === "identity-changed" || code === "device-unverified") throw new MessageError(code);
+  if (code === "device-removed" || code === "DM009") throw new SecurityError("device-removed");
+  if (code === "bad-recovery-key" || code === "wrong-recovery-key" || code === "no-backup" || code === "no-other-device") throw new SecurityError(code);
+  if (code && ERRORS[code]) throw new MessageError(ERRORS[code], (e as Error).message);
+  throw e;
+}
+
+/** "Chrome on Windows" — shown in Your devices. Only the owner sees it. */
+export function describeDevice(ua = globalThis.navigator?.userAgent ?? ""): string {
+  const browser = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
+  const os = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac OS X/.test(ua) ? "macOS"
+    : /Windows/.test(ua) ? "Windows" : /CrOS/.test(ua) ? "ChromeOS" : /Linux/.test(ua) ? "Linux" : null;
+  return os ? `${browser} on ${os}` : browser;
+}
+
+const CANCEL: Record<string, VerificationFlow["cancelReason"]> = {
+  "m.mismatched_sas": "mismatch",
+  "m.key_mismatch": "mismatch",
+  "m.mismatched_commitment": "mismatch",
+  "m.timeout": "timeout",
+};
+
 /** opts.memoryStore: keep crypto keys in memory instead of IndexedDB (Node tests only). */
 export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate: () => void, opts: { memoryStore?: boolean } = {}): MessagesApi {
   // ------------------------------------------------------------ this device
@@ -35,7 +74,8 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
   const backend: E2EBackend = {
     async rpc<T>(fn: string, args: Record<string, unknown>) {
       const { data, error } = await db.rpc(fn as never, args as never);
-      if (error) fail(error);
+      // Keep the database's code (DM009 etc.): the crypto layer acts on it.
+      if (error) throw Object.assign(new Error(error.message), { code: error.code });
       return data as T;
     },
     async fetchToDevice(deviceId) {
@@ -54,12 +94,42 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
     },
   };
 
+  const storageKey = (userId: string) => `amigo.e2e.${userId}`;
+
+  /** This browser was removed from the account elsewhere: forget its keys so it starts over as a new device. */
+  async function wipe(userId: string) {
+    const was = current;
+    current = null;
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey(userId)) ?? "null");
+      localStorage.removeItem(storageKey(userId));
+      (await was?.device.catch(() => null))?.close();
+      if (saved && typeof indexedDB !== "undefined" && indexedDB.databases) {
+        const prefix = `amigo-crypto-${userId}-${saved.deviceId}`;
+        for (const d of await indexedDB.databases()) if (d.name?.startsWith(prefix)) indexedDB.deleteDatabase(d.name);
+      }
+    } catch {
+      /* nothing saved */
+    }
+  }
+
+  /** Runs fn with this device; a "device removed" answer wipes the local keys first. */
+  async function withDevice<T>(userId: string, fn: (d: E2EDevice) => Promise<T>): Promise<T> {
+    try {
+      return await fn(await device(userId));
+    } catch (e) {
+      const code = (e as { code?: string })?.code;
+      if (code === "device-removed" || code === "DM009") await wipe(userId);
+      return translate(e);
+    }
+  }
+
   /** This browser's crypto device for the signed-in person (created and registered on first use). */
   function device(userId: string): Promise<E2EDevice> {
     if (current?.userId === userId) return current.device;
     const started = (async () => {
       const [crypto, { E2EDevice, newDeviceId }] = await Promise.all([import("@matrix-org/matrix-sdk-crypto-wasm"), import("./e2e")]);
-      const key = `amigo.e2e.${userId}`;
+      const key = storageKey(userId);
       let saved: { deviceId: string; passphrase: string } | null = null;
       try {
         saved = JSON.parse(localStorage.getItem(key) ?? "null");
@@ -81,6 +151,7 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
         backend,
         userId,
         deviceId: saved.deviceId,
+        deviceName: describeDevice(),
         storeName: opts.memoryStore ? undefined : `amigo-crypto-${userId}-${saved.deviceId}`,
         storePassphrase: opts.memoryStore ? undefined : saved.passphrase,
       });
@@ -227,6 +298,7 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
         return {
           ...base,
           text: p.body,
+          unverifiedDevice: !!res.unverifiedDevice && !fromViewer,
           media,
           replyTo:
             quotedId && quotedRow
@@ -276,8 +348,145 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "dm_participants" }, refresh)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "e2e_to_device", filter: `recipient_id=eq.${viewerId}` }, refresh);
 
+  // ------------------------------------------------------------- security
+
+  const verificationListeners = new Set<() => void>();
+  const pokeVerifications = () => verificationListeners.forEach((l) => l());
+
+  const security: MessagingSecurityApi = {
+    simulated: false,
+
+    setup: (viewerId) => withDevice(viewerId, (d) => d.ownSecurity()),
+
+    subscribeDevices: (viewerId, sub) =>
+      liveQuery(
+        "e2e:devices",
+        () =>
+          withDevice(viewerId, async (d) =>
+            (await d.myDevices()).map((x) => ({
+              id: x.deviceId,
+              name: x.name ?? "Unknown device",
+              current: x.current,
+              verified: x.verified,
+              createdAt: new Date(x.createdAt),
+              lastActiveAt: x.lastSeenAt ? new Date(x.lastSeenAt) : null,
+            })),
+          ),
+        sub,
+        (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "e2e_devices", filter: `user_id=eq.${viewerId}` }, refresh),
+      ),
+
+    async removeDevice(viewerId, deviceId) {
+      await withDevice(viewerId, (d) => d.removeDevice(deviceId));
+      invalidate();
+    },
+
+    peerTrust: (viewerId, peerId) => withDevice(viewerId, (d) => d.peerTrust(peerId)),
+
+    async acceptIdentityChange(viewerId, peerId) {
+      await withDevice(viewerId, (d) => d.acceptIdentityChange(peerId));
+      invalidate();
+    },
+
+    async startVerification(viewerId, peerId) {
+      const id = await withDevice(viewerId, (d) => d.startVerification(peerId));
+      pokeVerifications();
+      return id;
+    },
+
+    subscribeVerifications(viewerId, sub) {
+      let active = true;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let last = "";
+      let busy = false;
+      const tick = async () => {
+        if (!active || busy) return;
+        busy = true;
+        let next = 10_000;
+        try {
+          const flows = await withDevice(viewerId, async (d) => {
+            await d.refresh();
+            return d.verifications();
+          });
+          const people = flows.filter((f) => !f.self).map((f) => f.otherUserId);
+          await authors(people).catch(() => undefined);
+          const mapped: VerificationFlow[] = flows.map((f) => ({
+            id: f.flowId,
+            peer: f.self ? null : author(f.otherUserId),
+            self: f.self,
+            weStarted: f.weStarted,
+            state: f.state,
+            emoji: f.emoji,
+            cancelReason: f.state === "cancelled" ? (CANCEL[f.cancelReason ?? ""] ?? "cancelled") : undefined,
+          }));
+          // Poll quickly while something is in progress.
+          if (mapped.some((f) => f.state !== "done" && f.state !== "cancelled")) next = 1500;
+          const key = JSON.stringify(mapped);
+          if (key !== last && active) {
+            last = key;
+            sub.onData(mapped);
+          }
+        } catch (e) {
+          if (active) sub.onError(e as Error);
+        } finally {
+          busy = false;
+          if (active) timer = setTimeout(tick, next);
+        }
+      };
+      const poke = () => {
+        clearTimeout(timer);
+        timer = setTimeout(tick, 50);
+      };
+      verificationListeners.add(poke);
+      const channel = db
+        .channel(`e2e:mail:${crypto.randomUUID()}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "e2e_to_device", filter: `recipient_id=eq.${viewerId}` }, poke)
+        .subscribe();
+      void tick();
+      return () => {
+        active = false;
+        clearTimeout(timer);
+        verificationListeners.delete(poke);
+        void db.removeChannel(channel);
+      };
+    },
+
+    async acceptVerification(viewerId, flowId) {
+      await withDevice(viewerId, (d) => d.acceptVerification(flowId));
+      pokeVerifications();
+    },
+    async confirmVerification(viewerId, flowId) {
+      await withDevice(viewerId, (d) => d.confirmVerification(flowId));
+      pokeVerifications();
+      invalidate();
+    },
+    async rejectVerification(viewerId, flowId) {
+      await withDevice(viewerId, (d) => d.rejectVerification(flowId));
+      pokeVerifications();
+    },
+    async cancelVerification(viewerId, flowId) {
+      await withDevice(viewerId, (d) => d.cancelVerification(flowId));
+      pokeVerifications();
+    },
+
+    backupStatus: (viewerId) => withDevice(viewerId, (d) => d.backupState()),
+    setUpBackup: (viewerId) => withDevice(viewerId, (d) => d.setUpBackup()),
+    async restoreBackup(viewerId, recoveryKey) {
+      const result = await withDevice(viewerId, (d) => d.restoreBackup(recoveryKey));
+      // Messages that couldn't be decrypted before may be readable now.
+      for (const [id, r] of decrypted) if (!r.ok) decrypted.delete(id);
+      invalidate();
+      return result;
+    },
+    async resetIdentity(viewerId) {
+      await withDevice(viewerId, (d) => d.resetIdentity());
+      invalidate();
+    },
+  };
+
   return {
     encryption: "e2e",
+    security,
 
     subscribeConversations: (viewerId, sub) => liveQuery("dm:inbox", () => inbox(viewerId), sub, dmListen(viewerId)),
 
@@ -315,7 +524,7 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
       // Encrypting for someone with no devices would make the message unreadable forever.
       const { count } = await db.from("e2e_devices").select("device_id", { count: "exact", head: true }).eq("user_id", peerId);
       if (!count) throw new MessageError("peer-unavailable");
-      const d = await device(viewerId);
+      const d = await device(viewerId).catch(translate);
       let image: MessagePayload["amigo.image"] = null;
       if (input.image) {
         const enc = d.encryptAttachment(new Uint8Array(await input.image.blob.arrayBuffer()));
@@ -324,12 +533,12 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
         image = { path, info: enc.info, width: input.image.width, height: input.image.height, mimetype: input.image.blob.type || "image/jpeg" };
       }
       const payload: MessagePayload = { msgtype: image ? "m.image" : "m.text", body: text, "amigo.reply_to": input.replyToId ?? null, "amigo.image": image };
-      const content = await d.encrypt(conversationId, peerId, payload);
+      const content = await d.encrypt(conversationId, peerId, payload).catch(translate);
       const { data: sent, error: sendError } = await db.rpc("dm_send", { p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json });
       if (sendError) fail(sendError);
       // We already know what it says — no need to decrypt our own message again.
       const id = sent?.[0]?.id;
-      if (id) decrypted.set(id, { ok: true, payload, senderMismatch: false });
+      if (id) decrypted.set(id, { ok: true, payload, senderMismatch: false, unverifiedDevice: false });
       invalidate();
     },
 

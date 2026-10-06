@@ -397,6 +397,13 @@ export const supabaseSource: DataSource = {
   // The admin UI is only a convenience: every call below is re-checked by is_admin() in the database.
   admin: {
     isAdmin: () => q.fetchIsAdmin(supabase),
+    messageReports: {
+      list: () => q.adminMessageReports(supabase),
+      async setStatus(_adminId, reportId, status) {
+        await q.adminSetMessageReportStatus(supabase, reportId, status);
+        invalidate();
+      },
+    },
     support: {
       listRequests: (adminId, status) => q.adminListRequests(supabase, adminId, status),
       async moderate(_adminId, requestId, action, note) {

@@ -1062,8 +1062,22 @@ export type Database = {
       dm_report: { Args: { p_conversation: string; p_reason: string; p_note: string; p_evidence: Json }; Returns: string };
       admin_dm_reports: {
         Args: Record<PropertyKey, never>;
-        Returns: { id: string; reporter_username: string; reported_username: string; reason: string; note: string; evidence: Json; status: string; created_at: string }[];
+        Returns: {
+          id: string;
+          reporter_id: string;
+          reporter_username: string;
+          reported_id: string;
+          reported_username: string;
+          reason: string;
+          note: string;
+          evidence: Json;
+          status: string;
+          created_at: string;
+          reviewed_by_username: string | null;
+          reviewed_at: string | null;
+        }[];
       };
+      admin_dm_report_set_status: { Args: { p_report: string; p_status: string }; Returns: undefined };
       e2e_upload_keys: { Args: { p_device: string; p_device_keys: Json; p_one_time_keys: Json; p_fallback_keys: Json }; Returns: Json };
       e2e_query_keys: { Args: { p_users: string[] }; Returns: Json };
       e2e_claim_keys: { Args: { p_request: Json }; Returns: Json };

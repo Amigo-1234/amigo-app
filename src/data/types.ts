@@ -569,6 +569,8 @@ export interface AdminUsersApi {
 export interface AdminApi {
   isAdmin(viewerId: string): Promise<boolean>;
   support: SupportAdminApi;
+  /** Message reports (only the evidence reporters submitted — admins can't read conversations). */
+  messageReports?: MessageReportsAdminApi;
   users: AdminUsersApi;
 }
 
@@ -604,6 +606,8 @@ export interface DirectMessage {
    * (sent before this device existed, or keys not received yet). text is empty.
    */
   undecryptable?: boolean;
+  /** E2E backends: sent from one of their devices they haven't verified. */
+  unverifiedDevice?: boolean;
 }
 
 /** One-to-one only (no groups yet). */
@@ -633,7 +637,11 @@ export interface NewMessageInput {
 export type MessageReportReason = "spam" | "harassment" | "inappropriate" | "other";
 
 /** peer-unavailable: end-to-end encrypted backends only — they have no device that can receive messages yet. */
-export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "peer-unavailable" | "unknown";
+/**
+ * identity-changed: their security key changed since you verified them — OK it (or verify again) to keep sending.
+ * device-unverified: this device must be approved from another of your devices (or your identity reset) first.
+ */
+export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "peer-unavailable" | "identity-changed" | "device-unverified" | "unknown";
 
 export class MessageError extends Error {
   code: MessageErrorCode;
@@ -678,6 +686,116 @@ export interface MessagesApi {
    * they chose to share (messageIds) in the report.
    */
   report(viewerId: string, conversationId: string, input: { reason: MessageReportReason; note: string; messageIds: string[] }): Promise<void>;
+  /** Devices, verification and key backup. Present on end-to-end encrypted backends (and simulated in the demo). */
+  security?: MessagingSecurityApi;
+}
+
+// -------------------------------------------------------- messaging security
+
+/** How someone's identity looks from your device. */
+export type PeerTrust =
+  /** You verified them (emoji matched) and nothing changed since. */
+  | "verified"
+  /** Normal default: messages are encrypted; you just haven't compared emoji. */
+  | "unverified"
+  /** You had verified them and their security key changed. Sending pauses until you OK it or verify again. */
+  | "changed-verified"
+  /** Their security key changed since you first talked (you hadn't verified them). */
+  | "changed";
+
+export interface MessagingDevice {
+  id: string;
+  /** e.g. "Chrome on Windows". */
+  name: string;
+  current: boolean;
+  /** Approved by your account (cross-signed): it receives your conversation keys. */
+  verified: boolean;
+  createdAt: Date;
+  lastActiveAt: Date | null;
+}
+
+/** Whether this device can read and send messages yet. */
+export interface MessagingSetup {
+  deviceVerified: boolean;
+  /** Another verified device exists that could approve this one. */
+  canVerifyWithOtherDevice: boolean;
+}
+
+export interface VerificationFlow {
+  id: string;
+  /** null when verifying your own devices. */
+  peer: Author | null;
+  self: boolean;
+  weStarted: boolean;
+  state: "incoming" | "waiting" | "starting" | "compare" | "confirmed" | "done" | "cancelled";
+  emoji?: { symbol: string; name: string }[];
+  /** "mismatch" | "cancelled" | "timeout" */
+  cancelReason?: "mismatch" | "cancelled" | "timeout";
+}
+
+export interface KeyBackupStatus {
+  /** A backup exists for your account. */
+  exists: boolean;
+  keyCount: number;
+  /** This device holds the backup key (it backs up and can restore). */
+  thisDeviceHasKey: boolean;
+}
+
+export type SecurityErrorCode = "bad-recovery-key" | "wrong-recovery-key" | "no-backup" | "no-other-device" | "device-removed" | "unknown";
+
+export class SecurityError extends Error {
+  code: SecurityErrorCode;
+  constructor(code: SecurityErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+export interface MessagingSecurityApi {
+  /** true in the demo: everything here is a simulation (no real keys). */
+  simulated: boolean;
+  setup(viewerId: string): Promise<MessagingSetup>;
+  subscribeDevices(viewerId: string, sub: Subscription<MessagingDevice[]>): Unsubscribe;
+  removeDevice(viewerId: string, deviceId: string): Promise<void>;
+  peerTrust(viewerId: string, peerId: string): Promise<PeerTrust>;
+  /** OK a changed security key without verifying again. */
+  acceptIdentityChange(viewerId: string, peerId: string): Promise<void>;
+  /** Emoji verification with someone, or "self" to approve this device from another of yours. Resolves with the flow id. */
+  startVerification(viewerId: string, peerId: string | "self"): Promise<string>;
+  /** Active and incoming verifications (refreshes often while one is in progress). */
+  subscribeVerifications(viewerId: string, sub: Subscription<VerificationFlow[]>): Unsubscribe;
+  acceptVerification(viewerId: string, flowId: string): Promise<void>;
+  /** The emoji match. */
+  confirmVerification(viewerId: string, flowId: string): Promise<void>;
+  /** The emoji don't match. */
+  rejectVerification(viewerId: string, flowId: string): Promise<void>;
+  cancelVerification(viewerId: string, flowId: string): Promise<void>;
+  backupStatus(viewerId: string): Promise<KeyBackupStatus>;
+  /** Creates (or replaces) the backup. Resolves with the recovery key, shown once and never stored by Amigo. */
+  setUpBackup(viewerId: string): Promise<string>;
+  restoreBackup(viewerId: string, recoveryKey: string): Promise<{ imported: number; total: number }>;
+  /** "I can't use another device": new identity on this device. People who verified you are told it changed. */
+  resetIdentity(viewerId: string): Promise<void>;
+}
+
+/** A report about a conversation, as admins see it: only what the reporter chose to submit. */
+export interface MessageReport {
+  id: string;
+  reporter: { id: string; handle: string };
+  reported: { id: string; handle: string };
+  reason: MessageReportReason;
+  note: string;
+  /** Messages the reporter selected and submitted (decrypted on their device). Not verifiable by Amigo. */
+  evidence: { id: string; fromReported: boolean; text: string; createdAt: Date | null }[];
+  status: "open" | "reviewed";
+  createdAt: Date;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+}
+
+export interface MessageReportsAdminApi {
+  list(adminId: string): Promise<MessageReport[]>;
+  setStatus(adminId: string, reportId: string, status: "open" | "reviewed"): Promise<void>;
 }
 
 export interface Subscription<T> {

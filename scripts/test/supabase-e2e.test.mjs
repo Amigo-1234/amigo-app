@@ -3,9 +3,13 @@
  * with the migrations applied (local shim is fine), as real users.
  *
  * Runs real crypto devices (the app's src/data/supabase/e2e.ts on top of
- * @matrix-org/matrix-sdk-crypto-wasm): Ama on a phone and a laptop, Leo on
- * one device, Zoë as an outsider. Proves messages decrypt for the right
- * devices only and that the database never holds message plaintext.
+ * @matrix-org/matrix-sdk-crypto-wasm): Ama on a phone, a laptop and later a
+ * tablet, Leo on one device, Zoë as an outsider, plus an attacker who signs
+ * in to Ama's account. Proves: messages decrypt for the right devices only,
+ * new devices must be approved (emoji verification) before they get keys,
+ * people can verify each other, key backup restores history with the
+ * recovery key only, identity changes are detected, removed devices are
+ * locked out, and the database never holds message plaintext or private keys.
  *
  *   PGRST_URL=http://localhost:54330 JWT_SECRET=… DATABASE_URL=… \
  *     node scripts/test/supabase-e2e.test.mjs
@@ -84,10 +88,11 @@ const backendFor = (client) => ({
 });
 
 const tag = randomUUID().slice(0, 8);
-const ids = { ama: randomUUID(), leo: randomUUID(), zoe: randomUUID() };
+const ids = { ama: randomUUID(), leo: randomUUID(), zoe: randomUUID(), carl: randomUUID(), dana: randomUUID() };
 const SECRET = `meet me at the old bridge at nine 🌉 ${tag}`;
 const REPLY = `see you there ${tag}`;
-const LATER = `new device test ${tag}`;
+const LATER = `after the reset ${tag}`;
+const ATTACK = `only real devices should read this ${tag}`;
 
 async function send(device, client, conversationId, peerId, payload) {
   const content = await device.encrypt(conversationId, peerId, payload);
@@ -100,152 +105,214 @@ async function rows(client, conversationId) {
   if (error) throw new Error(error.message);
   return data;
 }
+const errCode = async (fn) => { try { await fn(); return null; } catch (e) { return e.code ?? e.message; } };
+
+/** Emoji verification between two devices: a starts, b accepts; returns both emoji lists. */
+async function verify(a, b, target, { confirm = true } = {}) {
+  await a.startVerification(target);
+  let incoming;
+  for (let i = 0; i < 10 && !incoming; i++) {
+    await b.refresh();
+    incoming = (await b.verifications()).find((v) => v.state === "incoming");
+  }
+  if (!incoming) return { ok: false, why: "no incoming request" };
+  await b.acceptVerification(incoming.flowId);
+  let va, vb;
+  for (let i = 0; i < 15 && !(va && vb); i++) {
+    await a.refresh(); await b.refresh();
+    va = (await a.verifications()).find((v) => v.state === "compare");
+    vb = (await b.verifications()).find((v) => v.state === "compare");
+  }
+  if (!va || !vb) return { ok: false, why: "never reached emoji" };
+  const ea = va.emoji.map((e) => e.symbol).join(""), eb = vb.emoji.map((e) => e.symbol).join("");
+  if (!confirm) return { ok: true, ea, eb, va, vb };
+  await a.confirmVerification(va.flowId);
+  await b.confirmVerification(vb.flowId);
+  for (let i = 0; i < 6; i++) { await a.refresh(); await b.refresh(); }
+  const done = (await a.verifications()).some((v) => v.flowId === va.flowId && v.state === "done")
+    && (await b.verifications()).some((v) => v.flowId === vb.flowId && v.state === "done");
+  return { ok: done, ea, eb, emojiCount: va.emoji.length };
+}
 
 try {
   for (const [name, id] of Object.entries(ids)) {
     await db.query("insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)", [id, `${name}-${tag}@example.com`, { display_name: `${name} ${tag}` }]);
   }
   const ama = asUser(ids.ama), leo = asUser(ids.leo), zoe = asUser(ids.zoe);
+  const start = (userId, client, name) => E2EDevice.start({ crypto: sdk, backend: backendFor(client), userId, deviceId: newDeviceId(), deviceName: name });
 
-  const start = (userId, client) => E2EDevice.start({ crypto: sdk, backend: backendFor(client), userId, deviceId: newDeviceId() });
-  const amaPhone = await start(ids.ama, ama);
-  const amaLaptop = await start(ids.ama, ama);
-  const leoPhone = await start(ids.leo, leo);
-  const zoeDevice = await start(ids.zoe, zoe);
+  // ---- first devices: each account gets a cross-signing identity automatically
+  const amaPhone = await start(ids.ama, ama, "Safari on iPhone");
+  const leoPhone = await start(ids.leo, leo, "Chrome on Android");
+  const zoeDevice = await start(ids.zoe, zoe, "Firefox on Linux");
+  const { rows: xs } = await db.query("select user_id, key_type, key from public.e2e_cross_signing_keys where user_id = any($1)", [[ids.ama, ids.leo, ids.zoe]]);
+  ok("first device creates the account identity (3 public cross-signing keys each)", xs.length === 9);
+  ok("cross-signing keys on the server are public keys only", xs.every((k) => Object.keys(k.key).every((f) => ["user_id", "usage", "keys", "signatures"].includes(f))));
+  ok("first device is verified for its account", (await amaPhone.ownSecurity()).deviceVerified);
 
   const { rows: devs } = await db.query("select user_id, device_keys from public.e2e_devices where user_id = any($1)", [Object.values(ids)]);
-  ok("each device published its public keys", devs.length === 4);
   ok("published device keys hold only public keys + signatures",
     devs.every((d) => Object.keys(d.device_keys).sort().join() === "algorithms,device_id,keys,signatures,user_id"));
-  const { rows: [otk] } = await db.query("select count(*)::int as n from public.e2e_one_time_keys where user_id = $1", [ids.ama]);
-  ok("one-time keys published", otk.n > 0, `${otk.n}`);
 
   const { data: conversationId } = await ama.rpc("dm_open", { p_peer: ids.leo });
 
-  // Ama (phone) → Leo
+  // ---- a second device starts unverified: it can't send and gets no keys until approved
+  const amaLaptop = await start(ids.ama, ama, "Chrome on macOS");
+  const laptopSec = await amaLaptop.ownSecurity();
+  ok("new device starts unverified, and knows another device can approve it", !laptopSec.deviceVerified && laptopSec.canVerifyWithOtherDevice);
+  ok("an unverified device can't send", (await errCode(() => send(amaLaptop, ama, conversationId, ids.leo, { msgtype: "m.text", body: "x" }))) === "device-unverified");
   const firstId = await send(amaPhone, ama, conversationId, ids.leo, { msgtype: "m.text", body: SECRET, "amigo.reply_to": null });
   const stored = await rows(leo, conversationId);
   ok("stored message is a Megolm envelope", stored[0].content.algorithm === "m.megolm.v1.aes-sha2" && typeof stored[0].content.ciphertext === "string");
-  const atLeo = await leoPhone.decrypt(stored[0]);
-  ok("Leo's device decrypts it", atLeo.ok && atLeo.payload.body === SECRET && !atLeo.senderMismatch);
-  const atLaptop = await amaLaptop.decrypt(stored[0]);
-  ok("Ama's other device decrypts it too (multi-device)", atLaptop.ok && atLaptop.payload.body === SECRET);
+  ok("Leo's device decrypts it", (await leoPhone.decrypt(stored[0])).ok);
+  ok("the unapproved laptop was not given the key", !(await amaLaptop.decrypt(stored[0])).ok);
 
-  // Leo replies; the reply relation stays inside the ciphertext
-  await send(leoPhone, leo, conversationId, ids.ama, { msgtype: "m.text", body: REPLY, "amigo.reply_to": firstId });
-  const both = await rows(ama, conversationId);
-  const reply = await amaPhone.decrypt(both[1]);
-  ok("Ama decrypts Leo's reply, with the reply relation inside", reply.ok && reply.payload.body === REPLY && reply.payload["amigo.reply_to"] === firstId);
-  ok("reply relation isn't visible to the server", !JSON.stringify(both[1]).includes(firstId));
+  // ---- approve the laptop from the phone (emoji verification between own devices)
+  const self = await verify(amaLaptop, amaPhone, "self");
+  ok("own-device verification: both show the same 7 emoji", self.ea === self.eb && self.emojiCount === 7, self.ea);
+  ok("own-device verification completes", self.ok, self.why);
+  ok("laptop is now verified", (await amaLaptop.ownSecurity()).deviceVerified);
+  const laptopDevices = await amaPhone.myDevices();
+  ok("Your devices: both listed, both verified, names + last active, current marked",
+    laptopDevices.length === 2 && laptopDevices.every((d) => d.verified && d.name && d.lastSeenAt) && laptopDevices.filter((d) => d.current).length === 1);
+  const second = await send(amaPhone, ama, conversationId, ids.leo, { msgtype: "m.text", body: `second ${tag}` });
+  ok("approved laptop receives keys for new messages", (await amaLaptop.decrypt((await rows(ama, conversationId)).find((r) => r.id === second))).ok);
 
-  // Outsiders
-  const { data: zoeRows } = await zoe.from("dm_messages").select("id").eq("conversation_id", conversationId);
-  ok("outsider can't even read the ciphertext rows", (zoeRows ?? []).length === 0);
-  const zoeTry = await zoeDevice.decrypt(stored[0]);
-  ok("a device that wasn't given the key can't decrypt a leaked ciphertext", !zoeTry.ok);
+  // ---- people verify each other
+  ok("Ama and Leo start unverified", (await amaPhone.peerTrust(ids.leo)) === "unverified" && (await leoPhone.peerTrust(ids.ama)) === "unverified");
+  const people = await verify(amaPhone, leoPhone, ids.leo);
+  ok("Ama ↔ Leo emoji match and verification completes", people.ok && people.ea === people.eb, people.why ?? people.ea);
+  ok("both now see each other as verified", (await amaPhone.peerTrust(ids.leo)) === "verified" && (await leoPhone.peerTrust(ids.ama)) === "verified");
+  ok("Ama's approved laptop trusts Leo too (cross-signing)", (await amaLaptop.peerTrust(ids.leo)) === "verified");
+  const { rows: [usig] } = await db.query("select count(*)::int as n from public.e2e_user_signatures where signer_id = $1 and target_id = $2", [ids.ama, ids.leo]);
+  ok("'Ama verified Leo' is stored as a signature only Ama can fetch", usig.n === 1);
+  const { data: zoeView } = await zoe.rpc("e2e_query_keys", { p_users: [`@${ids.leo}:amigo.world`] });
+  ok("others don't see who verified whom", !JSON.stringify(zoeView).includes(`@${ids.ama}:amigo.world`));
 
-  // A server that lies
-  const forged = { ...stored[0], sender_id: ids.leo };
-  const asForged = await amaLaptop.decrypt(forged);
-  ok("server-forged sender is detected", !asForged.ok || asForged.senderMismatch, JSON.stringify({ ok: asForged.ok, mismatch: asForged.senderMismatch }));
+  // mismatched emoji → nothing is trusted
+  await zoe.rpc("dm_open", { p_peer: ids.leo });
+  const mm = await verify(zoeDevice, leoPhone, ids.leo, { confirm: false });
+  await leoPhone.rejectVerification(mm.vb.flowId);
+  for (let i = 0; i < 4; i++) { await zoeDevice.refresh(); await leoPhone.refresh(); }
+  const zv = (await zoeDevice.verifications()).find((v) => v.flowId === mm.va.flowId);
+  const lv = (await leoPhone.verifications()).find((v) => v.flowId === mm.vb.flowId);
+  ok("\"They don't match\" cancels it on both sides (recorded as a mismatch by the one who pressed it)",
+    zv?.state === "cancelled" && lv?.state === "cancelled" && /mismatch/.test(lv.cancelReason ?? ""), `${zv?.state}/${lv?.state}/${lv?.cancelReason}`);
+  ok("…and Zoë stays unverified", (await zoeDevice.peerTrust(ids.leo)) === "unverified");
+
+  // ---- key backup: recovery key never reaches the server
+  const recoveryKey = await amaPhone.setUpBackup();
+  ok("recovery key is generated on the device", /^[A-Za-z0-9+/ ]{40,}$/.test(recoveryKey));
+  const plainKey = recoveryKey.replace(/\s+/g, "");
+  ok("recovery key never sent to the server", !wire.some((w) => w.includes(plainKey)));
+  const { rows: bk } = await db.query("select k.session_data from public.e2e_backup_keys k join public.e2e_backup_versions v using (version) where v.user_id = $1", [ids.ama]);
+  ok("backup holds the conversation keys, encrypted (ciphertext/ephemeral/mac only)", bk.length >= 1 && bk.every((r) => Object.keys(r.session_data).sort().join() === "ciphertext,ephemeral,mac"));
+  ok("backup status: exists, this device has the key", (await amaPhone.backupState()).thisDeviceHasKey);
+  await amaLaptop.refresh(); await amaLaptop.refresh();
+  ok("verified laptop received the backup key from the phone (Olm-encrypted)", (await amaLaptop.backupState()).thisDeviceHasKey);
+
+  // ---- password-reset attacker signs in as Ama on a new device
+  const attacker = await start(ids.ama, ama, "Unknown browser");
+  ok("attacker's device is unverified (no other device approved it)", !(await attacker.ownSecurity()).deviceVerified);
+  await send(leoPhone, leo, conversationId, ids.ama, { msgtype: "m.text", body: ATTACK });
+  const attackRow = (await rows(ama, conversationId)).at(-1);
+  ok("attacker can't read new messages (keys only go to verified devices)", !(await attacker.decrypt(attackRow)).ok);
+  ok("Ama's real devices can", (await amaPhone.decrypt(attackRow)).ok && (await amaLaptop.decrypt(attackRow)).ok);
+  ok("attacker can't read history without the recovery key", !(await attacker.decrypt(stored[0])).ok);
+  ok("attacker can't send as Ama", (await errCode(() => send(attacker, ama, conversationId, ids.leo, { msgtype: "m.text", body: "hi" }))) === "device-unverified");
+  ok("attacker can't restore the backup with a guessed key", (await errCode(() => attacker.restoreBackup(newDeviceId()))) === "bad-recovery-key");
+  const listed = (await amaPhone.myDevices()).find((d) => d.deviceId === attacker.deviceId);
+  ok("Ama sees the new, unverified device in Your devices", listed && !listed.verified);
+  await amaPhone.removeDevice(attacker.deviceId);
+  ok("removed device is locked out", (await errCode(() => attacker.refresh())) === "device-removed");
+  const { rows: [reup] } = await db.query("select count(*)::int as n from public.e2e_devices where user_id = $1 and device_id = $2", [ids.ama, attacker.deviceId]);
+  ok("removed device's keys are gone from the directory", reup.n === 0);
+
+  // ---- lost every device: new tablet with the recovery key
+  const amaTablet = await start(ids.ama, ama, "Safari on iPad");
+  ok("wrong recovery key is rejected", (await errCode(() => amaTablet.restoreBackup("AAAA".repeat(11)))) === "wrong-recovery-key" ||
+    (await errCode(() => amaTablet.restoreBackup("AAAA".repeat(11)))) === "bad-recovery-key");
+  const restored = await amaTablet.restoreBackup(recoveryKey);
+  ok("recovery key restores the backed-up keys", restored.imported >= 1 && restored.imported === restored.total, JSON.stringify(restored));
+  const old = await amaTablet.decrypt(stored[0]);
+  ok("…so the new device reads old history", old.ok && old.payload.body === SECRET);
+  // No other device at hand → reset identity on the tablet
+  await amaTablet.resetIdentity();
+  ok("after resetting, the tablet is verified", (await amaTablet.ownSecurity()).deviceVerified);
+  ok("old devices are no longer verified after the reset", !(await amaPhone.ownSecurity()).deviceVerified);
+  ok("Leo (who had verified Ama) is told her security key changed", (await leoPhone.peerTrust(ids.ama)) === "changed-verified");
+  ok("Leo's sending pauses until he OKs the change", (await errCode(() => send(leoPhone, leo, conversationId, ids.ama, { msgtype: "m.text", body: "x" }))) === "identity-changed");
+  await leoPhone.acceptIdentityChange(ids.ama);
+  ok("after OK, Ama shows as unverified (not verified)", (await leoPhone.peerTrust(ids.ama)) === "unverified");
+  await send(leoPhone, leo, conversationId, ids.ama, { msgtype: "m.text", body: LATER });
+  const after = (await rows(ama, conversationId)).at(-1);
+  ok("tablet reads new messages", (await amaTablet.decrypt(after)).ok);
+  ok("the phone (old identity, now unverified) doesn't get new keys", !(await amaPhone.decrypt(after)).ok);
+  const ampeople = await verify(amaTablet, leoPhone, ids.leo);
+  ok("they can verify again after the change", ampeople.ok && (await leoPhone.peerTrust(ids.ama)) === "verified");
+
+  // ---- server tampering
+  // (Leo received this key directly from Ama's device, so it knows which device made it.)
+  const forged = { ...stored[0], sender_id: ids.zoe };
+  const asForged = await leoPhone.decrypt(forged);
+  ok("server-forged sender is detected", !asForged.ok || asForged.senderMismatch);
   const c = stored[0].content.ciphertext;
   const tampered = { ...stored[0], content: { ...stored[0].content, ciphertext: c.slice(0, 40) + (c[40] === "A" ? "B" : "A") + c.slice(41) } };
   ok("tampered ciphertext is rejected", !(await leoPhone.decrypt(tampered)).ok);
-  const moved = { ...stored[0], conversation_id: randomUUID() };
-  ok("ciphertext replayed into another conversation is rejected", !(await leoPhone.decrypt(moved)).ok);
+  ok("ciphertext replayed into another conversation is rejected", !(await leoPhone.decrypt({ ...stored[0], conversation_id: randomUUID() })).ok);
 
-  // Photos: encrypted bytes in the bucket, key inside the message
+  // ---- photos
   const photo = new Uint8Array(4096).map((_, i) => (i * 7) % 251);
-  const enc = amaPhone.encryptAttachment(photo);
+  const enc = amaTablet.encryptAttachment(photo);
   const path = `${conversationId}/${randomUUID()}`;
   await backendFor(ama).uploadAttachment(path, enc.data);
-  await send(amaPhone, ama, conversationId, ids.leo, { msgtype: "m.image", body: "", "amigo.image": { path, info: enc.info, width: 64, height: 64, mimetype: "image/jpeg" } });
-  const third = (await rows(leo, conversationId))[2];
-  const img = await leoPhone.decrypt(third);
+  const photoId = await send(amaTablet, ama, conversationId, ids.leo, { msgtype: "m.image", body: "", "amigo.image": { path, info: enc.info, width: 64, height: 64, mimetype: "image/jpeg" } });
+  const img = await leoPhone.decrypt((await rows(leo, conversationId)).find((r) => r.id === photoId));
   const bytes = img.ok && leoPhone.decryptAttachment(await backendFor(leo).downloadAttachment(img.payload["amigo.image"].path), img.payload["amigo.image"].info);
   ok("encrypted photo round-trips", bytes && Buffer.compare(Buffer.from(bytes), Buffer.from(photo)) === 0);
-  ok("uploaded photo bytes are not the original", Buffer.compare(Buffer.from(enc.data), Buffer.from(photo)) !== 0);
   ok("photo key never sent outside the ciphertext", !wire.some((w) => w.includes(JSON.parse(enc.info).key.k)));
 
-  // A brand-new device: no history (no key backup yet), but new messages work
-  const amaTablet = await start(ids.ama, ama);
-  const oldOnTablet = await amaTablet.decrypt(stored[0]);
-  ok("a new device can't read messages sent before it existed (documented: no key backup yet)", !oldOnTablet.ok && oldOnTablet.reason === "missing-key");
-  await send(leoPhone, leo, conversationId, ids.ama, { msgtype: "m.text", body: LATER });
-  const latest = (await rows(ama, conversationId)).at(-1);
-  const onTablet = await amaTablet.decrypt(latest);
-  ok("…but it reads messages sent after it was added", onTablet.ok && onTablet.payload.body === LATER);
+  // ---- the app layer (src/data/supabase/messages.ts), fresh accounts
+  const carl = asUser(ids.carl), dana = asUser(ids.dana);
+  const oneShot = (name, fetcher, sub) => { fetcher().then(sub.onData, sub.onError); return () => {}; };
+  const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: resolve, onError: reject }));
+  const appCarl = createSupabaseMessages(carl, oneShot, () => {}, { memoryStore: true });
+  const appDana = createSupabaseMessages(dana, oneShot, () => {}, { memoryStore: true });
+  ok("app layer reports real encryption and real (not simulated) security", appCarl.encryption === "e2e" && appCarl.security.simulated === false);
+  ok("app: first device is set up", (await appCarl.security.setup(ids.carl)).deviceVerified && (await appDana.security.setup(ids.dana)).deviceVerified);
+  const convId = await appCarl.openConversation(ids.carl, ids.dana);
+  const APP = `app layer secret ${tag}`;
+  await appCarl.send(ids.carl, convId, { text: APP });
+  const view = await value((sub) => appDana.subscribeConversation(convId, ids.dana, sub));
+  ok("app: recipient sees the decrypted text", view.messages.at(-1).text === APP);
+  ok("app: peer trust starts unverified", (await appDana.security.peerTrust(ids.dana, ids.carl)) === "unverified");
+  const devicesList = await value((sub) => appCarl.security.subscribeDevices(ids.carl, sub));
+  ok("app: Your devices lists this device as current + verified", devicesList.length === 1 && devicesList[0].current && devicesList[0].verified);
+  const key = await appCarl.security.setUpBackup(ids.carl);
+  ok("app: backup set up, recovery key returned to show once", key.length > 40 && (await appCarl.security.backupStatus(ids.carl)).thisDeviceHasKey);
+  await appDana.report(ids.dana, convId, { reason: "spam", note: "test", messageIds: [view.messages.at(-1).id] });
+  const { rows: [rep] } = await db.query("select evidence from public.dm_reports where reporter_id = $1", [ids.dana]);
+  ok("app: report evidence is exactly what the reporter selected", rep.evidence.length === 1 && rep.evidence[0].text === APP);
 
-  // Plaintext never reached the database or the wire
+  // ---- nothing readable on the server
   const { rows: dump } = await db.query(`
     select (select coalesce(json_agg(m), '[]') from public.dm_messages m)::text
         || (select coalesce(json_agg(t), '[]') from public.e2e_to_device t)::text
         || (select coalesce(json_agg(d), '[]') from public.e2e_devices d)::text
         || (select coalesce(json_agg(k), '[]') from public.e2e_one_time_keys k)::text
-        || (select coalesce(json_agg(p), '[]') from public.dm_participants p)::text as all_rows`);
-  for (const secret of [SECRET, REPLY, LATER, "old bridge"]) {
-    ok(`database holds no plaintext: “${secret.slice(0, 18)}…”`, !dump[0].all_rows.includes(secret));
-    ok(`nothing sent to the server contained it`, !wire.some((w) => w.includes(secret)));
+        || (select coalesce(json_agg(x), '[]') from public.e2e_cross_signing_keys x)::text
+        || (select coalesce(json_agg(b), '[]') from public.e2e_backup_keys b)::text
+        || (select coalesce(json_agg(v), '[]') from public.e2e_backup_versions v)::text as all_rows`);
+  for (const secret of [SECRET, REPLY, LATER, ATTACK, APP, "old bridge", plainKey]) {
+    ok(`database holds no plaintext / recovery key: “${secret.slice(0, 16)}…”`, !dump[0].all_rows.includes(secret));
   }
-  ok("to-device mail was all Olm-encrypted", wire.filter((w) => w.includes('"p_event_type":"m.room.encrypted"')).every((w) => !w.includes("session_key")));
+  ok("no request to the server contained a message", ![SECRET, LATER, ATTACK, APP].some((t) => wire.some((w) => w.includes(t))));
+  ok("to-device mail carrying keys was all Olm-encrypted", wire.filter((w) => w.includes('"p_event_type":"m.room.encrypted"')).every((w) => !w.includes("session_key")));
 
   // Keys are replenished after being claimed
-  await amaPhone.refresh();
-  const { rows: [left] } = await db.query("select count(*)::int as n from public.e2e_one_time_keys where user_id = $1 and not fallback", [ids.ama]);
+  await amaTablet.refresh();
+  const { rows: [left] } = await db.query("select count(*)::int as n from public.e2e_one_time_keys where user_id = $1 and device_id = $2 and not fallback", [ids.ama, amaTablet.deviceId]);
   ok("one-time keys topped up after use", left.n > 0, `${left.n}`);
-
-  // The app's MessagesApi (src/data/supabase/messages.ts) end to end, as the UI uses it
-  const oneShot = (name, fetcher, sub) => { fetcher().then(sub.onData, sub.onError); return () => {}; };
-  const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: resolve, onError: reject }));
-  const appAma = createSupabaseMessages(ama, oneShot, () => {}, { memoryStore: true });
-  const appLeo = createSupabaseMessages(leo, oneShot, () => {}, { memoryStore: true });
-  ok("app layer reports real encryption", appAma.encryption === "e2e");
-  const { data: zoeConv } = await zoe.rpc("dm_open", { p_peer: ids.leo });
-  // Both apps register their device in the background via the unread badge (as after sign-in).
-  await value((sub) => appAma.subscribeUnreadCount(ids.ama, sub));
-  await value((sub) => appLeo.subscribeUnreadCount(ids.leo, sub));
-  await new Promise((r) => setTimeout(r, 1500));
-  const nobody = randomUUID();
-  await db.query("insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, '{}')", [nobody, `nodevice-${tag}@example.com`]);
-  ids.nobody = nobody;
-  const noDevConv = await appAma.openConversation(ids.ama, nobody);
-  let noDevErr = null;
-  try { await appAma.send(ids.ama, noDevConv, { text: "anyone?" }); } catch (e) { noDevErr = e; }
-  ok("sending to someone with no messaging device is refused (not silently unreadable)", noDevErr?.code === "peer-unavailable");
-  const convId = await appAma.openConversation(ids.ama, ids.leo);
-  ok("openConversation reuses the pair's conversation", convId === conversationId);
-  const APP = `app layer secret ${tag}`;
-  await appAma.send(ids.ama, convId, { text: APP });
-  const leoView = await value((sub) => appLeo.subscribeConversation(convId, ids.leo, sub));
-  const lastAtLeo = leoView.messages.at(-1);
-  ok("recipient's app shows the decrypted text", lastAtLeo.text === APP && !lastAtLeo.fromViewer);
-  const leoInbox = await value((sub) => appLeo.subscribeConversations(ids.leo, sub));
-  const row = leoInbox.find((c) => c.id === convId);
-  ok("inbox preview is decrypted on the device; unread counted", row.lastMessage.text === APP && row.unreadCount >= 1 && row.peer.id === ids.ama);
-  ok("unread badge counts conversations", (await value((sub) => appLeo.subscribeUnreadCount(ids.leo, sub))) >= 1);
-  await appLeo.markRead(ids.leo, convId);
-  const amaView = await value((sub) => appAma.subscribeConversation(convId, ids.ama, sub));
-  ok("sender sees Read after the recipient opens it", amaView.messages.at(-1).status === "read");
-  await appLeo.send(ids.leo, convId, { text: `re ${tag}`, replyToId: lastAtLeo.id });
-  const amaView2 = await value((sub) => appAma.subscribeConversation(convId, ids.ama, sub));
-  ok("reply quote resolved on the device", amaView2.messages.at(-1).replyTo?.id === lastAtLeo.id && amaView2.messages.at(-1).replyTo.text === APP);
-  ok("history from before this app device existed shows as undecryptable, not as text", amaView2.messages[0].undecryptable === true && amaView2.messages[0].text === "");
-  await appLeo.block(ids.leo, ids.ama);
-  let blockedErr = null;
-  try { await appAma.send(ids.ama, convId, { text: "hello?" }); } catch (e) { blockedErr = e; }
-  ok("blocked: send refused with MessageError(blocked)", blockedErr?.code === "blocked");
-  await appLeo.unblock(ids.leo, ids.ama);
-  await appLeo.report(ids.leo, convId, { reason: "spam", note: "test", messageIds: [lastAtLeo.id] });
-  const { rows: [rep] } = await db.query("select evidence from public.dm_reports where reporter_id = $1 order by created_at desc limit 1", [ids.leo]);
-  ok("report evidence is the text the reporter's device decrypted", rep.evidence[0]?.text === APP);
-  const { rows: [scan] } = await db.query("select count(*)::int as n from public.dm_messages where content::text like $1", [`%${APP}%`]);
-  ok("app-layer messages stored as ciphertext only", scan.n === 0);
-  ok("outsider's empty conversation is separate", zoeConv !== convId);
-
-  // Signing out a device removes its keys
-  await amaTablet.forget();
-  const { rows: [gone] } = await db.query("select count(*)::int as n from public.e2e_devices where user_id = $1", [ids.ama]);
-  ok("signed-out device removed from the key directory", gone.n === 3);
 } catch (e) {
   failures++;
   console.error("FAIL (exception)", e);

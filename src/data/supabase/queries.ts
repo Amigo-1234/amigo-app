@@ -5,7 +5,7 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { ProfileError, SupportError, WorldError, type AdminAuditEntry, type Verification, type VerificationType, type PersonSummary as Person, type AppNotification, type NewSupportRequest, type SupportAdminAction, type SupportConfig, type SupportErrorCode, type SupportFeedback, type SupportProfileStats, type SupportReaction, type SupportReport, type SupportRequest, type SupportSection, type SupportStatus, type SupportWallet, type SuspiciousSupport, type LeaderboardEntry, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
+import { ProfileError, SupportError, WorldError, type AdminAuditEntry, type Verification, type VerificationType, type PersonSummary as Person, type AppNotification, type NewSupportRequest, type SupportAdminAction, type SupportConfig, type SupportErrorCode, type SupportFeedback, type SupportProfileStats, type SupportReaction, type SupportReport, type SupportRequest, type SupportSection, type SupportStatus, type SupportWallet, type SuspiciousSupport, type LeaderboardEntry, type MessageReport, type MessageReportReason, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
@@ -911,4 +911,35 @@ export async function adminVerifiedUsers(db: Db, adminId: string) {
   if (error) throw supportError(error, true);
   const following = await viewerFollowsSet(db, adminId, data.map((u) => u.id));
   return data.map((u) => toLookup(u, following) as { person: Person; verification: Verification });
+}
+
+// ------------------------------------------------------- message reports
+// (20261006210000_messaging_security.sql). Admins see only what reporters
+// submitted; there is no admin path to conversations.
+
+export async function adminMessageReports(db: Db): Promise<MessageReport[]> {
+  const { data, error } = await db.rpc("admin_dm_reports");
+  if (error) throw new SupportError(error.code === "42501" ? "not-admin" : "unknown", error.message);
+  return (data ?? []).map((r) => ({
+    id: r.id,
+    reporter: { id: r.reporter_id, handle: r.reporter_username },
+    reported: { id: r.reported_id, handle: r.reported_username },
+    reason: r.reason as MessageReportReason,
+    note: r.note,
+    evidence: ((r.evidence as { id?: string; sender_id?: string; text?: string; created_at?: string }[] | null) ?? []).map((e, i) => ({
+      id: e.id ?? String(i),
+      fromReported: e.sender_id === r.reported_id,
+      text: String(e.text ?? ""),
+      createdAt: e.created_at ? new Date(e.created_at) : null,
+    })),
+    status: r.status === "reviewed" ? "reviewed" : "open",
+    createdAt: new Date(r.created_at),
+    reviewedBy: r.reviewed_by_username,
+    reviewedAt: r.reviewed_at ? new Date(r.reviewed_at) : null,
+  }));
+}
+
+export async function adminSetMessageReportStatus(db: Db, reportId: string, status: "open" | "reviewed") {
+  const { error } = await db.rpc("admin_dm_report_set_status", { p_report: reportId, p_status: status });
+  if (error) throw new SupportError(error.code === "42501" ? "not-admin" : "unknown", error.message);
 }

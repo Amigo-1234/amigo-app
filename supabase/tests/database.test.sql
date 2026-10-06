@@ -717,6 +717,99 @@ select pg_temp.q(:A, $$select public.e2e_delete_device('AAADEV')::text$$);
 select pg_temp.check('signing a device out removes its keys', (select count(*) = 0 from public.e2e_devices where user_id = :A)
   and (select count(*) = 0 from public.e2e_one_time_keys where user_id = :A));
 
+-- ------------------------------------------------------ messaging security
+
+select pg_temp.q(:A, $$select public.e2e_upload_keys('AAA2', '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","device_id":"AAA2","keys":{"ed25519:AAA2":"edA2","curve25519:AAA2":"cvA2"},"signatures":{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"ed25519:AAA2":"selfsig"}}}', null, null)::text$$);
+
+-- Cross-signing keys
+select pg_temp.must_fail('cross-signing keys must be your own', :A,
+  $$select public.e2e_upload_signing_keys('{"user_id":"@00000000-0000-0000-0000-00000000000b:amigo.world","usage":["master"],"keys":{"ed25519:MK":"MK"}}', null, null)$$, 'DM011');
+select pg_temp.must_fail('cross-signing key usage must match its slot', :A,
+  $$select public.e2e_upload_signing_keys('{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","usage":["self_signing"],"keys":{"ed25519:MK":"MK"}}', null, null)$$, 'DM011');
+select pg_temp.q(:A, $$select public.e2e_upload_signing_keys(
+  '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","usage":["master"],"keys":{"ed25519:MKA":"MKA"},"signatures":{}}',
+  '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","usage":["self_signing"],"keys":{"ed25519:SSA":"SSA"},"signatures":{}}',
+  '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","usage":["user_signing"],"keys":{"ed25519:USA":"USA"},"signatures":{}}')::text$$);
+select pg_temp.check('anyone signed in sees the public master + self-signing key',
+  pg_temp.q(:C, $$select (public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000a:amigo.world']) #>> '{master_keys,@00000000-0000-0000-0000-00000000000a:amigo.world,keys,ed25519:MKA}')
+                    || (public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000a:amigo.world']) #>> '{self_signing_keys,@00000000-0000-0000-0000-00000000000a:amigo.world,keys,ed25519:SSA}')$$) = 'MKASSA');
+select pg_temp.check('the user-signing key is only returned to its owner',
+  pg_temp.q(:C, $$select public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000a:amigo.world']) -> 'user_signing_keys' ? '@00000000-0000-0000-0000-00000000000a:amigo.world'$$) = 'false'
+  and pg_temp.q(:A, $$select public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000a:amigo.world']) -> 'user_signing_keys' ? '@00000000-0000-0000-0000-00000000000a:amigo.world'$$) = 'true');
+select pg_temp.must_fail('cross-signing keys not directly readable', :A, $$select count(*) from public.e2e_cross_signing_keys$$, '42501');
+
+-- Signatures
+select pg_temp.must_fail('only your own signatures are accepted', :A,
+  $$select public.e2e_upload_signatures('{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"AAA2":{"signatures":{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"ed25519:X":"forged"}}}}}')$$, 'DM011');
+select pg_temp.q(:A, $$select public.e2e_upload_signatures('{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"AAA2":{"signatures":{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"ed25519:SSA":"ssig"}}}}}')::text$$);
+select pg_temp.check('self-signing signature merged into the device (earlier signatures kept)',
+  (select device_keys #>> '{signatures,@00000000-0000-0000-0000-00000000000a:amigo.world,ed25519:SSA}' = 'ssig'
+      and device_keys #>> '{signatures,@00000000-0000-0000-0000-00000000000a:amigo.world,ed25519:AAA2}' = 'selfsig'
+   from public.e2e_devices where user_id = :A and device_id = 'AAA2'));
+select pg_temp.q(:A, $$select public.e2e_upload_keys('AAA2', '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","device_id":"AAA2","keys":{"ed25519:AAA2":"edA2","curve25519:AAA2":"cvA2"},"signatures":{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"ed25519:AAA2":"selfsig"}}}', null, null)::text$$);
+select pg_temp.check('re-uploading device keys keeps the cross-signing signature',
+  (select device_keys #>> '{signatures,@00000000-0000-0000-0000-00000000000a:amigo.world,ed25519:SSA}' = 'ssig' from public.e2e_devices where user_id = :A and device_id = 'AAA2'));
+select pg_temp.q(:B, $$select public.e2e_upload_signing_keys('{"user_id":"@00000000-0000-0000-0000-00000000000b:amigo.world","usage":["master"],"keys":{"ed25519:MKB":"MKB"},"signatures":{}}', null, null)::text$$);
+select pg_temp.q(:A, $$select public.e2e_upload_signatures('{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"MKB":{"signatures":{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"ed25519:USA":"A-verified-B"}}}}}')::text$$);
+select pg_temp.check('"A verified B" is visible to A only',
+  pg_temp.q(:A, $$select public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000b:amigo.world'])::text$$) like '%A-verified-B%'
+  and pg_temp.q(:B, $$select public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000b:amigo.world'])::text$$) not like '%A-verified-B%'
+  and pg_temp.q(:C, $$select public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000b:amigo.world'])::text$$) not like '%A-verified-B%');
+select pg_temp.must_fail('signing an unknown key is refused', :A,
+  $$select public.e2e_upload_signatures('{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"NOPE":{"signatures":{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"ed25519:USA":"x"}}}}}')$$, 'DM011');
+
+-- Verification relay
+select pg_temp.q(:A, $$select public.e2e_send_to_device('m.key.verification.request', '{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"BBBDEV":{"from_device":"AAA2","methods":["m.sas.v1"],"transaction_id":"t1"}}}')::text$$);
+select pg_temp.check('emoji-verification messages are relayed', pg_temp.q(:B, $$select count(*) from public.e2e_to_device where event_type = 'm.key.verification.request'$$)::int = 1);
+select pg_temp.must_fail('secrets never travel in plaintext (m.secret.send refused)', :A,
+  $$select public.e2e_send_to_device('m.secret.send', '{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"AAA2":{"secret":"x"}}}')$$, 'DM007');
+
+-- Your devices
+select pg_temp.q(:A, $$select public.e2e_touch_device('AAA2', 'Chrome on Windows')::text$$);
+select pg_temp.check('your devices: name and last active, for you only',
+  pg_temp.q(:A, $$select display_name || '/' || (last_seen_at is not null) from public.e2e_my_devices() where device_id = 'AAA2'$$) = 'Chrome on Windows/true'
+  and pg_temp.q(:B, $$select count(*) from public.e2e_my_devices() where device_id = 'AAA2'$$)::int = 0);
+select pg_temp.must_fail('device names are private', :B, $$select display_name from public.e2e_devices$$, '42501');
+select pg_temp.q(:A, $$select public.e2e_remove_device('AAA2')::text$$);
+select pg_temp.check('removed device: keys gone', (select count(*) = 0 from public.e2e_devices where user_id = :A and device_id = 'AAA2'));
+select pg_temp.must_fail('removed device cannot come back under the same id', :A,
+  $$select public.e2e_upload_keys('AAA2', '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","device_id":"AAA2","keys":{"ed25519:AAA2":"edA2"}}', null, null)$$, 'DM009');
+select pg_temp.q(:A, $$select public.e2e_remove_device('BBBDEV')::text$$);
+select pg_temp.check('removing only ever touches your own devices (A "removing" BBBDEV leaves B''s device alone)',
+  (select count(*) = 1 from public.e2e_devices where user_id = :B and device_id = 'BBBDEV')
+  and not exists (select 1 from public.e2e_revoked_devices where user_id = :B));
+
+-- Key backup
+select pg_temp.must_fail('backup must use the megolm backup algorithm', :A,
+  $$select public.e2e_backup_create('plaintext', '{"public_key":"PUB"}')$$, 'DM011');
+insert into dm_t values ('bv', pg_temp.q(:A, $$select public.e2e_backup_create('m.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB","signatures":{}}')$$));
+select pg_temp.must_fail('backed-up keys must be encrypted (no plaintext session key)', :A,
+  format($$select public.e2e_backup_put(%L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":0,"session_data":{"ciphertext":"c","ephemeral":"e","mac":"m","session_key":"PLAINTEXT"}}}}}')$$, (select v from dm_t where k = 'bv')), 'DM011');
+select pg_temp.q(:A, format($$select public.e2e_backup_put(%L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":5,"forwarded_count":0,"is_verified":true,"session_data":{"ciphertext":"c5","ephemeral":"e","mac":"m"}}}}}')::text$$, (select v from dm_t where k = 'bv')));
+select pg_temp.q(:A, format($$select public.e2e_backup_put(%L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":9,"forwarded_count":0,"is_verified":true,"session_data":{"ciphertext":"c9","ephemeral":"e","mac":"m"}}}}}')::text$$, (select v from dm_t where k = 'bv')));
+select pg_temp.check('backup keeps the better copy of a key', (select session_data ->> 'ciphertext' = 'c5' from public.e2e_backup_keys where session_id = 's1'));
+select pg_temp.check('owner restores their encrypted keys',
+  pg_temp.q(:A, format($$select public.e2e_backup_get(%L) #>> '{!r:amigo.world,sessions,s1,session_data,ciphertext}'$$, (select v from dm_t where k = 'bv'))) = 'c5');
+select pg_temp.check('nobody else can fetch someone''s backup (not even admins)',
+  pg_temp.q(:B, format($$select public.e2e_backup_get(%L)::text$$, (select v from dm_t where k = 'bv'))) = '{}'
+  and pg_temp.q(:D, format($$select public.e2e_backup_get(%L)::text$$, (select v from dm_t where k = 'bv'))) = '{}'
+  and pg_temp.q(:D, $$select coalesce(public.e2e_backup_current()::text, 'none')$$) = 'none');
+select pg_temp.must_fail('backup tables not directly readable', :D, $$select count(*) from public.e2e_backup_keys$$, '42501');
+select pg_temp.q(:A, $$select public.e2e_backup_create('m.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB2"}')$$);
+select pg_temp.must_fail('writing to a replaced backup version is refused', :A,
+  format($$select public.e2e_backup_put(%L, '{}')$$, (select v from dm_t where k = 'bv')), 'DM010');
+select pg_temp.check('a new backup replaces the old one and its keys', (select count(*) = 0 from public.e2e_backup_keys where session_id = 's1'));
+
+-- Message report review
+select pg_temp.must_fail('only admins review message reports', :A,
+  format($$select public.admin_dm_report_set_status(%L, 'reviewed')$$, (select id from public.dm_reports limit 1)), '42501');
+select pg_temp.q(:D, format($$select public.admin_dm_report_set_status(%L, 'reviewed')::text$$, (select id from public.dm_reports limit 1)));
+select pg_temp.check('admin marks a report reviewed (audit-logged)',
+  pg_temp.q(:D, $$select status || '/' || (reviewed_by_username is not null) from public.admin_dm_reports() limit 1$$) = 'reviewed/true'
+  and exists (select 1 from public.admin_audit_log where action = 'dm_report.reviewed'));
+select pg_temp.check('admins still can''t read any conversation',
+  pg_temp.q(:D, $$select (select count(*) from public.dm_messages) + (select count(*) from public.dm_conversations) + (select count(*) from public.e2e_to_device)$$)::int = 0);
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');
