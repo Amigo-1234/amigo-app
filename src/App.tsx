@@ -1,18 +1,21 @@
 import { lazy, Suspense } from "react";
-import { createBrowserRouter, RouterProvider } from "react-router";
+import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { Bell, Compass, Mail } from "lucide-react";
 import { MediaViewerProvider } from "./features/posts/MediaViewer";
 import HomeScreen from "./screens/HomeScreen";
 import { ComingSoonScreen } from "./screens/ComingSoonScreen";
 import { AppShell } from "./shell/AppShell";
 import { ComposerProvider } from "./state/composer";
-import { SessionProvider, useSession } from "./state/session";
+import { SessionProvider, useSession, useViewer } from "./state/session";
+import { profilesEnabled } from "./features/profile/links";
 import { ThemeProvider } from "./state/theme";
 import { ToastProvider } from "./state/toast";
 import { AmigoMark } from "./ui/Brand";
 
 const PostScreen = lazy(() => import("./screens/PostScreen"));
 const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
+const FollowListScreen = lazy(() => import("./screens/FollowListScreen"));
+const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
@@ -52,13 +55,27 @@ function Root() {
   );
 }
 
+/** "/profile" is your own profile (or settings on backends without profiles). */
+function MeRedirect() {
+  const viewer = useViewer();
+  return <Navigate to={profilesEnabled ? `/u/${viewer.handle}` : "/settings"} replace />;
+}
+
 const router = createBrowserRouter([
   {
     element: <Root />,
     children: [
       { index: true, element: <HomeScreen /> },
       { path: "post/:postId", element: <PostScreen /> },
-      { path: "profile", element: <ProfileScreen /> },
+      { path: "profile", element: <MeRedirect /> },
+      { path: "settings", element: <SettingsScreen /> },
+      ...(profilesEnabled
+        ? [
+            { path: "u/:handle", element: <ProfileScreen /> },
+            { path: "u/:handle/followers", element: <FollowListScreen kind="followers" /> },
+            { path: "u/:handle/following", element: <FollowListScreen kind="following" /> },
+          ]
+        : []),
       {
         path: "explore",
         element: (

@@ -284,34 +284,12 @@
   padding: 0;
 }
 
-.person {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
+.rail-card .person-row {
   padding: var(--space-2) 0;
 }
 
-.person__text {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
+.rail-card .follow-btn {
   min-width: 0;
-  line-height: 1.25;
-}
-
-.person__name {
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.person__handle {
-  color: var(--text-3);
-  font-size: var(--text-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .rail__foot {

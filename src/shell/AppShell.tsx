@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
+import { profilesEnabled } from "../features/profile/links";
 import { Plus } from "lucide-react";
 import { Composer } from "../features/composer/Composer";
 import { useComposer } from "../state/composer";
@@ -32,7 +33,13 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKey);
   }, [composer]);
 
-  const mobileItems = NAV.filter((n) => n.mobile);
+  const meHref = profilesEnabled ? `/u/${viewer.handle}` : "/settings";
+  const nav = NAV.map((n) => (n.to === "/profile" ? { ...n, to: meHref } : n));
+  const mobileItems = nav.filter((n) => n.mobile);
+  // Own profile, its follow lists and settings all count as "Profile" in the nav.
+  const onMe = pathname === "/settings" || pathname === meHref || pathname.startsWith(`${meHref}/`);
+  const navClass = (to: string) => ({ isActive }: { isActive: boolean }) =>
+    `${isActive || (to === meHref && onMe) ? "active" : ""}`;
 
   return (
     <div className="shell">
@@ -48,14 +55,17 @@ export function AppShell() {
           </NavLink>
 
           <nav className="sidebar__nav">
-            {NAV.map(({ to, label, icon: Icon }) => (
-              <NavLink key={to} to={to} end={to === "/"} className="side-link" title={label}>
-                {({ isActive }) => (
+            {nav.map(({ to, label, icon: Icon }) => (
+              <NavLink key={to} to={to} end={to === "/"} className={(a) => `side-link ${navClass(to)(a)}`} title={label}>
+                {({ isActive: routeActive }) => {
+                  const isActive = routeActive || (to === meHref && onMe);
+                  return (
                   <>
                     <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
                     <span className="side-link__label">{label}</span>
                   </>
-                )}
+                  );
+                }}
               </NavLink>
             ))}
           </nav>
@@ -64,7 +74,7 @@ export function AppShell() {
             Post
           </Button>
 
-          <NavLink to="/profile" className="sidebar__me" aria-label={`Your profile, ${viewer.name}`}>
+          <NavLink to={meHref} className="sidebar__me" aria-label={`Your profile, ${viewer.name}`}>
             <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="sm" />
             <span className="sidebar__me-text">
               <span className="sidebar__me-name">{viewer.name}</span>
@@ -84,7 +94,7 @@ export function AppShell() {
 
       <nav className="bottom-nav" aria-label="Primary">
         {mobileItems.slice(0, 2).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end={to === "/"} className="bottom-link" aria-label={label}>
+          <NavLink key={to} to={to} end={to === "/"} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={label}>
             {({ isActive }) => <Icon size={25} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />}
           </NavLink>
         ))}
@@ -92,10 +102,10 @@ export function AppShell() {
           <Plus size={24} strokeWidth={2.4} aria-hidden="true" />
         </button>
         {mobileItems.slice(2).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className="bottom-link" aria-label={label}>
+          <NavLink key={to} to={to} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={label}>
             {({ isActive }) =>
-              to === "/profile" ? (
-                <span className={`bottom-avatar${isActive ? " is-active" : ""}`}>
+              to === meHref ? (
+                <span className={`bottom-avatar${isActive || onMe ? " is-active" : ""}`}>
                   <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="xs" />
                 </span>
               ) : (

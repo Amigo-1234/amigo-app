@@ -25,6 +25,22 @@ npm run build                # typecheck (app + scripts) + production build
 | `firebase` *(default when unset)* | legacy, kept as the rollback path. No new features. |
 | `demo` | in-memory sample data (`?demo=loading\|empty\|error\|slow\|signedout`) |
 
+## Product so far
+
+- **Home**: Latest and Following feeds, composer, likes, replies, share, live updates.
+- **Post**: conversation view with replies.
+- **Profiles** (`/u/:handle`):
+  - a header with bio, join date and counts;
+  - Posts, Replies and Media tabs;
+  - follower and following lists;
+  - edit profile: photo, name, username (with an availability check) and bio.
+
+  Profiles are an optional `DataSource` capability (`profiles`). The Supabase and demo sources
+  provide it. The legacy Firebase source doesn't, so the UI falls back to plain names and a
+  Settings page.
+- **Settings** (`/settings`): appearance and sign out.
+- Explore, Notifications, Messages and Moments are placeholders for later phases.
+
 ## Backend (Supabase)
 
 | | |
@@ -33,7 +49,7 @@ npm run build                # typecheck (app + scripts) + production build
 | Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
 | Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
 | Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
-| Tests | `npm run db:test`: 63 database/RLS checks, rolled back after running · `npm run test:api`: 29 checks through PostgREST |
+| Tests | `npm run db:test`: 63 database/RLS checks, rolled back after running · `npm run test:api`: 47 checks through PostgREST |
 
 To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
 [`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied

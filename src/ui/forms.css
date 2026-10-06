@@ -1,0 +1,49 @@
+/* Shared form controls (auth, settings, edit profile). */
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field__label {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-2);
+}
+
+.field__input {
+  height: 48px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 1rem; /* 16px keeps iOS from zooming */
+  transition: border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
+}
+
+.field__input:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.form-error,
+.form-notice,
+.auth__error,
+.auth__notice {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.form-error,
+.auth__error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.form-notice,
+.auth__notice {
+  background: var(--surface-2);
+  color: var(--text-2);
+}
+

@@ -12,7 +12,7 @@
 import type { AuthError as SupabaseAuthError, RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase/client";
 import * as q from "./supabase/queries";
-import { AuthError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
+import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
 const REFRESH_DEBOUNCE_MS = 250;
 
@@ -263,5 +263,45 @@ export const supabaseSource: DataSource = {
   async unfollow(viewerId, targetId) {
     await q.unfollow(supabase, viewerId, targetId);
     invalidate();
+  },
+
+  profiles: {
+    getProfile: (handle, viewerId) => q.fetchProfileByHandle(supabase, handle, viewerId),
+
+    subscribeProfilePosts(profileId, viewerId, tab, limit, sub) {
+      return liveQuery(
+        `profile:${profileId}:${tab}`,
+        () => q.fetchProfilePosts(supabase, profileId, viewerId, tab, limit),
+        sub,
+        (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `author_id=eq.${profileId}` }, refresh),
+      );
+    },
+
+    listFollows: (profileId, kind, viewerId) => q.fetchFollowList(supabase, profileId, kind, viewerId),
+    isHandleAvailable: (handle, viewerId) => q.isHandleAvailable(supabase, handle, viewerId),
+
+    async updateProfile(viewerId, update) {
+      const patch: Parameters<typeof q.updateProfileRow>[2] = {};
+      if (update.name !== undefined) patch.display_name = update.name.trim();
+      if (update.bio !== undefined) patch.bio = update.bio.trim();
+      if (update.handle !== undefined) patch.username = update.handle.toLowerCase();
+      let uploaded: string | null = null;
+      if (update.avatar === null) patch.avatar_url = null;
+      else if (update.avatar) {
+        const blob = await (await fetch(update.avatar.dataUrl)).blob();
+        uploaded = `${viewerId}/${crypto.randomUUID()}.jpg`;
+        const { error } = await supabase.storage.from("avatars").upload(uploaded, blob, { contentType: blob.type, cacheControl: "31536000" });
+        if (error) throw new ProfileError("unknown", error.message);
+        patch.avatar_url = supabase.storage.from("avatars").getPublicUrl(uploaded).data.publicUrl;
+      }
+      try {
+        await q.updateProfileRow(supabase, viewerId, patch);
+      } catch (e) {
+        if (uploaded) void supabase.storage.from("avatars").remove([uploaded]);
+        throw e;
+      }
+      await emitViewer();
+      invalidate();
+    },
   },
 };

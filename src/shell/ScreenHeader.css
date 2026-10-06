@@ -69,11 +69,18 @@
   background: var(--surface-hover);
 }
 
-.tab[aria-selected="true"] {
+.tab--link {
+  display: grid;
+  place-items: center;
+}
+
+.tab[aria-selected="true"],
+.tab[aria-current="page"] {
   color: var(--text);
 }
 
-.tab[aria-selected="true"]::after {
+.tab[aria-selected="true"]::after,
+.tab[aria-current="page"]::after {
   content: "";
   position: absolute;
   left: 50%;

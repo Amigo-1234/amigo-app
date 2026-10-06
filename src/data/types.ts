@@ -37,6 +37,8 @@ export interface Post {
   likeCount: number;
   likedByViewer: boolean;
   replyCount: number;
+  /** Set when this post is a reply (shown on profile "Replies" tabs). */
+  replyTo?: { postId: string; handle: string } | null;
 }
 
 export interface Reply {
@@ -83,14 +85,79 @@ export class AuthError extends Error {
   }
 }
 
+// ----------------------------------------------------------------- profiles
+
+export interface Profile {
+  id: string;
+  name: string;
+  handle: string;
+  bio: string;
+  avatarUrl: string | null;
+  followerCount: number;
+  followingCount: number;
+  postCount: number;
+  joinedAt: Date | null;
+  viewerFollows: boolean;
+  isViewer: boolean;
+}
+
+export type ProfileTab = "posts" | "replies" | "media";
+export type FollowListKind = "followers" | "following";
+
+export interface ProfileUpdate {
+  name?: string;
+  handle?: string;
+  bio?: string;
+  /** A new picture, or null to remove the current one. Omit to leave it unchanged. */
+  avatar?: { dataUrl: string; width: number; height: number } | null;
+}
+
+export const HANDLE_PATTERN = /^[a-z0-9_]{3,24}$/;
+export const BIO_MAX_LENGTH = 160;
+export const NAME_MAX_LENGTH = 50;
+
+export type ProfileErrorCode = "handle-taken" | "handle-invalid" | "unknown";
+
+export class ProfileError extends Error {
+  code: ProfileErrorCode;
+  constructor(code: ProfileErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/**
+ * Profiles are an optional capability: backends that have real usernames and
+ * profile rows (Supabase, demo) provide it; the legacy Firebase source does not,
+ * and the UI degrades to plain names without profile links.
+ */
+export interface ProfilesApi {
+  /** Case-insensitive. null when no such person exists. */
+  getProfile(handle: string, viewerId: string): Promise<Profile | null>;
+  subscribeProfilePosts(
+    profileId: string,
+    viewerId: string,
+    tab: ProfileTab,
+    limit: number,
+    sub: Subscription<{ posts: Post[]; hasMore: boolean }>,
+  ): Unsubscribe;
+  listFollows(profileId: string, kind: FollowListKind, viewerId: string): Promise<PersonSummary[]>;
+  isHandleAvailable(handle: string, viewerId: string): Promise<boolean>;
+  /** Updates the signed-in person's profile; onViewerChanged fires with the new values. */
+  updateProfile(viewerId: string, update: ProfileUpdate): Promise<void>;
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
 }
 
-/** Everything the UI needs from a backend. Implemented by Firebase and demo sources. */
+/** Everything the UI needs from a backend. Implemented by Supabase, demo and (legacy) Firebase sources. */
 export interface DataSource {
   kind: "firebase" | "supabase" | "demo";
+
+  /** Optional capability — see ProfilesApi. */
+  profiles?: ProfilesApi;
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;

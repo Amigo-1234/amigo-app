@@ -5,7 +5,7 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import type { FeedScope, MediaItem, PersonSummary, Post, Reply } from "../types";
+import { ProfileError, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
@@ -21,6 +21,7 @@ export type PostRow = {
   parent_id: string | null;
   author: ProfileRow | null;
   media: MediaRow[];
+  parent?: { id: string; author: { username: string } | null } | null;
 };
 
 export const POST_SELECT =
@@ -50,6 +51,7 @@ function toMedia(db: Db, rows: MediaRow[]): MediaItem[] {
 
 export function toPost(db: Db, row: PostRow, liked: Set<string>): Post {
   return {
+    replyTo: row.parent?.author ? { postId: row.parent.id, handle: row.parent.author.username } : null,
     id: row.id,
     author: toAuthor(row.author),
     text: row.body,
@@ -158,4 +160,106 @@ export async function unfollow(db: Db, viewerId: string, targetId: string) {
 export async function updateDisplayName(db: Db, userId: string, name: string) {
   const { error } = await db.from("profiles").update({ display_name: name.trim() }).eq("id", userId);
   if (error) throw dataError(error);
+}
+
+// ----------------------------------------------------------------- profiles
+
+const PROFILE_COLUMNS = "id, username, display_name, bio, avatar_url, follower_count, following_count, post_count, created_at";
+// Media tab: only posts that have at least one media row.
+const MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
+
+async function viewerFollowsSet(db: Db, viewerId: string, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { data, error } = await db.from("follows").select("followee_id").eq("follower_id", viewerId).in("followee_id", ids);
+  if (error) throw dataError(error);
+  return new Set(data.map((r) => r.followee_id));
+}
+
+export async function fetchProfileByHandle(db: Db, handle: string, viewerId: string): Promise<Profile | null> {
+  const { data, error } = await db.from("profiles").select(PROFILE_COLUMNS).eq("username", handle.toLowerCase()).maybeSingle();
+  if (error) throw dataError(error);
+  if (!data) return null;
+  const following = data.id === viewerId ? new Set<string>() : await viewerFollowsSet(db, viewerId, [data.id]);
+  return {
+    id: data.id,
+    name: data.display_name,
+    handle: data.username,
+    bio: data.bio,
+    avatarUrl: data.avatar_url,
+    followerCount: data.follower_count,
+    followingCount: data.following_count,
+    postCount: data.post_count,
+    joinedAt: new Date(data.created_at),
+    viewerFollows: following.has(data.id),
+    isViewer: data.id === viewerId,
+  };
+}
+
+export async function fetchProfilePosts(db: Db, profileId: string, viewerId: string, tab: ProfileTab, limit: number) {
+  const select = tab === "media" ? MEDIA_SELECT : POST_SELECT;
+  let query = db.from("posts").select(select).eq("author_id", profileId);
+  if (tab === "posts") query = query.is("parent_id", null);
+  if (tab === "replies") query = query.not("parent_id", "is", null);
+  const { data, error } = await query.order("created_at", { ascending: false }).limit(limit + 1).returns<PostRow[]>();
+  if (error) throw dataError(error);
+  const rows = data.slice(0, limit);
+  if (tab === "replies") await attachParents(db, rows);
+  const liked = await likedSet(db, viewerId, rows.map((r) => r.id));
+  return { posts: rows.map((r) => toPost(db, r, liked)), hasMore: data.length > limit };
+}
+
+/**
+ * "Replying to @x": PostgREST can't embed a table's self-reference without a
+ * computed relationship, so parents are fetched in one extra query. Parents
+ * the viewer can't see (deleted, followers-only) simply stay unlabelled.
+ */
+async function attachParents(db: Db, rows: PostRow[]) {
+  const ids = [...new Set(rows.map((r) => r.parent_id).filter((x): x is string => !!x))];
+  if (ids.length === 0) return;
+  const { data, error } = await db
+    .from("posts")
+    .select("id, author:profiles!posts_author_id_fkey(username)")
+    .in("id", ids)
+    .returns<{ id: string; author: { username: string } | null }[]>();
+  if (error) throw dataError(error);
+  const byId = new Map(data.map((p) => [p.id, p]));
+  for (const r of rows) r.parent = r.parent_id ? byId.get(r.parent_id) ?? null : null;
+}
+
+export async function fetchFollowList(db: Db, profileId: string, kind: FollowListKind, viewerId: string): Promise<PersonSummary[]> {
+  const select =
+    kind === "followers"
+      ? "created_at, person:profiles!follows_follower_id_fkey(id, username, display_name, avatar_url)"
+      : "created_at, person:profiles!follows_followee_id_fkey(id, username, display_name, avatar_url)";
+  const { data, error } = await db
+    .from("follows")
+    .select(select)
+    .eq(kind === "followers" ? "followee_id" : "follower_id", profileId)
+    .order("created_at", { ascending: false })
+    .limit(500)
+    .returns<{ person: ProfileRow | null }[]>();
+  if (error) throw dataError(error);
+  const people = data.map((r) => r.person).filter((p): p is ProfileRow => !!p);
+  const following = await viewerFollowsSet(db, viewerId, people.map((p) => p.id));
+  return people.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: following.has(p.id) }));
+}
+
+export async function isHandleAvailable(db: Db, handle: string, viewerId: string) {
+  const { data, error } = await db.from("profiles").select("id").eq("username", handle.toLowerCase()).limit(1);
+  if (error) throw dataError(error);
+  return data.length === 0 || data[0].id === viewerId;
+}
+
+export async function updateProfileRow(
+  db: Db,
+  userId: string,
+  patch: { display_name?: string; username?: string; bio?: string; avatar_url?: string | null },
+) {
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await db.from("profiles").update(patch).eq("id", userId);
+  if (!error) return;
+  if (error.code === "23505") throw new ProfileError("handle-taken");
+  // Only the username format constraint means "invalid username"; other checks (bio/name length) are generic.
+  if (error.code === "23514" && /profiles_username_format/.test(error.message)) throw new ProfileError("handle-invalid", error.message);
+  throw new ProfileError("unknown", error.message);
 }

@@ -5,6 +5,7 @@ import "@fontsource-variable/bricolage-grotesque";
 import "./styles/tokens.css";
 import "./styles/base.css";
 import "./ui/Button.css";
+import "./ui/forms.css";
 import App from "./App";
 
 createRoot(document.getElementById("root")!).render(

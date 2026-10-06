@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import { useLocation, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
+import { profileHref } from "../features/profile/links";
 import { ArrowLeft, CircleAlert, MessageCircle, SearchX } from "lucide-react";
 import { dataSource, type Post, type Reply } from "../data";
 import { POST_MAX_LENGTH } from "../features/composer/Composer";
@@ -103,12 +104,23 @@ export default function PostScreen() {
 }
 
 function ReplyRow({ reply }: { reply: Reply }) {
+  const href = profileHref(reply.author.handle);
   return (
     <article className="reply">
-      <Avatar name={reply.author.name} src={reply.author.avatarUrl} seed={reply.author.id} size="sm" />
+      {href ? (
+        <Link to={href} tabIndex={-1} aria-hidden="true" className="post__avatar-link">
+          <Avatar name={reply.author.name} src={reply.author.avatarUrl} seed={reply.author.id} size="sm" />
+        </Link>
+      ) : (
+        <Avatar name={reply.author.name} src={reply.author.avatarUrl} seed={reply.author.id} size="sm" />
+      )}
       <div className="reply__body">
         <div className="reply__meta">
-          <span className="reply__name">{reply.author.name}</span>
+          {href ? (
+            <Link to={href} className="reply__name post__name--link">{reply.author.name}</Link>
+          ) : (
+            <span className="reply__name">{reply.author.name}</span>
+          )}
           <span className="reply__sub">
             @{reply.author.handle} ·{" "}
             <time dateTime={reply.createdAt?.toISOString()} aria-label={timeAgoLong(reply.createdAt)}>

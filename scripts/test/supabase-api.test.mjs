@@ -144,6 +144,41 @@ try {
   const { error: counterErr } = await ama.from("profiles").update({ follower_count: 1e6 }).eq("id", ids.ama);
   ok("counters not writable through the API", counterErr?.code === "42501", counterErr?.code);
 
+  // profiles (Phase 3)
+  const amaHandle = (await q.fetchProfile(leo, ids.ama)).username;
+  let profile = await q.fetchProfileByHandle(leo, amaHandle.toUpperCase(), ids.leo);
+  ok("profile by handle is case-insensitive", profile?.id === ids.ama && profile.isViewer === false);
+  ok("profile has counts and join date", profile.postCount === 2 && profile.joinedAt instanceof Date);
+  ok("unknown handle → null", (await q.fetchProfileByHandle(leo, `nobody_${tag}`, ids.leo)) === null);
+  await q.follow(leo, ids.leo, ids.ama);
+  profile = await q.fetchProfileByHandle(leo, amaHandle, ids.leo);
+  ok("viewerFollows + followerCount", profile.viewerFollows === true && profile.followerCount === 1);
+  ok("own profile isViewer", (await q.fetchProfileByHandle(ama, amaHandle, ids.ama)).isViewer === true);
+
+  const amaPosts = await q.fetchProfilePosts(leo, ids.ama, ids.leo, "posts", 10);
+  ok("posts tab: top-level only, newest first", amaPosts.posts.length === 2 && amaPosts.posts.every((x) => !x.replyTo));
+  const leoReplies = await q.fetchProfilePosts(ama, ids.leo, ids.ama, "replies", 10);
+  ok("replies tab: replies with 'replying to' handle", leoReplies.posts.length === 1 && leoReplies.posts[0].replyTo?.handle === amaHandle);
+  const amaMedia = await q.fetchProfilePosts(leo, ids.ama, ids.leo, "media", 10);
+  ok("media tab: only posts with media", amaMedia.posts.length === 1 && amaMedia.posts[0].media.length === 1);
+  const paged2 = await q.fetchProfilePosts(leo, ids.ama, ids.leo, "posts", 1);
+  ok("profile paging", paged2.posts.length === 1 && paged2.hasMore === true);
+
+  const amaFollowers = await q.fetchFollowList(zoe, ids.ama, "followers", ids.zoe);
+  ok("followers list with viewer follow state", amaFollowers.length === 1 && amaFollowers[0].id === ids.leo && amaFollowers[0].viewerFollows === false);
+  const leoFollowingList = await q.fetchFollowList(zoe, ids.leo, "following", ids.zoe);
+  ok("following list", leoFollowingList.length === 1 && leoFollowingList[0].id === ids.ama);
+
+  ok("own handle counts as available", await q.isHandleAvailable(ama, amaHandle, ids.ama));
+  ok("someone else's handle is taken", !(await q.isHandleAvailable(leo, amaHandle, ids.leo)));
+  await rejects("rename to a taken handle", () => q.updateProfileRow(leo, ids.leo, { username: amaHandle }), "handle-taken");
+  await rejects("invalid handle format", () => q.updateProfileRow(leo, ids.leo, { username: "Bad Name" }), "handle-invalid");
+  await rejects("over-long bio is not reported as a username problem", () => q.updateProfileRow(leo, ids.leo, { bio: "x".repeat(161) }), "unknown");
+  await q.updateProfileRow(leo, ids.leo, { username: `leo_${tag}`, bio: "Hiking." });
+  ok("rename + bio saved", (await q.fetchProfileByHandle(ama, `leo_${tag}`, ids.ama))?.bio === "Hiking.");
+  await q.updateProfileRow(zoe, ids.leo, { bio: "hijacked" }); // RLS filters to zero rows
+  ok("cannot edit someone else's profile", (await q.fetchProfileByHandle(ama, `leo_${tag}`, ids.ama))?.bio === "Hiking.");
+
   // private surfaces
   const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });
   ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);

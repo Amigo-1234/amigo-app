@@ -1,0 +1,53 @@
+.person-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  list-style: none;
+}
+
+.person-row__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  border-radius: var(--radius-md);
+}
+
+a.person-row__main:hover .person-row__name {
+  text-decoration: underline;
+}
+
+.person-row__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.person-row__name {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.person-row__handle {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.follow-btn {
+  min-width: 96px;
+}
+
+@media (min-width: 768px) {
+  .person-row {
+    padding-left: var(--space-5);
+    padding-right: var(--space-5);
+  }
+}

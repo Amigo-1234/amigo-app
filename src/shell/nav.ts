@@ -13,5 +13,6 @@ export const NAV: NavItem[] = [
   { to: "/explore", label: "Explore", icon: Compass, mobile: true },
   { to: "/notifications", label: "Notifications", icon: Bell, mobile: false },
   { to: "/messages", label: "Messages", icon: Mail, mobile: true },
+  // Resolved to the viewer's own /u/<handle> in AppShell.
   { to: "/profile", label: "Profile", icon: UserRound, mobile: true },
 ];

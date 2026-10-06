@@ -39,3 +39,23 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
   bitmap.close();
   throw new Error("That image is too large. Try a smaller one.");
 }
+
+const AVATAR_SIZE = 512;
+
+/** Centre-crop to a square and downscale for profile pictures. */
+export async function prepareAvatar(file: File): Promise<PreparedImage> {
+  if (!file.type.startsWith("image/")) throw new Error("That file isn't an image.");
+  const bitmap = await createImageBitmap(file).catch(() => {
+    throw new Error("We couldn't read that image. Try a JPG or PNG.");
+  });
+  const side = Math.min(bitmap.width, bitmap.height);
+  const size = Math.min(AVATAR_SIZE, side);
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Image processing isn't supported in this browser.");
+  ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
+  bitmap.close();
+  return { dataUrl: canvas.toDataURL("image/jpeg", 0.85), width: size, height: size };
+}

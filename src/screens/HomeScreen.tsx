@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
 import { Link, useSearchParams } from "react-router";
 import { ArrowUp, Bell, CircleAlert, Feather, UsersRound, WifiOff } from "lucide-react";
 import { Composer } from "../features/composer/Composer";
 import { describeError } from "../features/feed/errors";
 import { useFeed, type FeedTab } from "../features/feed/useFeed";
 import { PostCard } from "../features/posts/PostCard";
-import { FeedSkeleton, PostSkeleton } from "../features/posts/PostSkeleton";
+import { FeedSkeleton } from "../features/posts/PostSkeleton";
+import { FeedFooter } from "../features/feed/FeedFooter";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
 import { Avatar } from "../ui/Avatar";
@@ -125,36 +125,5 @@ export default function HomeScreen() {
         )}
       </section>
     </>
-  );
-}
-
-function FeedFooter({ hasMore, loading, onMore }: { hasMore: boolean; loading: boolean; onMore: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || !hasMore) return;
-    const io = new IntersectionObserver((entries) => entries[0].isIntersecting && onMore(), { rootMargin: "800px 0px" });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [hasMore, onMore]);
-
-  if (!hasMore) {
-    return <p className="feed-end">You're all caught up</p>;
-  }
-  return (
-    <div ref={ref}>
-      {loading ? (
-        <div role="status" aria-label="Loading more posts">
-          <PostSkeleton />
-        </div>
-      ) : (
-        <div className="feed-more">
-          <Button variant="ghost" onClick={onMore}>
-            Load more
-          </Button>
-        </div>
-      )}
-    </div>
   );
 }

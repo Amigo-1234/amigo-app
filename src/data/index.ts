@@ -21,4 +21,4 @@ export const dataSource: DataSource =
       : (await import("./firebaseSource")).firebaseSource;
 
 export type * from "./types";
-export { AuthError } from "./types";
+export { AuthError, BIO_MAX_LENGTH, HANDLE_PATTERN, NAME_MAX_LENGTH, ProfileError } from "./types";
