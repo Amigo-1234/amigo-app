@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, CalendarDays, CircleAlert, Feather, Image as ImageIcon, MessageCircle, Settings, UserRoundX } from "lucide-react";
-import type { Profile, ProfileTab } from "../data";
+import { ArrowLeft, CalendarDays, HandHeart, CircleAlert, Feather, Image as ImageIcon, MessageCircle, Settings, UserRoundX } from "lucide-react";
+import { dataSource, type Profile, type ProfileTab, type SupportProfileStats } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
 import { PostCard } from "../features/posts/PostCard";
@@ -19,6 +19,7 @@ import { Button, IconButton } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
 import "./ProfileScreen.css";
+import "../features/support/Support.css";
 
 const TABS: { id: ProfileTab; label: string }[] = [
   { id: "posts", label: "Posts" },
@@ -153,7 +154,33 @@ function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; 
           </span>
         </li>
       </ul>
+      <SupportStat profile={profile} />
     </section>
+  );
+}
+
+/** Restrained Support Hub line; hidden when there's nothing to show. */
+function SupportStat({ profile }: { profile: Profile }) {
+  const [stats, setStats] = useState<SupportProfileStats | null>(null);
+  useEffect(() => {
+    if (!dataSource.support) return;
+    let cancelled = false;
+    dataSource.support.profileStats(profile.id).then((s) => !cancelled && setStats(s)).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.id]);
+  if (!stats || (!stats.helpedCount && !stats.reputation && !stats.activeRequests)) return null;
+  const parts = [
+    <span key="h">Helped <strong>{stats.helpedCount}</strong> {stats.helpedCount === 1 ? "person" : "people"}</span>,
+    <span key="r"><strong>{stats.reputation}</strong> Support reputation</span>,
+  ];
+  if (stats.activeRequests) parts.push(<span key="a"><strong>{stats.activeRequests}</strong> active {stats.activeRequests === 1 ? "request" : "requests"}</span>);
+  return (
+    <Link to={profile.isViewer ? "/support?section=mine" : "/support"} className="profile__support" aria-label={`Support Hub: helped ${stats.helpedCount}, reputation ${stats.reputation}, ${stats.activeRequests} active requests`}>
+      <HandHeart size={15} aria-hidden="true" />
+      {parts.flatMap((p, i) => (i ? [<span key={`d${i}`} aria-hidden="true">·</span>, p] : [p]))}
+    </Link>
   );
 }
 

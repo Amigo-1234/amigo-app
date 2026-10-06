@@ -347,6 +347,71 @@ export const supabaseSource: DataSource = {
     listParticipants: (worldId, viewerId, limit) => q.fetchParticipants(supabase, worldId, viewerId, limit),
   },
 
+  support: {
+    config: () => q.fetchSupportConfig(supabase),
+    wallet: () => q.fetchWallet(supabase),
+
+    subscribeRequests(viewerId, opts, sub) {
+      return liveQuery(
+        `support:${opts.section}:${opts.category ?? ""}`,
+        () => q.fetchSupportRequests(supabase, viewerId, opts),
+        sub,
+        (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "support_requests" }, refresh),
+      );
+    },
+
+    subscribeRequest(id, viewerId, sub) {
+      return liveQuery(
+        `support:${id}`,
+        () => q.fetchSupportRequest(supabase, id, viewerId),
+        sub,
+        (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "support_requests", filter: `id=eq.${id}` }, refresh),
+      );
+    },
+
+    async createRequest(_viewerId, input) {
+      const res = await q.createSupportRequest(supabase, input);
+      invalidate();
+      return res;
+    },
+    async openSupport(requestId) {
+      await q.openSupport(supabase, requestId);
+      invalidate();
+    },
+    async confirmSupport(requestId) {
+      const res = await q.confirmSupport(supabase, requestId);
+      invalidate();
+      return res;
+    },
+    async leaveFeedback(requestId, _viewerId, { reaction, text }) {
+      const res = await q.leaveFeedback(supabase, requestId, reaction, text);
+      invalidate();
+      return res;
+    },
+    listFeedback: (requestId) => q.fetchFeedback(supabase, requestId),
+    report: (requestId, _viewerId, reason) => q.reportSupport(supabase, requestId, reason),
+    profileStats: (profileId) => q.fetchSupportProfileStats(supabase, profileId),
+  },
+
+  // The admin UI is only a convenience: every call below is re-checked by is_admin() in the database.
+  admin: {
+    isAdmin: () => q.fetchIsAdmin(supabase),
+    support: {
+      listRequests: (adminId, status) => q.adminListRequests(supabase, adminId, status),
+      async moderate(_adminId, requestId, action, note) {
+        await q.adminModerate(supabase, requestId, action, note);
+        invalidate();
+      },
+      listReports: (_adminId, status) => q.adminReports(supabase, status),
+      resolveReport: (_adminId, reportId, outcome) => q.adminResolveReport(supabase, reportId, outcome),
+      suspicious: () => q.adminSuspicious(supabase),
+      supporters: (_adminId, requestId) => q.adminSupporters(supabase, requestId),
+      findUser: (adminId, handle) => q.adminFindUser(supabase, adminId, handle),
+      adjustCredits: (_adminId, userId, delta, note) => q.adminAdjustCredits(supabase, userId, delta, note),
+      audit: (_adminId, limit) => q.adminAudit(supabase, limit),
+    },
+  },
+
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {
       return liveQuery(

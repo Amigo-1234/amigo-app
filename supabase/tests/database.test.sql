@@ -419,6 +419,117 @@ delete from public.worlds where slug = 'live-comp';
 select pg_temp.check('deleting a World keeps its posts',
   (select world_id is null from public.posts where id = (select id from t where k = 'a_entry')));
 
+-- ------------------------------------------------------------- support hub
+
+select pg_temp.check('starter credits on first use', pg_temp.q(:A, 'select credits from public.support_wallet()')::int = 5);
+select pg_temp.act_as(:A);
+insert into t select 'sr1', (public.create_support_request('Listen to my song', 'Tell me if the chorus works for you.', 'https://soundcloud.com/ama/song', 'music', 'listen', 3)).id;
+select pg_temp.act_as_admin();
+select pg_temp.check('creating a request spends credits and waits for review',
+  pg_temp.q(:A, 'select credits from public.support_wallet()')::int = 0
+  and (select status = 'pending' from public.support_requests where id = (select id from t where k = 'sr1')));
+select pg_temp.must_fail('not enough credits for a second request', :A,
+  $$select public.create_support_request('Another one', 'Second request without credits.', 'https://example.com', 'app', 'try', 3)$$, 'SP008');
+select pg_temp.must_fail('bad link rejected', :B, $$select public.create_support_request('Bad link', 'A javascript link should fail.', 'javascript:alert(1)', 'app', 'try', 3)$$, 'SP006');
+select pg_temp.must_fail('target outside settings rejected', :B, $$select public.create_support_request('Tiny goal', 'Target of one is below the minimum.', 'https://example.com', 'app', 'try', 1)$$, 'SP006');
+select pg_temp.check('pending requests are hidden from others',
+  pg_temp.q(:B, format('select count(*) from public.support_requests where id = %L', (select id from t where k = 'sr1')))::int = 0
+  and pg_temp.q(null, format('select count(*) from public.support_requests where id = %L', (select id from t where k = 'sr1')))::int = 0
+  and pg_temp.q(:A, format('select count(*) from public.support_requests where id = %L', (select id from t where k = 'sr1')))::int = 1);
+select pg_temp.must_fail('clients cannot insert requests directly', :B,
+  $$insert into public.support_requests (creator_id, title, description, url, category, ask, target) values ('00000000-0000-0000-0000-00000000000b', 'x', 'y', 'https://e.com', 'app', 'try', 3)$$, '42501');
+select pg_temp.must_fail('clients cannot mint credits', :B,
+  $$insert into public.support_ledger (user_id, credits, reason) values ('00000000-0000-0000-0000-00000000000b', 999, 'admin')$$, '42501');
+select pg_temp.must_fail('clients cannot edit requests', :A, $$update public.support_requests set supporter_count = 100$$, '42501');
+
+-- admin is enforced in the database
+select pg_temp.must_fail('non-admin cannot moderate', :B, format($$select public.admin_support_moderate(%L, 'approve')$$, (select id from t where k = 'sr1')), '42501');
+select pg_temp.must_fail('non-admin cannot adjust credits', :B, $$select public.admin_support_adjust_credits('00000000-0000-0000-0000-00000000000b', 100, 'free money')$$, '42501');
+select pg_temp.must_fail('non-admin cannot read reports', :B, 'select count(*) from public.support_reports', '42501');
+select pg_temp.must_fail('non-admin cannot read the audit log', :B, 'select * from public.admin_audit(10)', '42501');
+select pg_temp.must_fail('nobody can make themselves admin', :B, $$insert into public.app_admins (user_id) values ('00000000-0000-0000-0000-00000000000b')$$, '42501');
+select pg_temp.check('is_admin is false for normal users', pg_temp.q(:B, 'select public.is_admin()')::boolean = false);
+select pg_temp.act_as_admin();
+insert into public.app_admins (user_id, note) values (:D, 'test admin');
+select pg_temp.check('is_admin is true for admins', pg_temp.q(:D, 'select public.is_admin()')::boolean);
+select pg_temp.act_as(:D);
+select public.admin_support_moderate((select id from t where k = 'sr1'), 'approve', 'looks fine');
+select public.admin_support_moderate((select id from t where k = 'sr1'), 'feature');
+select pg_temp.act_as_admin();
+select pg_temp.check('admin approve + feature', (select status = 'active' and featured from public.support_requests where id = (select id from t where k = 'sr1')));
+select pg_temp.check('admin actions are audit-logged', (select count(*) = 2 from public.admin_audit_log where admin_id = :D and target_id = (select id from t where k = 'sr1')));
+
+-- supporting
+select pg_temp.must_fail('cannot support your own request', :A, format('select public.open_support(%L)', (select id from t where k = 'sr1')), 'SP001');
+select pg_temp.must_fail('must open the link before confirming', :C, format('select * from public.confirm_support(%L)', (select id from t where k = 'sr1')), 'SP002');
+select pg_temp.act_as(:B);
+select public.open_support((select id from t where k = 'sr1'));
+select pg_temp.act_as_admin();
+select pg_temp.must_fail('confirming instantly is refused', :B, format('select * from public.confirm_support(%L)', (select id from t where k = 'sr1')), 'SP004');
+update public.support_visits set opened_at = now() - interval '12 seconds' where user_id = :B;
+create temp table sr_out as select pg_temp.q(:B, format('select credits || ''/'' || reputation from public.confirm_support(%L)', (select id from t where k = 'sr1'))) as earned;
+select pg_temp.check('support earns credits and reputation',
+  (select earned = '1/2' from sr_out)
+  and pg_temp.q(:B, 'select credits || ''/'' || reputation || ''/'' || helped from public.support_wallet()') = '6/2/1'
+  and (select supporter_count = 1 from public.support_requests where id = (select id from t where k = 'sr1')));
+select pg_temp.must_fail('support once only', :B, format('select * from public.confirm_support(%L)', (select id from t where k = 'sr1')), 'SP003');
+select pg_temp.check('written feedback earns a bonus',
+  pg_temp.q(:B, format($$select credits from public.leave_support_feedback(%L, 'loved', 'Great chorus, start it earlier.')$$, (select id from t where k = 'sr1')))::int = 1);
+select pg_temp.must_fail('feedback once only', :B, format($$select * from public.leave_support_feedback(%L, 'nice', 'again')$$, (select id from t where k = 'sr1')), 'SP003');
+select pg_temp.check('feedback is private to the creator',
+  pg_temp.q(:A, format('select count(*) from public.support_feedback(%L)', (select id from t where k = 'sr1')))::int = 1
+  and pg_temp.q(:C, format('select count(*) from public.support_feedback(%L)', (select id from t where k = 'sr1')))::int = 0);
+select pg_temp.check('ledgers are private',
+  pg_temp.q(:C, $$select count(*) from public.support_ledger where user_id = '00000000-0000-0000-0000-00000000000b'$$)::int = 0
+  and pg_temp.q(:C, $$select count(*) from public.support_visits where user_id = '00000000-0000-0000-0000-00000000000b'$$)::int = 0);
+
+-- discovery
+select pg_temp.check('For you skips what you already supported',
+  pg_temp.q(:B, format($$select count(*) from public.support_discover('for_you') where id = %L$$, (select id from t where k = 'sr1')))::int = 0
+  and pg_temp.q(:C, format($$select count(*) from public.support_discover('for_you') where id = %L$$, (select id from t where k = 'sr1')))::int = 1);
+select pg_temp.check('For you never shows your own request',
+  pg_temp.q(:A, format($$select count(*) from public.support_discover('for_you') where id = %L$$, (select id from t where k = 'sr1')))::int = 0
+  and pg_temp.q(:A, format($$select count(*) from public.support_discover('mine') where id = %L$$, (select id from t where k = 'sr1')))::int = 1);
+select pg_temp.check('category filter and search',
+  pg_temp.q(:C, $$select count(*) from public.support_discover('new', 'music', 'chorus')$$)::int = 1
+  and pg_temp.q(:C, $$select count(*) from public.support_discover('new', 'app', null)$$)::int = 0
+  and pg_temp.q(:C, $$select count(*) from public.support_discover('new', null, '50%_off')$$)::int = 0);
+
+-- completion (target 3)
+select pg_temp.act_as(:C);
+select public.open_support((select id from t where k = 'sr1'));
+select pg_temp.act_as(:D);
+select public.open_support((select id from t where k = 'sr1'));
+select pg_temp.act_as_admin();
+update public.support_visits set opened_at = now() - interval '2 minutes' where user_id in (:C, :D);
+select pg_temp.q(:C, format('select credits from public.confirm_support(%L)', (select id from t where k = 'sr1')));
+select pg_temp.q(:D, format('select credits from public.confirm_support(%L)', (select id from t where k = 'sr1')));
+select pg_temp.check('reaching the goal completes the request',
+  (select status = 'completed' and supporter_count = 3 and completed_at is not null from public.support_requests where id = (select id from t where k = 'sr1'))
+  and pg_temp.q(:B, format($$select count(*) from public.support_discover('completed') where id = %L$$, (select id from t where k = 'sr1')))::int = 1);
+select pg_temp.check('profile stats are public numbers', pg_temp.q(null, $$select helped || '/' || reputation from public.support_profile_stats('00000000-0000-0000-0000-00000000000b')$$) = '1/3');
+
+-- reports, suspicious activity, credits, reject refund
+select pg_temp.act_as(:C);
+select public.report_support_request((select id from t where k = 'sr1'), 'Looks like spam');
+select pg_temp.act_as_admin();
+select pg_temp.must_fail('report once', :C, format($$select public.report_support_request(%L, 'again')$$, (select id from t where k = 'sr1')), 'SP007');
+select pg_temp.check('admin sees reports', pg_temp.q(:D, 'select count(*) from public.admin_support_reports()')::int = 1);
+select pg_temp.check('quick confirmations are flagged for admins',
+  pg_temp.q(:D, $$select count(*) from public.admin_support_suspicious() where kind = 'quick-confirm' and user_id = '00000000-0000-0000-0000-00000000000b'$$)::int = 1);
+select pg_temp.act_as(:D);
+select public.admin_support_adjust_credits(:A, 5, 'test top-up');
+select pg_temp.act_as(:A);
+insert into t select 'sr2', (public.create_support_request('Try my app signup', 'Is signing up quick enough for you?', 'https://example.com/signup', 'app', 'try', 5)).id;
+select pg_temp.act_as(:D);
+select public.admin_support_moderate((select id from t where k = 'sr2'), 'reject', 'duplicate');
+select pg_temp.act_as_admin();
+select pg_temp.check('rejecting refunds the credits', pg_temp.q(:A, 'select credits from public.support_wallet()')::int = 5);
+select pg_temp.must_fail('admins cannot overdraw a balance', :D, $$select public.admin_support_adjust_credits('00000000-0000-0000-0000-00000000000a', -50, 'too much')$$, 'SP006');
+select pg_temp.check('reputation entries cannot be negative',
+  (select count(*) = 1 from pg_constraint where conrelid = 'public.support_ledger'::regclass and pg_get_constraintdef(oid) like '%reputation >= 0%'));
+select pg_temp.check('every admin action is in the audit log', pg_temp.q(:D, 'select count(*) from public.admin_audit(50)')::int = 4);
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');

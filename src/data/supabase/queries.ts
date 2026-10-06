@@ -5,7 +5,7 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { ProfileError, WorldError, type AppNotification, type LeaderboardEntry, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
+import { ProfileError, SupportError, WorldError, type AdminAuditEntry, type AppNotification, type NewSupportRequest, type SupportAdminAction, type SupportConfig, type SupportErrorCode, type SupportFeedback, type SupportProfileStats, type SupportReaction, type SupportReport, type SupportRequest, type SupportSection, type SupportStatus, type SupportWallet, type SuspiciousSupport, type LeaderboardEntry, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
@@ -601,4 +601,258 @@ export async function fetchParticipants(db: Db, worldId: string, viewerId: strin
   return [...people.filter((p) => !following.has(p.id)), ...people.filter((p) => following.has(p.id))]
     .slice(0, limit)
     .map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id) }));
+}
+
+// -------------------------------------------------------------- support hub
+//
+// Every write is an RPC that checks the rules in the database
+// (20261006170000_support_hub.sql). SP00x codes map to SupportError.
+
+const SUPPORT_ERRORS: Record<string, SupportErrorCode> = {
+  SP001: "own-request",
+  SP002: "not-opened",
+  SP003: "already-supported",
+  SP004: "too-fast",
+  SP005: "not-active",
+  SP006: "invalid",
+  SP007: "already-reported",
+  SP008: "insufficient-credits",
+};
+
+export function supportError(e: PostgrestError, admin = false): Error {
+  const code = SUPPORT_ERRORS[e.code];
+  if (code) return new SupportError(code, e.message);
+  if (admin && e.code === "42501") return new SupportError("not-admin", e.message);
+  return dataError(e);
+}
+
+type RequestRow = Database["public"]["Tables"]["support_requests"]["Row"] & { creator: ProfileRow | null };
+const REQUEST_SELECT =
+  "id, creator_id, title, description, url, category, ask, target, supporter_count, status, featured, created_at, " +
+  "creator:profiles!support_requests_creator_id_fkey(id, username, display_name, avatar_url)";
+
+async function viewerVisits(db: Db, viewerId: string, ids: string[]) {
+  if (!ids.length) return new Map<string, { confirmed: boolean; feedback: boolean }>();
+  const { data, error } = await db.from("support_visits").select("request_id, confirmed_at, feedback_at").eq("user_id", viewerId).in("request_id", ids);
+  if (error) throw dataError(error);
+  return new Map(data.map((v) => [v.request_id, { confirmed: !!v.confirmed_at, feedback: !!v.feedback_at }]));
+}
+
+function toRequest(r: RequestRow, viewerId: string, visit?: { confirmed: boolean; feedback: boolean }): SupportRequest {
+  return {
+    id: r.id,
+    creator: toAuthor(r.creator),
+    title: r.title,
+    description: r.description,
+    url: r.url,
+    category: r.category as SupportRequest["category"],
+    ask: r.ask as SupportRequest["ask"],
+    target: r.target,
+    supporterCount: r.supporter_count,
+    createdAt: new Date(r.created_at),
+    status: r.status as SupportStatus,
+    featured: r.featured,
+    isViewer: r.creator_id === viewerId,
+    viewerState: visit?.confirmed ? "supported" : visit ? "opened" : "none",
+    viewerFeedback: !!visit?.feedback,
+  };
+}
+
+async function decorateRequests(db: Db, rows: RequestRow[], viewerId: string) {
+  const visits = await viewerVisits(db, viewerId, rows.map((r) => r.id));
+  return rows.map((r) => toRequest(r, viewerId, visits.get(r.id)));
+}
+
+export async function fetchSupportConfig(db: Db): Promise<SupportConfig> {
+  const { data, error } = await db.rpc("support_config");
+  if (error) throw dataError(error);
+  return {
+    requestCost: data.request_cost,
+    starterCredits: data.starter_credits,
+    supportCredits: data.support_credits,
+    supportReputation: data.support_reputation,
+    feedbackCredits: data.feedback_credits,
+    feedbackReputation: data.feedback_reputation,
+    defaultTarget: data.default_target,
+    minTarget: data.min_target,
+    maxTarget: data.max_target,
+    moderation: data.moderation,
+    minVisitSeconds: data.min_visit_seconds,
+  };
+}
+
+export async function fetchWallet(db: Db): Promise<SupportWallet> {
+  const { data, error } = await db.rpc("support_wallet");
+  if (error) throw dataError(error);
+  const w = data[0];
+  return { credits: w.credits, reputation: w.reputation, helpedCount: w.helped, activeRequests: w.active_requests };
+}
+
+export async function fetchSupportRequests(
+  db: Db,
+  viewerId: string,
+  opts: { section: SupportSection; category: string | null; query: string; limit: number },
+) {
+  const { data, error } = await db
+    .rpc("support_discover", { p_section: opts.section, p_category: opts.category, p_query: opts.query || null, p_limit: opts.limit + 1 })
+    .select(REQUEST_SELECT)
+    .returns<RequestRow[]>();
+  if (error) throw dataError(error);
+  const rows = data.slice(0, opts.limit);
+  return { requests: await decorateRequests(db, rows, viewerId), hasMore: data.length > opts.limit };
+}
+
+export async function fetchSupportRequest(db: Db, id: string, viewerId: string): Promise<SupportRequest | null> {
+  const { data, error } = await db.from("support_requests").select(REQUEST_SELECT).eq("id", id).maybeSingle().returns<RequestRow | null>();
+  if (error) throw dataError(error);
+  return data ? (await decorateRequests(db, [data], viewerId))[0] : null;
+}
+
+export async function createSupportRequest(db: Db, input: NewSupportRequest) {
+  const { data, error } = await db.rpc("create_support_request", {
+    p_title: input.title,
+    p_description: input.description,
+    p_url: input.url,
+    p_category: input.category,
+    p_ask: input.ask,
+    p_target: input.target,
+  });
+  if (error) throw supportError(error);
+  return { id: data.id, status: data.status as SupportStatus };
+}
+
+export async function openSupport(db: Db, requestId: string) {
+  const { error } = await db.rpc("open_support", { p_request: requestId });
+  if (error) throw supportError(error);
+}
+
+export async function confirmSupport(db: Db, requestId: string) {
+  const { data, error } = await db.rpc("confirm_support", { p_request: requestId });
+  if (error) throw supportError(error);
+  return data[0];
+}
+
+export async function leaveFeedback(db: Db, requestId: string, reaction: SupportReaction | null, text: string) {
+  const { data, error } = await db.rpc("leave_support_feedback", { p_request: requestId, p_reaction: reaction, p_text: text });
+  if (error) throw supportError(error);
+  return data[0];
+}
+
+export async function fetchFeedback(db: Db, requestId: string): Promise<SupportFeedback[]> {
+  const { data, error } = await db.rpc("support_feedback", { p_request: requestId });
+  if (error) throw dataError(error);
+  return data.map((f) => ({
+    id: `${requestId}:${f.user_id}`,
+    author: toAuthor({ id: f.user_id, username: f.username, display_name: f.display_name, avatar_url: f.avatar_url }),
+    reaction: f.reaction as SupportReaction | null,
+    text: f.feedback,
+    createdAt: new Date(f.feedback_at),
+  }));
+}
+
+export async function reportSupport(db: Db, requestId: string, reason: string) {
+  const { error } = await db.rpc("report_support_request", { p_request: requestId, p_reason: reason });
+  if (error) throw supportError(error);
+}
+
+export async function fetchSupportProfileStats(db: Db, profileId: string): Promise<SupportProfileStats> {
+  const { data, error } = await db.rpc("support_profile_stats", { p_profile: profileId });
+  if (error) throw dataError(error);
+  const x = data[0];
+  return { helpedCount: x.helped, reputation: x.reputation, activeRequests: x.active_requests };
+}
+
+export async function fetchIsAdmin(db: Db): Promise<boolean> {
+  const { data, error } = await db.rpc("is_admin");
+  if (error) throw dataError(error);
+  return data === true;
+}
+
+// ---------------------------------------------------------------- admin
+
+const asAuthor = (id: string, username: string | null, display_name: string | null, avatar_url: string | null) =>
+  toAuthor(username ? { id, username, display_name: display_name ?? username, avatar_url } : null);
+
+export async function adminListRequests(db: Db, adminId: string, status: SupportStatus | "all") {
+  // RLS lets admins read every request (is_admin() in the select policy).
+  let q = db.from("support_requests").select(REQUEST_SELECT);
+  if (status !== "all") q = q.eq("status", status);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(200).returns<RequestRow[]>();
+  if (error) throw supportError(error, true);
+  return decorateRequests(db, data, adminId);
+}
+
+export async function adminModerate(db: Db, requestId: string, action: SupportAdminAction, note?: string) {
+  const { error } = await db.rpc("admin_support_moderate", { p_request: requestId, p_action: action, p_note: note });
+  if (error) throw supportError(error, true);
+}
+
+export async function adminReports(db: Db, status: "open" | "all"): Promise<SupportReport[]> {
+  const { data, error } = await db.rpc("admin_support_reports", { p_status: status });
+  if (error) throw supportError(error, true);
+  return data.map((x) => ({
+    id: x.id,
+    request: { id: x.request_id, title: x.request_title, status: x.request_status as SupportStatus },
+    reporter: asAuthor(x.reporter_id, x.reporter_username, x.reporter_display_name, x.reporter_avatar_url),
+    reason: x.reason,
+    createdAt: new Date(x.created_at),
+    status: x.status as SupportReport["status"],
+  }));
+}
+
+export async function adminResolveReport(db: Db, reportId: string, outcome: "dismissed" | "actioned") {
+  const { error } = await db.rpc("admin_support_resolve_report", { p_report: reportId, p_outcome: outcome });
+  if (error) throw supportError(error, true);
+}
+
+export async function adminSuspicious(db: Db): Promise<SuspiciousSupport[]> {
+  const { data, error } = await db.rpc("admin_support_suspicious");
+  if (error) throw supportError(error, true);
+  return data.map((x) => ({
+    kind: x.kind as SuspiciousSupport["kind"],
+    person: asAuthor(x.user_id, x.username, x.display_name, x.avatar_url),
+    detail: x.detail,
+    requestId: x.request_id,
+    at: new Date(x.at),
+  }));
+}
+
+export async function adminSupporters(db: Db, requestId: string) {
+  const { data, error } = await db.rpc("admin_support_supporters", { p_request: requestId });
+  if (error) throw supportError(error, true);
+  return data.map((x) => ({
+    person: asAuthor(x.user_id, x.username, x.display_name, x.avatar_url),
+    openedAt: new Date(x.opened_at),
+    confirmedAt: x.confirmed_at ? new Date(x.confirmed_at) : null,
+    seconds: x.seconds,
+  }));
+}
+
+export async function adminFindUser(db: Db, adminId: string, handle: string) {
+  const { data, error } = await db.rpc("admin_support_find_user", { p_handle: handle });
+  if (error) throw supportError(error, true);
+  const u = data[0];
+  if (!u) return null;
+  const following = await viewerFollowsSet(db, adminId, [u.id]);
+  return {
+    id: u.id, name: u.display_name, handle: u.username, avatarUrl: u.avatar_url, viewerFollows: following.has(u.id),
+    wallet: { credits: u.credits, reputation: u.reputation, helpedCount: u.helped, activeRequests: u.active_requests },
+  };
+}
+
+export async function adminAdjustCredits(db: Db, userId: string, delta: number, note: string) {
+  const { error } = await db.rpc("admin_support_adjust_credits", { p_user: userId, p_delta: delta, p_note: note });
+  if (error) throw supportError(error, true);
+}
+
+export async function adminAudit(db: Db, limit: number): Promise<AdminAuditEntry[]> {
+  const { data, error } = await db.rpc("admin_audit", { p_limit: limit });
+  if (error) throw supportError(error, true);
+  return data.map((a) => ({
+    id: a.id,
+    admin: asAuthor(a.admin_id ?? "unknown", a.username, a.display_name, a.avatar_url),
+    action: a.action,
+    summary: a.summary,
+    createdAt: new Date(a.created_at),
+  }));
 }

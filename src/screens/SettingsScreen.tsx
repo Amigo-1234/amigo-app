@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router";
-import { ArrowLeft, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { ArrowLeft, LogOut, Monitor, Moon, ShieldCheck, Sun } from "lucide-react";
+import { useIsAdmin } from "../features/admin/useAdmin";
 import { profilesEnabled } from "../features/profile/links";
 import { dataSource } from "../data";
 import { ScreenHeader } from "../shell/ScreenHeader";
@@ -23,6 +24,7 @@ const THEMES: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
  */
 export default function SettingsScreen() {
   const viewer = useViewer();
+  const isAdmin = useIsAdmin();
   const toast = useToast();
   const navigate = useNavigate();
   const { preference, setPreference } = useTheme();
@@ -89,6 +91,14 @@ export default function SettingsScreen() {
           ))}
         </div>
       </section>
+
+      {isAdmin && (
+        <section className="settings-group">
+          <Link to="/admin" className="btn btn--secondary btn--md">
+            <ShieldCheck size={18} aria-hidden="true" /> Amigo admin
+          </Link>
+        </section>
+      )}
 
       <section className="settings-group">
         {viewer.email && <p className="settings-meta">Signed in as {viewer.email}</p>}

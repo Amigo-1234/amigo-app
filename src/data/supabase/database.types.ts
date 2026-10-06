@@ -6,6 +6,73 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      admin_audit_log: {
+        Row: {
+          action: string;
+          admin_id: string | null;
+          created_at: string;
+          details: Json;
+          id: string;
+          summary: string;
+          target_id: string | null;
+          target_type: string;
+        };
+        Insert: {
+          action: string;
+          admin_id?: string | null;
+          created_at?: string;
+          details?: Json;
+          id?: string;
+          summary: string;
+          target_id?: string | null;
+          target_type: string;
+        };
+        Update: {
+          action?: string;
+          admin_id?: string | null;
+          created_at?: string;
+          details?: Json;
+          id?: string;
+          summary?: string;
+          target_id?: string | null;
+          target_type?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_log_admin_id_fkey";
+            columns: ["admin_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      app_admins: {
+        Row: {
+          granted_at: string;
+          note: string | null;
+          user_id: string;
+        };
+        Insert: {
+          granted_at?: string;
+          note?: string | null;
+          user_id: string;
+        };
+        Update: {
+          granted_at?: string;
+          note?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "app_admins_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       follows: {
         Row: {
           created_at: string;
@@ -319,6 +386,282 @@ export type Database = {
         };
         Relationships: [];
       };
+      support_ledger: {
+        Row: {
+          actor_id: string | null;
+          created_at: string;
+          credits: number;
+          id: string;
+          note: string | null;
+          reason: string;
+          reputation: number;
+          request_id: string | null;
+          user_id: string;
+        };
+        Insert: {
+          actor_id?: string | null;
+          created_at?: string;
+          credits?: number;
+          id?: string;
+          note?: string | null;
+          reason: string;
+          reputation?: number;
+          request_id?: string | null;
+          user_id: string;
+        };
+        Update: {
+          actor_id?: string | null;
+          created_at?: string;
+          credits?: number;
+          id?: string;
+          note?: string | null;
+          reason?: string;
+          reputation?: number;
+          request_id?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "support_ledger_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "support_ledger_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "support_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "support_ledger_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      support_reports: {
+        Row: {
+          created_at: string;
+          id: string;
+          reason: string;
+          reporter_id: string;
+          request_id: string;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          status: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          reason: string;
+          reporter_id: string;
+          request_id: string;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          reason?: string;
+          reporter_id?: string;
+          request_id?: string;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "support_reports_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "support_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "support_reports_reporter_id_fkey";
+            columns: ["reporter_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      support_requests: {
+        Row: {
+          ask: string;
+          category: string;
+          completed_at: string | null;
+          created_at: string;
+          creator_id: string;
+          description: string;
+          featured: boolean;
+          id: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+          status: string;
+          supporter_count: number;
+          target: number;
+          title: string;
+          updated_at: string;
+          url: string;
+        };
+        Insert: {
+          ask: string;
+          category: string;
+          completed_at?: string | null;
+          created_at?: string;
+          creator_id: string;
+          description: string;
+          featured?: boolean;
+          id?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          status?: string;
+          supporter_count?: number;
+          target: number;
+          title: string;
+          updated_at?: string;
+          url: string;
+        };
+        Update: {
+          ask?: string;
+          category?: string;
+          completed_at?: string | null;
+          created_at?: string;
+          creator_id?: string;
+          description?: string;
+          featured?: boolean;
+          id?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+          status?: string;
+          supporter_count?: number;
+          target?: number;
+          title?: string;
+          updated_at?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "support_requests_creator_id_fkey";
+            columns: ["creator_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "support_requests_reviewed_by_fkey";
+            columns: ["reviewed_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      support_settings: {
+        Row: {
+          default_target: number;
+          feedback_credits: number;
+          feedback_reputation: number;
+          id: boolean;
+          max_target: number;
+          min_target: number;
+          min_visit_seconds: number;
+          moderation: boolean;
+          quick_confirm_seconds: number;
+          request_cost: number;
+          starter_credits: number;
+          support_credits: number;
+          support_reputation: number;
+          updated_at: string;
+        };
+        Insert: {
+          default_target?: number;
+          feedback_credits?: number;
+          feedback_reputation?: number;
+          id?: boolean;
+          max_target?: number;
+          min_target?: number;
+          min_visit_seconds?: number;
+          moderation?: boolean;
+          quick_confirm_seconds?: number;
+          request_cost?: number;
+          starter_credits?: number;
+          support_credits?: number;
+          support_reputation?: number;
+          updated_at?: string;
+        };
+        Update: {
+          default_target?: number;
+          feedback_credits?: number;
+          feedback_reputation?: number;
+          id?: boolean;
+          max_target?: number;
+          min_target?: number;
+          min_visit_seconds?: number;
+          moderation?: boolean;
+          quick_confirm_seconds?: number;
+          request_cost?: number;
+          starter_credits?: number;
+          support_credits?: number;
+          support_reputation?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+
+        ];
+      };
+      support_visits: {
+        Row: {
+          confirmed_at: string | null;
+          feedback: string;
+          feedback_at: string | null;
+          opened_at: string;
+          reaction: string | null;
+          request_id: string;
+          user_id: string;
+        };
+        Insert: {
+          confirmed_at?: string | null;
+          feedback?: string;
+          feedback_at?: string | null;
+          opened_at?: string;
+          reaction?: string | null;
+          request_id: string;
+          user_id: string;
+        };
+        Update: {
+          confirmed_at?: string | null;
+          feedback?: string;
+          feedback_at?: string | null;
+          opened_at?: string;
+          reaction?: string | null;
+          request_id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "support_visits_request_id_fkey";
+            columns: ["request_id"];
+            isOneToOne: false;
+            referencedRelation: "support_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "support_visits_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       world_chat_messages: {
         Row: {
           author_id: string;
@@ -503,7 +846,16 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      admin_audit: { Args: { p_limit?: number }; Returns: { action: string; admin_id: string | null; avatar_url: string | null; created_at: string; display_name: string | null; id: string; summary: string; username: string | null }[] };
+      admin_support_adjust_credits: { Args: { p_delta: number; p_note: string; p_user: string }; Returns: undefined };
+      admin_support_find_user: { Args: { p_handle: string }; Returns: { active_requests: number; avatar_url: string | null; credits: number; display_name: string; helped: number; id: string; reputation: number; username: string }[] };
+      admin_support_moderate: { Args: { p_action: string; p_note?: string; p_request: string }; Returns: undefined };
+      admin_support_reports: { Args: { p_status?: string }; Returns: { created_at: string; id: string; reason: string; reporter_avatar_url: string | null; reporter_display_name: string; reporter_id: string; reporter_username: string; request_id: string; request_status: string; request_title: string; status: string }[] };
+      admin_support_resolve_report: { Args: { p_outcome: string; p_report: string }; Returns: undefined };
+      admin_support_supporters: { Args: { p_request: string }; Returns: { avatar_url: string | null; confirmed_at: string | null; display_name: string; opened_at: string; seconds: number | null; user_id: string; username: string }[] };
+      admin_support_suspicious: { Args: never; Returns: { at: string; avatar_url: string | null; detail: string; display_name: string; kind: string; request_id: string | null; user_id: string; username: string }[] };
       can_view_post: { Args: { p_post_id: string }; Returns: boolean };
+      confirm_support: { Args: { p_request: string }; Returns: { credits: number; reputation: number }[] };
       create_post: {
         Args: {
           p_body: string;
@@ -535,6 +887,7 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_support_request: { Args: { p_ask: string; p_category: string; p_description: string; p_target: number; p_title: string; p_url: string }; Returns: Database["public"]["Tables"]["support_requests"]["Row"] };
       delete_post: { Args: { p_post_id: string }; Returns: undefined };
       create_world_post: {
         Args: { p_body: string; p_entry?: boolean; p_media?: Json; p_world_id: string };
@@ -573,6 +926,8 @@ export type Database = {
         };
       };
       generate_username: { Args: { seed: string }; Returns: string };
+      is_admin: { Args: never; Returns: boolean };
+      leave_support_feedback: { Args: { p_reaction: string | null; p_request: string; p_text: string }; Returns: { credits: number; reputation: number }[] };
       legacy_find_unmigrated_user: {
         Args: { p_email: string };
         Returns: {
@@ -581,6 +936,8 @@ export type Database = {
         }[];
       };
       mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
+      open_support: { Args: { p_request: string }; Returns: undefined };
+      report_support_request: { Args: { p_reason: string; p_request: string }; Returns: undefined };
       set_post_like: { Args: { p_liked: boolean; p_post_id: string }; Returns: undefined };
       suggested_profiles: {
         Args: { p_limit?: number };
@@ -603,6 +960,11 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      support_config: { Args: never; Returns: Database["public"]["Tables"]["support_settings"]["Row"] };
+      support_discover: { Args: { p_category?: string | null; p_limit?: number; p_query?: string | null; p_section?: string }; Returns: Database["public"]["Tables"]["support_requests"]["Row"][]; SetofOptions: { from: "*"; to: "support_requests"; isOneToOne: false; isSetofReturn: true } };
+      support_feedback: { Args: { p_request: string }; Returns: { avatar_url: string | null; display_name: string; feedback: string; feedback_at: string; reaction: string | null; user_id: string; username: string }[] };
+      support_profile_stats: { Args: { p_profile: string }; Returns: { active_requests: number; helped: number; reputation: number }[] };
+      support_wallet: { Args: never; Returns: { active_requests: number; credits: number; helped: number; reputation: number }[] };
       unread_notification_count: { Args: never; Returns: number };
       viewer_follows: { Args: { p_author: string }; Returns: boolean };
       world_leaderboard: {

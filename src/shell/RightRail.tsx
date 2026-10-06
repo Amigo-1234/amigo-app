@@ -7,12 +7,13 @@ import { Skeleton } from "../ui/Skeleton";
 
 /** Desktop-only companion column. Uses the prototype's real follow graph. */
 export function RightRail() {
-  // Explore has its own "Suggested for you" section; don't show it twice.
-  const onExplore = useLocation().pathname === "/explore";
+  // Explore has its own "Suggested for you" section; admin pages are work, not social.
+  const path = useLocation().pathname;
+  const hideSuggestions = path === "/explore" || path === "/admin" || path.startsWith("/admin/");
   return (
     <aside className="rail" aria-label="Suggestions">
       <div className="rail__inner">
-        {!onExplore && <WhoToFollow />}
+        {!hideSuggestions && <WhoToFollow />}
         <p className="rail__foot">Amigo World · {new Date().getFullYear()}</p>
       </div>
     </aside>

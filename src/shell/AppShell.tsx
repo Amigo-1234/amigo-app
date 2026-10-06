@@ -1,7 +1,8 @@
 import { Suspense, useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { profilesEnabled } from "../features/profile/links";
-import { Plus } from "lucide-react";
+import { Plus, ShieldCheck } from "lucide-react";
+import { useIsAdmin } from "../features/admin/useAdmin";
 import { Composer, type ComposerHandle } from "../features/composer/Composer";
 import { PublishStatusBar } from "./PublishStatusBar";
 import { useComposer } from "../state/composer";
@@ -21,6 +22,7 @@ export function AppShell() {
   const composerRef = useRef<ComposerHandle>(null);
   const { pathname } = useLocation();
   const { unread } = useUnread();
+  const isAdmin = useIsAdmin();
   const badge = badgeText(unread);
 
   useEffect(() => window.scrollTo(0, 0), [pathname]);
@@ -84,6 +86,15 @@ export function AppShell() {
               </NavLink>
             ))}
           </nav>
+
+          {isAdmin && (
+            <NavLink to="/admin" className={({ isActive }) => `side-link side-link--admin ${isActive ? "active" : ""}`} title="Admin">
+              <span className="nav-icon">
+                <ShieldCheck size={22} strokeWidth={1.8} aria-hidden="true" />
+              </span>
+              <span className="side-link__label">Admin</span>
+            </NavLink>
+          )}
 
           <Button className="sidebar__post" size="lg" block aria-label="Create post" onClick={() => composer.setOpen(true)} icon={<Plus size={20} aria-hidden="true" />}>
             Post

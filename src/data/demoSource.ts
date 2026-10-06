@@ -5,6 +5,7 @@
  * Preview states with a query param: ?demo=loading | empty | error | slow | signedout | postfail
  */
 import { mentionedHandles } from "../lib/mentions";
+import { createDemoSupport } from "./demoSupport";
 import { createDemoWorlds } from "./demoWorlds";
 import type {
   AppNotification,
@@ -329,6 +330,17 @@ const demoWorlds = createDemoWorlds({
   scenario,
 });
 
+const demoSupport = createDemoSupport({
+  personIds: () => peopleList.map((p) => p.id),
+  handleOf: (id) => people.get(id)?.handle ?? null,
+  author,
+  summary: (id, viewerId) => summary(people.get(id)!, viewerId),
+  emit,
+  watch,
+  later,
+  scenario,
+});
+
 /**
  * Demo/test hook: make someone else act, through the same rules a real
  * backend applies (e.g. __amigoDemo.act("mira", "like", "me2")).
@@ -351,6 +363,7 @@ const demoWorlds = createDemoWorlds({
   },
   notificationCount: (recipientId: string) => notes.filter((n) => n.recipientId === recipientId).length,
   worlds: demoWorlds.hooks,
+  support: demoSupport.hooks,
 };
 
 // -------------------------------------------------------------------- auth
@@ -457,9 +470,18 @@ export const demoSource: DataSource = {
     return demoWorlds.api;
   },
 
+  get support() {
+    return demoSupport.api;
+  },
+
+  get admin() {
+    return demoSupport.admin;
+  },
+
   discovery: {
     explore: (viewerId) =>
-      later(() => {
+      // ?demo=loading keeps Explore loading, like every subscribed view.
+      scenario === "loading" ? new Promise(() => {}) : later(() => {
         failIfError();
         const top = topLevel();
         const weekAgo = Date.now() - 7 * 86_400_000;

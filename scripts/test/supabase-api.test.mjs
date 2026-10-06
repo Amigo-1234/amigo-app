@@ -339,6 +339,52 @@ try {
   await q.leaveWorld(omar, w.id, ids.omar);
   ok("leave updates the count", (await q.fetchWorld(nina, wslug, ids.nina)).participantCount === 1);
 
+  // support hub + admin
+  ok("support: starter credits", (await q.fetchWallet(nina)).credits === 5);
+  const req = await q.createSupportRequest(nina, { title: `Hear my demo ${tag}`, description: "Is the chorus catchy enough?", url: "https://soundcloud.com/nina/demo", category: "music", ask: "listen", target: 3 });
+  ok("support: create spends credits, waits for review", req.status === "pending" && (await q.fetchWallet(nina)).credits === 0);
+  await rejects("support: second request needs credits", () => q.createSupportRequest(nina, { title: "Another", description: "One more request here.", url: "https://example.com", category: "app", ask: "try", target: 3 }), "insufficient-credits");
+  await rejects("support: bad link rejected", () => q.createSupportRequest(omar, { title: "Bad link", description: "javascript links fail.", url: "javascript:alert(1)", category: "app", ask: "try", target: 3 }), "invalid");
+  ok("support: pending hidden from others", (await q.fetchSupportRequest(omar, req.id, ids.omar)) === null && (await q.fetchSupportRequest(nina, req.id, ids.nina))?.status === "pending");
+  ok("support: normal users aren't admins", (await q.fetchIsAdmin(omar)) === false);
+  await rejects("support: non-admin cannot moderate", () => q.adminModerate(omar, req.id, "approve"), "not-admin");
+  await rejects("support: non-admin cannot read reports", () => q.adminReports(omar, "open"), "not-admin");
+  await rejects("support: non-admin cannot adjust credits", () => q.adminAdjustCredits(omar, ids.omar, 100, "free"), "not-admin");
+  await db.query("insert into public.app_admins (user_id, note) values ($1, 'api test')", [ids.leo]);
+  ok("support: admin recognised", (await q.fetchIsAdmin(leo)) === true);
+  ok("support: admin sees pending queue", (await q.adminListRequests(leo, ids.leo, "pending")).some((r) => r.id === req.id));
+  await q.adminModerate(leo, req.id, "approve");
+  await q.adminModerate(leo, req.id, "feature");
+  const forYou = await q.fetchSupportRequests(omar, ids.omar, { section: "for_you", category: null, query: "", limit: 20 });
+  ok("support: approved + featured shows in For you", forYou.requests.some((r) => r.id === req.id && r.featured && r.viewerState === "none"));
+  ok("support: category + search", (await q.fetchSupportRequests(omar, ids.omar, { section: "new", category: "music", query: tag, limit: 20 })).requests.length === 1
+    && (await q.fetchSupportRequests(omar, ids.omar, { section: "new", category: "app", query: tag, limit: 20 })).requests.length === 0);
+  await rejects("support: can't support your own", () => q.openSupport(nina, req.id), "own-request");
+  await rejects("support: must open first", () => q.confirmSupport(omar, req.id), "not-opened");
+  await q.openSupport(omar, req.id);
+  ok("support: opened state", (await q.fetchSupportRequest(omar, req.id, ids.omar)).viewerState === "opened");
+  await rejects("support: instant confirm refused", () => q.confirmSupport(omar, req.id), "too-fast");
+  await db.query("update public.support_visits set opened_at = now() - interval '1 minute' where user_id = $1", [ids.omar]);
+  const earned = await q.confirmSupport(omar, req.id);
+  const after = await q.fetchSupportRequest(omar, req.id, ids.omar);
+  ok("support: confirm earns credits/reputation", earned.credits === 1 && earned.reputation === 2 && after.viewerState === "supported" && after.supporterCount === 1);
+  await rejects("support: once only", () => q.confirmSupport(omar, req.id), "already-supported");
+  ok("support: written feedback bonus", (await q.leaveFeedback(omar, req.id, "useful", "Great hook, shorter intro please.")).credits === 1);
+  ok("support: feedback private to the creator", (await q.fetchFeedback(nina, req.id)).length === 1 && (await q.fetchFeedback(omar, req.id)).length === 0);
+  ok("support: supported request leaves For you", !(await q.fetchSupportRequests(omar, ids.omar, { section: "for_you", category: null, query: "", limit: 50 })).requests.some((r) => r.id === req.id));
+  ok("support: wallet + profile stats", (await q.fetchWallet(omar)).credits === 7 && (await q.fetchSupportProfileStats(anon, ids.omar)).helpedCount === 1);
+  await q.reportSupport(omar, req.id, "test report");
+  await rejects("support: report once", () => q.reportSupport(omar, req.id, "again"), "already-reported");
+  const reps = await q.adminReports(leo, "open");
+  ok("support: admin sees report", reps.some((x) => x.request.id === req.id && x.reporter.id === ids.omar));
+  await q.adminResolveReport(leo, reps.find((x) => x.request.id === req.id).id, "dismissed");
+  ok("support: quick confirm not flagged after a minute", !(await q.adminSuspicious(leo)).some((x) => x.person.id === ids.omar));
+  ok("support: supporters inspector", (await q.adminSupporters(leo, req.id))[0]?.seconds >= 60);
+  const found = await q.adminFindUser(leo, ids.leo, (await q.fetchProfile(nina, ids.nina)).username);
+  await q.adminAdjustCredits(leo, ids.nina, 3, "api test top-up");
+  ok("support: admin credit adjustment", found?.wallet.credits === 0 && (await q.fetchWallet(nina)).credits === 3);
+  ok("support: audit log", (await q.adminAudit(leo, 20)).filter((a) => a.admin.id === ids.leo).length === 4);
+
   // private surfaces
   const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });
   ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);

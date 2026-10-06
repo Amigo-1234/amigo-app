@@ -363,6 +363,188 @@ export interface WorldsApi {
   listParticipants(worldId: string, viewerId: string, limit: number): Promise<PersonSummary[]>;
 }
 
+// ------------------------------------------------------------- support hub
+
+/**
+ * Support Hub: people ask for genuine help with something outside Amigo (a
+ * song, video, app, business…). Supporting means visiting it and confirming
+ * you did; nothing external (follows, streams, likes) is ever required or
+ * verified. Optional capability: demo and Supabase only.
+ */
+export type SupportCategory = "music" | "video" | "app" | "business" | "design" | "social" | "other";
+export type SupportAsk = "listen" | "watch" | "try" | "visit" | "read";
+/** pending: waiting for review (when moderation is on). removed/rejected are only visible to the creator and admins. */
+export type SupportStatus = "pending" | "active" | "completed" | "closed" | "rejected" | "removed";
+export type SupportReaction = "loved" | "useful" | "nice" | "keep_going";
+export type SupportSection = "for_you" | "needs" | "new" | "completed" | "mine";
+
+export interface SupportRequest {
+  id: string;
+  creator: Author;
+  title: string;
+  description: string;
+  url: string;
+  category: SupportCategory;
+  ask: SupportAsk;
+  target: number;
+  supporterCount: number;
+  createdAt: Date;
+  status: SupportStatus;
+  featured: boolean;
+  isViewer: boolean;
+  /** "supported" once the viewer confirmed; "opened" after tapping Support but before confirming. */
+  viewerState: "none" | "opened" | "supported";
+  /** Whether the viewer already left feedback (feedback can be left once). */
+  viewerFeedback: boolean;
+}
+
+export interface SupportFeedback {
+  id: string;
+  author: Author;
+  reaction: SupportReaction | null;
+  text: string;
+  createdAt: Date;
+}
+
+/** Credits are spendable; reputation is permanent and can't be spent. */
+export interface SupportWallet {
+  credits: number;
+  reputation: number;
+  helpedCount: number;
+  activeRequests: number;
+}
+
+/** Public, restrained profile numbers. */
+export interface SupportProfileStats {
+  helpedCount: number;
+  reputation: number;
+  activeRequests: number;
+}
+
+/** Scoring and rules. Configurable per backend (demo constants / a settings row in Supabase). */
+export interface SupportConfig {
+  requestCost: number;
+  starterCredits: number;
+  supportCredits: number;
+  supportReputation: number;
+  feedbackCredits: number;
+  feedbackReputation: number;
+  defaultTarget: number;
+  minTarget: number;
+  maxTarget: number;
+  /** New requests wait for admin approval. */
+  moderation: boolean;
+  /** Minimum seconds between tapping Support and confirming. */
+  minVisitSeconds: number;
+}
+
+export interface NewSupportRequest {
+  title: string;
+  description: string;
+  url: string;
+  category: SupportCategory;
+  ask: SupportAsk;
+  target: number;
+}
+
+export const SUPPORT_LIMITS = { titleMin: 4, titleMax: 80, descriptionMin: 10, descriptionMax: 280, feedbackMax: 280, urlMax: 500 } as const;
+
+export type SupportErrorCode =
+  | "insufficient-credits"
+  | "own-request"
+  | "already-supported"
+  | "not-opened"
+  | "too-fast"
+  | "not-active"
+  | "invalid"
+  | "already-reported"
+  | "not-admin"
+  | "unknown";
+
+export class SupportError extends Error {
+  code: SupportErrorCode;
+  constructor(code: SupportErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+export interface SupportApi {
+  config(): Promise<SupportConfig>;
+  wallet(viewerId: string): Promise<SupportWallet>;
+  /** Ranked or filtered requests. Live: updates when supports/requests change. */
+  subscribeRequests(
+    viewerId: string,
+    opts: { section: SupportSection; category: SupportCategory | null; query: string; limit: number },
+    sub: Subscription<{ requests: SupportRequest[]; hasMore: boolean }>,
+  ): Unsubscribe;
+  subscribeRequest(id: string, viewerId: string, sub: Subscription<SupportRequest | null>): Unsubscribe;
+  /** Spends requestCost credits. */
+  createRequest(viewerId: string, input: NewSupportRequest): Promise<{ id: string; status: SupportStatus }>;
+  /** Records that the viewer opened the link (tap Support). */
+  openSupport(requestId: string, viewerId: string): Promise<void>;
+  /** Confirms the viewer supported it; earns credits + reputation. Once per request. */
+  confirmSupport(requestId: string, viewerId: string): Promise<{ credits: number; reputation: number }>;
+  leaveFeedback(requestId: string, viewerId: string, feedback: { reaction: SupportReaction | null; text: string }): Promise<{ credits: number; reputation: number }>;
+  /** Only the request's creator (and admins) can read its feedback. */
+  listFeedback(requestId: string, viewerId: string): Promise<SupportFeedback[]>;
+  report(requestId: string, viewerId: string, reason: string): Promise<void>;
+  profileStats(profileId: string): Promise<SupportProfileStats>;
+}
+
+// -------------------------------------------------------------------- admin
+
+/**
+ * Admin. The UI hides /admin from non-admins, but every admin operation is
+ * authorised by the backend (Supabase: is_admin() inside SECURITY DEFINER RPCs).
+ * Every action is written to an audit log.
+ */
+export type SupportAdminAction = "approve" | "reject" | "remove" | "close" | "reopen" | "feature" | "unfeature";
+
+export interface SupportReport {
+  id: string;
+  request: { id: string; title: string; status: SupportStatus };
+  reporter: Author;
+  reason: string;
+  createdAt: Date;
+  status: "open" | "dismissed" | "actioned";
+}
+
+export interface SuspiciousSupport {
+  kind: "quick-confirm" | "burst" | "mutual";
+  person: Author;
+  /** Plain-language explanation built from real timestamps/counts. */
+  detail: string;
+  requestId: string | null;
+  at: Date;
+}
+
+export interface AdminAuditEntry {
+  id: string;
+  admin: Author;
+  action: string;
+  summary: string;
+  createdAt: Date;
+}
+
+export interface SupportAdminApi {
+  listRequests(adminId: string, status: SupportStatus | "all"): Promise<SupportRequest[]>;
+  moderate(adminId: string, requestId: string, action: SupportAdminAction, note?: string): Promise<void>;
+  listReports(adminId: string, status: "open" | "all"): Promise<SupportReport[]>;
+  resolveReport(adminId: string, reportId: string, outcome: "dismissed" | "actioned"): Promise<void>;
+  suspicious(adminId: string): Promise<SuspiciousSupport[]>;
+  /** Supporters of one request with how long they took to confirm. */
+  supporters(adminId: string, requestId: string): Promise<{ person: Author; openedAt: Date; confirmedAt: Date | null; seconds: number | null }[]>;
+  findUser(adminId: string, handle: string): Promise<(PersonSummary & { wallet: SupportWallet }) | null>;
+  adjustCredits(adminId: string, userId: string, delta: number, note: string): Promise<void>;
+  audit(adminId: string, limit: number): Promise<AdminAuditEntry[]>;
+}
+
+export interface AdminApi {
+  isAdmin(viewerId: string): Promise<boolean>;
+  support: SupportAdminApi;
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
@@ -386,6 +568,10 @@ export interface DataSource {
   notifications?: NotificationsApi;
   /** Optional capability — see WorldsApi. */
   worlds?: WorldsApi;
+  /** Optional capability — see SupportApi. */
+  support?: SupportApi;
+  /** Optional capability — see AdminApi. */
+  admin?: AdminApi;
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;

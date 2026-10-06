@@ -1,5 +1,6 @@
 import { Link, useSearchParams } from "react-router";
-import { ArrowUp, Bell, CircleAlert, Feather, UsersRound, WifiOff } from "lucide-react";
+import { ArrowUp, Bell, CircleAlert, Feather, HandHeart, UsersRound, WifiOff } from "lucide-react";
+import { supportEnabled } from "../features/support/useSupport";
 import { Composer } from "../features/composer/Composer";
 import { describeError } from "../features/feed/errors";
 import { useFeed, type FeedTab } from "../features/feed/useFeed";
@@ -45,12 +46,19 @@ export default function HomeScreen() {
         title="Home"
         brandOnMobile
         actions={
+          <>
+          {supportEnabled && (
+            <Link to="/support" className="icon-btn icon-btn--md mobile-only" aria-label="Support Hub" title="Support Hub">
+              <HandHeart size={22} aria-hidden="true" />
+            </Link>
+          )}
           <Link to="/notifications" className="icon-btn icon-btn--md mobile-only" aria-label={notificationsLabel(unread)} title="Notifications">
             <span className="nav-icon">
               <Bell size={22} aria-hidden="true" />
               {badge && <span className="nav-badge" aria-hidden="true">{badge}</span>}
             </span>
           </Link>
+          </>
         }
       >
         <div className="tabs" role="tablist" aria-label="Feed">

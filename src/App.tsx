@@ -23,6 +23,10 @@ const ExploreScreen = lazy(() => import("./screens/ExploreScreen"));
 const NotificationsScreen = lazy(() => import("./screens/NotificationsScreen"));
 const WorldsScreen = lazy(() => import("./screens/WorldsScreen"));
 const WorldScreen = lazy(() => import("./screens/WorldScreen"));
+const SupportScreen = lazy(() => import("./screens/SupportScreen"));
+const SupportRequestScreen = lazy(() => import("./screens/SupportRequestScreen"));
+const SupportNewScreen = lazy(() => import("./screens/SupportNewScreen"));
+const AdminScreen = lazy(() => import("./screens/AdminScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
@@ -101,6 +105,15 @@ const router = createBrowserRouter([
             { path: "worlds/:slug", element: <WorldScreen /> },
           ]
         : []),
+      ...(dataSource.support
+        ? [
+            { path: "support", element: <SupportScreen /> },
+            { path: "support/new", element: <SupportNewScreen /> },
+            { path: "support/:requestId", element: <SupportRequestScreen /> },
+          ]
+        : []),
+      // /admin is guarded in the screen and, for real, by the backend on every admin call.
+      ...(dataSource.admin ? [{ path: "admin/:section?", element: <AdminScreen /> }] : []),
       {
         path: "notifications",
         element: notificationsEnabled ? (
