@@ -13,6 +13,7 @@
  */
 import type { AuthError as SupabaseAuthError, RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase/client";
+import { createSupabaseMessages } from "./supabase/messages";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
@@ -423,6 +424,9 @@ export const supabaseSource: DataSource = {
       listVerified: (adminId) => q.adminVerifiedUsers(supabase, adminId),
     },
   },
+
+  // End-to-end encrypted; the crypto library loads on first use.
+  messages: createSupabaseMessages(supabase, liveQuery, invalidate),
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {

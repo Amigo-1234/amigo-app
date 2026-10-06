@@ -97,8 +97,8 @@ Function execute rights are explicit: PostgreSQL's built-in `PUBLIC` execute def
 (migration `20261006140000`), and the test suite fails if any `public` function is executable by
 `PUBLIC`. **Every migration that adds a function must `revoke … from public` and grant explicitly.**
 
-Tested by `supabase/tests/database.test.sql` (185 checks) and
-`scripts/test/supabase-api.test.mjs` (147 checks through PostgREST).
+Tested by `supabase/tests/database.test.sql` (235 checks) and
+`scripts/test/supabase-api.test.mjs` (147 checks through PostgREST). Messages / E2E: see [MESSAGES.md](MESSAGES.md).
 
 ## Realtime
 
@@ -132,20 +132,7 @@ create table public.bookmarks (
   primary key (user_id, post_id));
 -- RLS: owner-only select/insert/delete. Backfill from legacy.saved_post_archive.
 
-create table public.conversations (id uuid primary key default gen_random_uuid(),
-  created_at timestamptz default now(), last_message_at timestamptz);
-create table public.conversation_members (
-  conversation_id uuid references public.conversations on delete cascade,
-  user_id uuid references public.profiles on delete cascade,
-  joined_at timestamptz default now(), last_read_at timestamptz,
-  primary key (conversation_id, user_id));
-create table public.messages (
-  id uuid primary key default gen_random_uuid(),
-  conversation_id uuid references public.conversations on delete cascade,
-  sender_id uuid references public.profiles on delete cascade,
-  body text, media_path text, created_at timestamptz default now(), deleted_at timestamptz);
--- RLS: everything gated on is_member(conversation_id) (SECURITY DEFINER helper).
--- Private bucket "message-media" with signed URLs. Never public. Realtime: messages filtered by conversation.
+-- Messages: built (end-to-end encrypted) — see MESSAGES.md and 20261006200000_messages.sql.
 
 create table public.moments (
   id uuid primary key default gen_random_uuid(),

@@ -632,7 +632,8 @@ export interface NewMessageInput {
 
 export type MessageReportReason = "spam" | "harassment" | "inappropriate" | "other";
 
-export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "unknown";
+/** peer-unavailable: end-to-end encrypted backends only — they have no device that can receive messages yet. */
+export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "peer-unavailable" | "unknown";
 
 export class MessageError extends Error {
   code: MessageErrorCode;

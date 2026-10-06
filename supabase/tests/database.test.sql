@@ -587,6 +587,136 @@ select pg_temp.check('registering an existing confirmed account applies at once'
 select pg_temp.check('other accounts stay normal', not exists (select 1 from public.app_admins where user_id = :A)
   and not exists (select 1 from public.profile_verifications where user_id = :A));
 
+-- ---------------------------------------------------------------- messages
+
+-- A ↔ B talk; C is an outsider (and an admin by now); D is an admin.
+create temp table dm_t (k text primary key, v text);
+grant all on dm_t to authenticated, anon;
+select pg_temp.must_fail('anon cannot open conversations', null, $$select public.dm_open('00000000-0000-0000-0000-00000000000b')$$, '42501');
+select pg_temp.must_fail('cannot message yourself', :A, $$select public.dm_open('00000000-0000-0000-0000-00000000000a')$$, 'DM002');
+select pg_temp.must_fail('cannot message nobody', :A, $$select public.dm_open(gen_random_uuid())$$, 'DM002');
+insert into dm_t values ('conv', pg_temp.q(:A, $$select public.dm_open('00000000-0000-0000-0000-00000000000b')$$));
+select pg_temp.check('the pair has one conversation (B opening it finds the same)',
+  pg_temp.q(:B, $$select public.dm_open('00000000-0000-0000-0000-00000000000a')$$) = (select v from dm_t where k = 'conv'));
+select pg_temp.check('both are participants', (select count(*) = 2 from public.dm_participants where conversation_id = (select v::uuid from dm_t where k = 'conv')));
+
+-- Device keys
+select pg_temp.must_fail('device keys must name your own user', :A,
+  $$select public.e2e_upload_keys('AAADEV', '{"user_id":"@00000000-0000-0000-0000-00000000000b:amigo.world","device_id":"AAADEV","keys":{"ed25519:AAADEV":"x"}}', null, null)$$, 'DM006');
+select pg_temp.must_fail('device keys must name the device', :A,
+  $$select public.e2e_upload_keys('AAADEV', '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","device_id":"OTHER","keys":{"ed25519:AAADEV":"x"}}', null, null)$$, 'DM006');
+select pg_temp.check('upload device + one-time keys',
+  pg_temp.q(:A, $$select public.e2e_upload_keys('AAADEV',
+    '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","device_id":"AAADEV","algorithms":["m.olm.v1.curve25519-aes-sha2","m.megolm.v1.aes-sha2"],"keys":{"ed25519:AAADEV":"edA","curve25519:AAADEV":"cvA"},"signatures":{}}',
+    '{"signed_curve25519:K1":{"key":"k1"},"signed_curve25519:K2":{"key":"k2"}}',
+    '{"signed_curve25519:F1":{"key":"f1","fallback":true}}') -> 'one_time_key_counts' ->> 'signed_curve25519'$$)::int = 2);
+select pg_temp.must_fail('identity keys of a device cannot be swapped', :A,
+  $$select public.e2e_upload_keys('AAADEV', '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","device_id":"AAADEV","keys":{"ed25519:AAADEV":"evil","curve25519:AAADEV":"cvA"}}', null, null)$$, 'DM006');
+select pg_temp.check('public device keys readable by signed-in users',
+  pg_temp.q(:C, $$select public.e2e_query_keys(array['@00000000-0000-0000-0000-00000000000a:amigo.world']) #>> '{device_keys,@00000000-0000-0000-0000-00000000000a:amigo.world,AAADEV,keys,ed25519:AAADEV}'$$) = 'edA');
+select pg_temp.must_fail('one-time keys are not directly readable', :B, $$select count(*) from public.e2e_one_time_keys$$, '42501');
+select pg_temp.check('claim hands out a one-time key once',
+  pg_temp.q(:B, $$select public.e2e_claim_keys('{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"AAADEV":"signed_curve25519"}}')::text$$) like '%signed_curve25519:K%');
+select pg_temp.q(:B, $$select public.e2e_claim_keys('{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"AAADEV":"signed_curve25519"}}')::text$$);
+select pg_temp.check('then the fallback key (kept)',
+  pg_temp.q(:B, $$select public.e2e_claim_keys('{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"AAADEV":"signed_curve25519"}}')::text$$) like '%signed_curve25519:F1%'
+  and (select count(*) = 1 from public.e2e_one_time_keys where user_id = :A));
+select pg_temp.check('key counts: one-time keys used up, fallback marked used',
+  pg_temp.q(:A, $$select public.e2e_key_counts('AAADEV')::text$$)::jsonb = '{"signed_curve25519":0,"unused_fallback":false}');
+select pg_temp.q(:B, $$select public.e2e_upload_keys('BBBDEV', '{"user_id":"@00000000-0000-0000-0000-00000000000b:amigo.world","device_id":"BBBDEV","keys":{"ed25519:BBBDEV":"edB","curve25519:BBBDEV":"cvB"}}', null, null)::text$$);
+
+-- Messages: ciphertext only
+select pg_temp.must_fail('plaintext body rejected', :A,
+  format($$select * from public.dm_send(%L, 'AAADEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s","body":"hello"}')$$, (select v from dm_t where k = 'conv')), 'DM005');
+select pg_temp.must_fail('unencrypted algorithm rejected', :A,
+  format($$select * from public.dm_send(%L, 'AAADEV', '{"algorithm":"none","ciphertext":"hello","session_id":"s"}')$$, (select v from dm_t where k = 'conv')), 'DM005');
+select pg_temp.must_fail('must send from your own registered device', :A,
+  format($$select * from public.dm_send(%L, 'BBBDEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv')), 'DM005');
+select pg_temp.must_fail('outsiders cannot send into a conversation', :C,
+  format($$select * from public.dm_send(%L, 'AAADEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv')), 'DM003');
+select pg_temp.must_fail('no direct inserts into dm_messages', :A,
+  format($$insert into public.dm_messages (conversation_id, sender_id, sender_device_id, content) values (%L, '00000000-0000-0000-0000-00000000000a', 'AAADEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv')), '42501');
+select pg_temp.q(:A, format($$select id::text from public.dm_send(%L, 'AAADEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"CIPHERTEXT-1","session_id":"s1","sender_key":"cvA","device_id":"AAADEV"}')$$, (select v from dm_t where k = 'conv')));
+select pg_temp.check('participant reads the ciphertext', pg_temp.q(:B, $$select content ->> 'ciphertext' from public.dm_messages limit 1$$) = 'CIPHERTEXT-1');
+select pg_temp.check('outsider sees no conversations, participants or messages',
+  pg_temp.q(:C, $$select (select count(*) from public.dm_messages) + (select count(*) from public.dm_conversations) + (select count(*) from public.dm_participants)$$)::int = 0);
+select pg_temp.check('admins cannot read conversations either',
+  pg_temp.q(:D, $$select (select count(*) from public.dm_messages) + (select count(*) from public.dm_conversations)$$)::int = 0);
+select pg_temp.check('no column anywhere could hold a plaintext body',
+  not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name like 'dm_%'
+              and column_name in ('body', 'text', 'plaintext', 'message')));
+
+-- Inbox, unread, receipts
+select pg_temp.check('B has 1 unread', pg_temp.q(:B, $$select unread_count from public.dm_inbox()$$)::int = 1);
+select pg_temp.check('A has 0 unread (own message)', pg_temp.q(:A, $$select unread_count from public.dm_inbox()$$)::int = 0);
+select pg_temp.q(:B, $$select public.dm_mark_delivered()::text$$);
+select pg_temp.check('delivered marker visible to the sender', pg_temp.q(:A, $$select (peer_last_delivered_at >= last_message_at)::text from public.dm_inbox()$$) = 'true');
+select pg_temp.q(:B, format($$select public.dm_mark_read(%L)::text$$, (select v from dm_t where k = 'conv')));
+select pg_temp.check('read marker visible to the sender; unread cleared',
+  pg_temp.q(:A, $$select (peer_last_read_at >= last_message_at)::text from public.dm_inbox()$$) = 'true'
+  and pg_temp.q(:B, $$select unread_count from public.dm_inbox()$$)::int = 0);
+select pg_temp.must_fail('markers are not client-writable', :B,
+  $$update public.dm_participants set last_read_at = now() where user_id = '00000000-0000-0000-0000-00000000000a'$$, '42501');
+
+-- To-device mail (how conversation keys travel)
+select pg_temp.must_fail('room keys must be Olm-encrypted', :A,
+  $$select public.e2e_send_to_device('m.room.encrypted', '{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"BBBDEV":{"algorithm":"m.megolm.v1.aes-sha2","room_key":"PLAINTEXT"}}}')$$, 'DM007');
+select pg_temp.must_fail('plaintext m.room_key events not allowed', :A,
+  $$select public.e2e_send_to_device('m.room_key', '{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"BBBDEV":{"session_key":"x"}}}')$$, 'DM007');
+select pg_temp.must_fail('cannot mail strangers', :C,
+  $$select public.e2e_send_to_device('m.room.encrypted', '{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"BBBDEV":{"algorithm":"m.olm.v1.curve25519-aes-sha2","ciphertext":{}}}}')$$, 'DM007');
+select pg_temp.q(:A, $$select public.e2e_send_to_device('m.room.encrypted', '{"@00000000-0000-0000-0000-00000000000b:amigo.world":{"BBBDEV":{"algorithm":"m.olm.v1.curve25519-aes-sha2","sender_key":"cvA","ciphertext":{"cvB":{"type":0,"body":"OLM"}}}}}')::text$$);
+select pg_temp.check('recipient reads its mail; others cannot',
+  pg_temp.q(:B, $$select count(*) from public.e2e_to_device$$)::int = 1
+  and pg_temp.q(:A, $$select count(*) from public.e2e_to_device$$)::int = 0
+  and pg_temp.q(:D, $$select count(*) from public.e2e_to_device$$)::int = 0);
+select pg_temp.q(:B, $$select public.e2e_ack_to_device('BBBDEV', (select max(id) from public.e2e_to_device))::text$$);
+select pg_temp.check('acknowledged mail is deleted', (select count(*) = 0 from public.e2e_to_device where recipient_id = :B));
+select pg_temp.check('device changes listed for conversation partners only',
+  pg_temp.q(:A, $$select count(*) from public.e2e_device_changes('-infinity') where user_id = '@00000000-0000-0000-0000-00000000000b:amigo.world'$$)::int = 1
+  and pg_temp.q(:C, $$select count(*) from public.e2e_device_changes('-infinity') where user_id = '@00000000-0000-0000-0000-00000000000b:amigo.world'$$)::int = 0);
+
+-- Blocking
+select pg_temp.q(:B, $$select public.dm_block('00000000-0000-0000-0000-00000000000a')::text$$);
+select pg_temp.must_fail('blocked person cannot send', :A,
+  format($$select * from public.dm_send(%L, 'AAADEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv')), 'DM004');
+select pg_temp.must_fail('the blocker cannot send either', :B,
+  format($$select * from public.dm_send(%L, 'BBBDEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv')), 'DM004');
+select pg_temp.check('blocked side sees can_send=false but not who blocked',
+  pg_temp.q(:A, $$select can_send::text || '/' || blocked_by_me::text from public.dm_inbox()$$) = 'false/false'
+  and pg_temp.q(:A, $$select count(*) from public.user_blocks$$)::int = 0);
+select pg_temp.check('blocker sees their block', pg_temp.q(:B, $$select blocked_by_me::text from public.dm_inbox()$$) = 'true');
+select pg_temp.must_fail('blocks are not client-writable', :A, $$delete from public.user_blocks$$, '42501');
+select pg_temp.q(:B, $$select public.dm_unblock('00000000-0000-0000-0000-00000000000a')::text$$);
+select pg_temp.check('unblocked: can send again', pg_temp.q(:A, $$select can_send::text from public.dm_inbox()$$) = 'true');
+
+-- Reports
+select pg_temp.must_fail('outsiders cannot report a conversation', :C,
+  format($$select public.dm_report(%L, 'spam', '', '[]')$$, (select v from dm_t where k = 'conv')), 'DM003');
+select pg_temp.must_fail('report reason checked', :B,
+  format($$select public.dm_report(%L, 'boring', '', '[]')$$, (select v from dm_t where k = 'conv')), 'DM008');
+select pg_temp.q(:B, format($$select public.dm_report(%L, 'harassment', 'please look', '[{"id":"m1","text":"revealed by reporter"}]')::text$$, (select v from dm_t where k = 'conv')));
+select pg_temp.must_fail('reports are not readable by users', :B, $$select count(*) from public.dm_reports$$, '42501');
+select pg_temp.must_fail('report list is admin-only', :A, $$select count(*) from public.admin_dm_reports()$$, '42501');
+select pg_temp.check('admin sees the report with the reporter-revealed evidence only',
+  pg_temp.q(:D, $$select evidence #>> '{0,text}' from public.admin_dm_reports() limit 1$$) = 'revealed by reporter');
+
+-- Attachments bucket
+select pg_temp.act_as(:A);
+insert into storage.objects (bucket_id, name) values ('dm-attachments', (select v from dm_t where k = 'conv') || '/blob1');
+select pg_temp.act_as_admin();
+select pg_temp.check('participant uploads encrypted attachment; other participant can fetch it',
+  pg_temp.q(:B, $$select count(*) from storage.objects where bucket_id = 'dm-attachments'$$)::int = 1);
+select pg_temp.check('outsider cannot see attachments', pg_temp.q(:C, $$select count(*) from storage.objects where bucket_id = 'dm-attachments'$$)::int = 0);
+select pg_temp.must_fail('outsider cannot upload into a conversation', :C,
+  format($$insert into storage.objects (bucket_id, name) values ('dm-attachments', %L)$$, (select v from dm_t where k = 'conv') || '/x'), '42501');
+select pg_temp.check('dm-attachments bucket is private', (select not public from storage.buckets where id = 'dm-attachments'));
+
+-- Devices
+select pg_temp.q(:A, $$select public.e2e_delete_device('AAADEV')::text$$);
+select pg_temp.check('signing a device out removes its keys', (select count(*) = 0 from public.e2e_devices where user_id = :A)
+  and (select count(*) = 0 from public.e2e_one_time_keys where user_id = :A));
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');

@@ -13,6 +13,7 @@
     "db:test": "psql \"$DATABASE_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/database.test.sql",
     "db:types": "supabase gen types typescript --local --schema public > src/data/supabase/database.types.ts",
     "test:api": "node scripts/test/supabase-api.test.mjs",
+    "test:e2e": "node scripts/test/supabase-e2e.test.mjs",
     "migrate:extract": "node scripts/migration/extract.ts",
     "migrate:audit": "node scripts/migration/audit.ts",
     "migrate:plan": "node scripts/migration/migrate.ts --plan-only",
@@ -24,6 +25,7 @@
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource-variable/geist": "^5.3.0",
+    "@matrix-org/matrix-sdk-crypto-wasm": "18.9.0",
     "@supabase/supabase-js": "^2.117.2",
     "firebase": "^12.19.0",
     "lucide-react": "^1.52.0",

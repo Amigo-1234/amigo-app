@@ -6,6 +6,155 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 export type Database = {
   public: {
     Tables: {
+      dm_conversations: {
+        Row: {
+          id: string;
+          kind: string;
+          direct_key: string;
+          created_at: string;
+          last_message_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          kind?: string;
+          direct_key?: string;
+          created_at?: string;
+          last_message_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          kind?: string;
+          direct_key?: string;
+          created_at?: string;
+          last_message_at?: string | null;
+        };
+        Relationships: [];
+      };
+      dm_participants: {
+        Row: {
+          conversation_id: string;
+          user_id: string;
+          joined_at: string;
+          last_read_at: string;
+          last_delivered_at: string;
+        };
+        Insert: {
+          conversation_id?: string;
+          user_id?: string;
+          joined_at?: string;
+          last_read_at?: string;
+          last_delivered_at?: string;
+        };
+        Update: {
+          conversation_id?: string;
+          user_id?: string;
+          joined_at?: string;
+          last_read_at?: string;
+          last_delivered_at?: string;
+        };
+        Relationships: [
+          { foreignKeyName: "dm_participants_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+        ];
+      };
+      dm_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          sender_device_id: string;
+          content: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id?: string;
+          sender_id?: string;
+          sender_device_id?: string;
+          content?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender_id?: string;
+          sender_device_id?: string;
+          content?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      e2e_devices: {
+        Row: {
+          user_id: string;
+          device_id: string;
+          device_keys: Json;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id?: string;
+          device_id?: string;
+          device_keys?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          device_id?: string;
+          device_keys?: Json;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      e2e_to_device: {
+        Row: {
+          id: number;
+          recipient_id: string;
+          recipient_device: string;
+          sender_id: string;
+          event_type: string;
+          content: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: number;
+          recipient_id?: string;
+          recipient_device?: string;
+          sender_id?: string;
+          event_type?: string;
+          content?: Json;
+          created_at?: string;
+        };
+        Update: {
+          id?: number;
+          recipient_id?: string;
+          recipient_device?: string;
+          sender_id?: string;
+          event_type?: string;
+          content?: Json;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      user_blocks: {
+        Row: {
+          blocker_id: string;
+          blocked_id: string;
+          created_at: string;
+        };
+        Insert: {
+          blocker_id?: string;
+          blocked_id?: string;
+          created_at?: string;
+        };
+        Update: {
+          blocker_id?: string;
+          blocked_id?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       admin_audit_log: {
         Row: {
           action: string;
@@ -885,6 +1034,44 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      dm_open: { Args: { p_peer: string }; Returns: string };
+      dm_send: { Args: { p_conversation: string; p_device: string; p_content: Json }; Returns: { id: string; created_at: string }[] };
+      dm_mark_read: { Args: { p_conversation: string }; Returns: undefined };
+      dm_mark_delivered: { Args: Record<PropertyKey, never>; Returns: undefined };
+      dm_blocked_between: { Args: { a: string; b: string }; Returns: boolean };
+      dm_inbox: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          conversation_id: string;
+          peer_id: string;
+          last_message_at: string;
+          last_message_id: string | null;
+          last_sender_id: string | null;
+          last_sender_device: string | null;
+          last_content: Json | null;
+          unread_count: number;
+          my_last_read_at: string;
+          peer_last_read_at: string;
+          peer_last_delivered_at: string;
+          blocked_by_me: boolean;
+          can_send: boolean;
+        }[];
+      };
+      dm_block: { Args: { p_user: string }; Returns: undefined };
+      dm_unblock: { Args: { p_user: string }; Returns: undefined };
+      dm_report: { Args: { p_conversation: string; p_reason: string; p_note: string; p_evidence: Json }; Returns: string };
+      admin_dm_reports: {
+        Args: Record<PropertyKey, never>;
+        Returns: { id: string; reporter_username: string; reported_username: string; reason: string; note: string; evidence: Json; status: string; created_at: string }[];
+      };
+      e2e_upload_keys: { Args: { p_device: string; p_device_keys: Json; p_one_time_keys: Json; p_fallback_keys: Json }; Returns: Json };
+      e2e_query_keys: { Args: { p_users: string[] }; Returns: Json };
+      e2e_claim_keys: { Args: { p_request: Json }; Returns: Json };
+      e2e_key_counts: { Args: { p_device: string }; Returns: Json };
+      e2e_send_to_device: { Args: { p_event_type: string; p_messages: Json }; Returns: undefined };
+      e2e_ack_to_device: { Args: { p_device: string; p_up_to: number }; Returns: undefined };
+      e2e_device_changes: { Args: { p_since: string }; Returns: { user_id: string; changed_at: string }[] };
+      e2e_delete_device: { Args: { p_device: string }; Returns: undefined };
       admin_audit: { Args: { p_limit?: number }; Returns: { action: string; admin_id: string | null; avatar_url: string | null; created_at: string; display_name: string | null; id: string; summary: string; username: string | null }[] };
       admin_support_adjust_credits: { Args: { p_delta: number; p_note: string; p_user: string }; Returns: undefined };
       admin_support_find_user: { Args: { p_handle: string }; Returns: { active_requests: number; avatar_url: string | null; credits: number; display_name: string; helped: number; id: string; reputation: number; username: string }[] };

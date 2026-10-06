@@ -233,6 +233,7 @@ export function ConversationPane({ conversationId }: { conversationId: string })
 function sendErrorText(e: Error, peerName: string) {
   if (e instanceof MessageError && e.code === "blocked") return `You can't message ${peerName} right now.`;
   if (e instanceof MessageError && e.code === "too-long") return "That message is too long.";
+  if (e instanceof MessageError && e.code === "peer-unavailable") return `${peerName} can't receive encrypted messages yet — they need to open Amigo World once.`;
   return "Your message wasn't sent. Tap Retry to try again.";
 }
 
