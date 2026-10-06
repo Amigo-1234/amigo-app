@@ -67,7 +67,8 @@ npm run build                # typecheck (app + scripts) + production build
 - **Support Hub** (`/support`): ask for genuine feedback on a song, video, app or project and help
   others in return — Support Credits (spendable) and Support Reputation (permanent), fair
   discovery without follower counts. **Admin** (`/admin`, admins only, enforced by the backend):
-  moderation, reports, suspicious activity, credit adjustments, audit log. See
+  moderation, reports, suspicious activity, credit adjustments, audit log, and admin-only
+  **verification** badges (Admin → Users). See
   [docs/architecture/SUPPORT_HUB.md](docs/architecture/SUPPORT_HUB.md).
 - Messages and Moments are placeholders for later phases.
 
@@ -79,7 +80,7 @@ npm run build                # typecheck (app + scripts) + production build
 | Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
 | Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
 | Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
-| Tests | `npm run db:test`: 163 database/RLS checks, rolled back after running · `npm run test:api`: 139 checks through PostgREST |
+| Tests | `npm run db:test`: 176 database/RLS checks, rolled back after running · `npm run test:api`: 147 checks through PostgREST |
 
 To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
 [`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied

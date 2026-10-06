@@ -1,0 +1,12 @@
+.verified-badge {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  margin-left: 3px;
+  vertical-align: -2px;
+  color: var(--accent);
+}
+
+.verified-badge svg {
+  fill: color-mix(in srgb, var(--accent) 18%, transparent);
+}

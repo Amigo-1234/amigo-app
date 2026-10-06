@@ -81,6 +81,7 @@ revoked first and added back per column.
 | support_requests | read open/completed | read open/completed + own; admins all; no direct writes (RPCs) — see [SUPPORT_HUB.md](SUPPORT_HUB.md) |
 | support_visits, support_ledger | — | read **own** (admins all); no direct writes |
 | support_reports, app_admins, admin_audit_log | — | — (admin RPCs only) |
+| profile_verifications | read badge columns (not the note) | same; no writes (admin RPCs only) |
 | legacy.* | — | — (no schema usage; not exposed by the API) |
 | storage.objects | public bucket URLs only, no listing | write/replace/delete in **own** `<uid>/` folder; list own folder only |
 
@@ -96,8 +97,8 @@ Function execute rights are explicit: PostgreSQL's built-in `PUBLIC` execute def
 (migration `20261006140000`), and the test suite fails if any `public` function is executable by
 `PUBLIC`. **Every migration that adds a function must `revoke … from public` and grant explicitly.**
 
-Tested by `supabase/tests/database.test.sql` (163 checks) and
-`scripts/test/supabase-api.test.mjs` (139 checks through PostgREST).
+Tested by `supabase/tests/database.test.sql` (176 checks) and
+`scripts/test/supabase-api.test.mjs` (147 checks through PostgREST).
 
 ## Realtime
 

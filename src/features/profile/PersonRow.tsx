@@ -4,6 +4,7 @@ import { Avatar } from "../../ui/Avatar";
 import { FollowButton } from "./FollowButton";
 import { profileHref } from "./links";
 import "./PersonRow.css";
+import { VerifiedBadge } from "../../ui/VerifiedBadge";
 
 /** One person in a list (follow lists, suggestions). The whole row links to their profile. */
 export function PersonRow({ person, onFollowChange }: { person: PersonSummary; onFollowChange?: (following: boolean) => void }) {
@@ -12,7 +13,10 @@ export function PersonRow({ person, onFollowChange }: { person: PersonSummary; o
     <>
       <Avatar name={person.name} src={person.avatarUrl} seed={person.id} size="md" />
       <span className="person-row__text">
-        <span className="person-row__name">{person.name}</span>
+        <span className="person-row__name">
+          {person.name}
+          <VerifiedBadge verified={person.verified} size={15} />
+        </span>
         <span className="person-row__handle">@{person.handle}</span>
         {person.bio && <span className="person-row__bio">{person.bio}</span>}
       </span>

@@ -16,6 +16,7 @@ import { Button, IconButton } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
 import "./PostScreen.css";
+import { VerifiedBadge } from "../ui/VerifiedBadge";
 
 type Load<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; error: unknown };
 
@@ -123,9 +124,9 @@ function ReplyRow({ reply }: { reply: Reply }) {
       <div className="reply__body">
         <div className="reply__meta">
           {href ? (
-            <Link to={href} className="reply__name post__name--link">{reply.author.name}</Link>
+            <Link to={href} className="reply__name post__name--link">{reply.author.name}<VerifiedBadge verified={reply.author.verified} size={14} /></Link>
           ) : (
-            <span className="reply__name">{reply.author.name}</span>
+            <span className="reply__name">{reply.author.name}<VerifiedBadge verified={reply.author.verified} size={14} /></span>
           )}
           <span className="reply__sub">
             @{reply.author.handle} ·{" "}

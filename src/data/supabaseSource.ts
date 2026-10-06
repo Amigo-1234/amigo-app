@@ -410,6 +410,18 @@ export const supabaseSource: DataSource = {
       adjustCredits: (_adminId, userId, delta, note) => q.adminAdjustCredits(supabase, userId, delta, note),
       audit: (_adminId, limit) => q.adminAudit(supabase, limit),
     },
+    users: {
+      find: (adminId, handle) => q.adminFindUserProfile(supabase, adminId, handle),
+      async verify(_adminId, userId, type, note) {
+        await q.adminVerify(supabase, userId, type, note);
+        invalidate();
+      },
+      async unverify(_adminId, userId, note) {
+        await q.adminUnverify(supabase, userId, note);
+        invalidate();
+      },
+      listVerified: (adminId) => q.adminVerifiedUsers(supabase, adminId),
+    },
   },
 
   notifications: {

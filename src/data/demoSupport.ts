@@ -27,12 +27,18 @@ import type {
   SupportStatus,
   SuspiciousSupport,
   SupportWallet,
+  Verification,
+  VerificationType,
 } from "./types";
 import { SUPPORT_LIMITS, SupportError } from "./types";
 import { BURST_COUNT, BURST_WINDOW_MIN, DEFAULT_SUPPORT_CONFIG, QUICK_CONFIRM_SECONDS, checkSupportUrl, dailyJitter, forYouScore } from "./supportRules";
 
 export interface SupportDemoContext {
   personIds: () => string[];
+  verification: {
+    get: (id: string) => { type: VerificationType; note: string; at: Date; by: string | null } | null;
+    set: (id: string, v: { type: VerificationType; note: string; at: Date; by: string | null } | null) => void;
+  };
   handleOf: (id: string) => string | null;
   author: (id: string) => Author;
   summary: (id: string, viewerId: string) => PersonSummary;
@@ -341,6 +347,12 @@ export function createDemoSupport(ctx: SupportDemoContext) {
   };
 
   // ---------------------------------------------------------------- admin
+  const VERIFICATION_TYPES: VerificationType[] = ["notable", "creator", "business", "organization", "amigo"];
+  const toVerification = (id: string): Verification | null => {
+    const v = ctx.verification.get(id);
+    return v ? { type: v.type, note: v.note, verifiedAt: v.at, verifiedBy: v.by ? ctx.author(v.by) : null } : null;
+  };
+
   const admin: AdminApi = {
     isAdmin: (viewerId) => ctx.later(() => admins.has(viewerId), 100),
     support: {
@@ -462,6 +474,44 @@ export function createDemoSupport(ctx: SupportDemoContext) {
           requireAdmin(adminId);
           return auditLog.slice(0, limit).map((a): AdminAuditEntry => ({ id: a.id, admin: ctx.author(a.adminId), action: a.action, summary: a.summary, createdAt: a.at }));
         }, 150),
+    },
+
+    users: {
+      find: (adminId, handle) =>
+        ctx.later(() => {
+          requireAdmin(adminId);
+          const h = handle.trim().replace(/^@/, "").toLowerCase();
+          const id = ctx.personIds().find((p) => ctx.handleOf(p) === h);
+          return id ? { person: ctx.summary(id, adminId), verification: toVerification(id) } : null;
+        }, 200),
+
+      verify: (adminId, userId, type, note) =>
+        ctx.later(() => {
+          requireAdmin(adminId);
+          if (!VERIFICATION_TYPES.includes(type)) throw new SupportError("invalid", "Unknown verification type");
+          const was = ctx.verification.get(userId);
+          ctx.verification.set(userId, { type, note: note.trim().slice(0, 280), at: new Date(), by: adminId });
+          audit(adminId, "user.verify", `${was ? "changed verification of" : "verified"} @${ctx.handleOf(userId)} as ${type}${note.trim() ? ` — ${note.trim()}` : ""}`);
+          ctx.emit();
+        }, 300),
+
+      unverify: (adminId, userId, note) =>
+        ctx.later(() => {
+          requireAdmin(adminId);
+          if (!ctx.verification.get(userId)) throw new SupportError("invalid", "Not verified");
+          ctx.verification.set(userId, null);
+          audit(adminId, "user.unverify", `removed verification from @${ctx.handleOf(userId)}${note.trim() ? ` — ${note.trim()}` : ""}`);
+          ctx.emit();
+        }, 300),
+
+      listVerified: (adminId) =>
+        ctx.later(() => {
+          requireAdmin(adminId);
+          return ctx
+            .personIds()
+            .filter((id) => ctx.verification.get(id))
+            .map((id) => ({ person: ctx.summary(id, adminId), verification: toVerification(id)! }));
+        }, 200),
     },
   };
 

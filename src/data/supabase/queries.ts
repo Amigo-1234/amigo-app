@@ -5,12 +5,18 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { ProfileError, SupportError, WorldError, type AdminAuditEntry, type AppNotification, type NewSupportRequest, type SupportAdminAction, type SupportConfig, type SupportErrorCode, type SupportFeedback, type SupportProfileStats, type SupportReaction, type SupportReport, type SupportRequest, type SupportSection, type SupportStatus, type SupportWallet, type SuspiciousSupport, type LeaderboardEntry, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
+import { ProfileError, SupportError, WorldError, type AdminAuditEntry, type Verification, type VerificationType, type PersonSummary as Person, type AppNotification, type NewSupportRequest, type SupportAdminAction, type SupportConfig, type SupportErrorCode, type SupportFeedback, type SupportProfileStats, type SupportReaction, type SupportReport, type SupportRequest, type SupportSection, type SupportStatus, type SupportWallet, type SuspiciousSupport, type LeaderboardEntry, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
 
-type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "username" | "display_name" | "avatar_url">;
+type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "username" | "display_name" | "avatar_url"> & {
+  verification?: { verification_type: string } | null;
+};
+
+/** A person as embedded anywhere: public fields + whether they're verified (never the admin note). */
+export const VERIFICATION_EMBED = "verification:profile_verifications!profile_verifications_user_id_fkey(verification_type)";
+const PERSON = `id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`;
 type MediaRow = Pick<Database["public"]["Tables"]["post_media"]["Row"], "kind" | "bucket" | "storage_path" | "width" | "height" | "alt" | "position">;
 export type PostRow = {
   id: string;
@@ -28,14 +34,14 @@ export type PostRow = {
 
 export const POST_SELECT =
   "id, body, created_at, like_count, reply_count, parent_id, is_entry, world:worlds!posts_world_id_fkey(slug, title), " +
-  "author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), " +
+  `author:profiles!posts_author_id_fkey(${PERSON}), ` +
   "media:post_media(kind, bucket, storage_path, width, height, alt, position)";
 
 // ------------------------------------------------------------------ mapping
 
 export function toAuthor(p: ProfileRow | null) {
   return p
-    ? { id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url }
+    ? { id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, verified: !!p.verification }
     : { id: "unknown", name: "Amigo", handle: "amigo", avatarUrl: null };
 }
 
@@ -127,9 +133,12 @@ export async function fetchFollowingIds(db: Db, viewerId: string) {
 }
 
 export async function fetchSuggestions(db: Db, max: number): Promise<PersonSummary[]> {
-  const { data, error } = await db.rpc("suggested_profiles", { p_limit: max });
+  const { data, error } = await db
+    .rpc("suggested_profiles", { p_limit: max })
+    .select(`id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`)
+    .returns<ProfileRow[]>();
   if (error) throw dataError(error);
-  return data.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: false }));
+  return data.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: false, verified: !!p.verification }));
 }
 
 // ------------------------------------------------------------------- writes
@@ -168,7 +177,7 @@ export async function updateDisplayName(db: Db, userId: string, name: string) {
 
 // ----------------------------------------------------------------- profiles
 
-const PROFILE_COLUMNS = "id, username, display_name, bio, avatar_url, follower_count, following_count, post_count, created_at";
+const PROFILE_COLUMNS = `id, username, display_name, bio, avatar_url, follower_count, following_count, post_count, created_at, ${VERIFICATION_EMBED}`;
 // Media tab: only posts that have at least one media row.
 const MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 
@@ -196,6 +205,7 @@ export async function fetchProfileByHandle(db: Db, handle: string, viewerId: str
     joinedAt: new Date(data.created_at),
     viewerFollows: following.has(data.id),
     isViewer: data.id === viewerId,
+    verified: !!(data as { verification?: unknown }).verification,
   };
 }
 
@@ -233,8 +243,8 @@ async function attachParents(db: Db, rows: PostRow[]) {
 export async function fetchFollowList(db: Db, profileId: string, kind: FollowListKind, viewerId: string): Promise<PersonSummary[]> {
   const select =
     kind === "followers"
-      ? "created_at, person:profiles!follows_follower_id_fkey(id, username, display_name, avatar_url)"
-      : "created_at, person:profiles!follows_followee_id_fkey(id, username, display_name, avatar_url)";
+      ? `created_at, person:profiles!follows_follower_id_fkey(${PERSON})`
+      : `created_at, person:profiles!follows_followee_id_fkey(${PERSON})`;
   const { data, error } = await db
     .from("follows")
     .select(select)
@@ -245,7 +255,7 @@ export async function fetchFollowList(db: Db, profileId: string, kind: FollowLis
   if (error) throw dataError(error);
   const people = data.map((r) => r.person).filter((p): p is ProfileRow => !!p);
   const following = await viewerFollowsSet(db, viewerId, people.map((p) => p.id));
-  return people.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: following.has(p.id) }));
+  return people.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: following.has(p.id), verified: !!p.verification }));
 }
 
 export async function isHandleAvailable(db: Db, handle: string, viewerId: string) {
@@ -290,7 +300,7 @@ export async function searchPeople(db: Db, query: string, viewerId: string, limi
   const pattern = orValue(likePattern(q));
   const { data, error } = await db
     .from("profiles")
-    .select("id, username, display_name, avatar_url, bio, follower_count")
+    .select(`id, username, display_name, avatar_url, bio, follower_count, ${VERIFICATION_EMBED}`)
     .or(`username.ilike.${pattern},display_name.ilike.${pattern}`)
     .order("follower_count", { ascending: false })
     .limit(Math.min(limit * 3, 100));
@@ -300,6 +310,7 @@ export async function searchPeople(db: Db, query: string, viewerId: string, limi
   const following = await viewerFollowsSet(db, viewerId, ranked.map((p) => p.id));
   return ranked.map((p) => ({
     id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id),
+    verified: !!(p as { verification?: unknown }).verification,
   }));
 }
 
@@ -328,7 +339,7 @@ export async function fetchExplore(db: Db, viewerId: string): Promise<ExploreFee
   const topLevel = () => db.from("posts").select(POST_SELECT).is("parent_id", null);
 
   const [people, recentPopular, conversations, media] = await Promise.all([
-    db.rpc("suggested_profiles", { p_limit: 4 }),
+    db.rpc("suggested_profiles", { p_limit: 4 }).select(`id, username, display_name, avatar_url, bio, ${VERIFICATION_EMBED}`).returns<(ProfileRow & { bio: string })[]>(),
     topLevel().gte("created_at", since).order("like_count", { ascending: false }).order("created_at", { ascending: false }).limit(3).returns<PostRow[]>(),
     topLevel().gt("reply_count", 0).order("created_at", { ascending: false }).limit(3).returns<PostRow[]>(),
     db.from("posts").select(MEDIA_SELECT).is("parent_id", null).order("created_at", { ascending: false }).limit(9).returns<PostRow[]>(),
@@ -350,7 +361,7 @@ export async function fetchExplore(db: Db, viewerId: string): Promise<ExploreFee
   const map = (rows: PostRow[]) => rows.map((r) => toPost(db, r, liked));
   return {
     suggestedPeople: people.data!.map((p) => ({
-      id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: false,
+      id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: false, verified: !!p.verification,
     })),
     popular: { posts: map(popularRows), windowDays },
     conversations: map(conversations.data!),
@@ -375,7 +386,7 @@ type NotificationRow = {
 
 const NOTIFICATION_SELECT =
   "id, kind, created_at, read_at, " +
-  "actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url), " +
+  `actor:profiles!notifications_actor_id_fkey(${PERSON}), ` +
   "post:posts!notifications_post_id_fkey(id, body, parent_id, media:post_media(kind, bucket, storage_path, width, height, alt, position))";
 
 export async function fetchNotifications(db: Db, limit: number): Promise<NotificationPage> {
@@ -487,7 +498,7 @@ async function decorateWorlds(db: Db, rows: WorldRow[], viewerId: string): Promi
     db.from("world_members").select("world_id").eq("user_id", viewerId).in("world_id", ids),
     db
       .from("world_members")
-      .select("world_id, person:profiles!world_members_user_id_fkey(id, username, display_name, avatar_url)")
+      .select(`world_id, person:profiles!world_members_user_id_fkey(${PERSON})`)
       .in("world_id", ids)
       .neq("user_id", viewerId)
       .order("joined_at", { ascending: false })
@@ -571,7 +582,7 @@ export async function fetchLeaderboard(db: Db, worldId: string, viewerId: string
 export async function fetchChat(db: Db, worldId: string, limit: number): Promise<WorldChatMessage[]> {
   const { data, error } = await db
     .from("world_chat_messages")
-    .select("id, body, created_at, author:profiles!world_chat_messages_author_id_fkey(id, username, display_name, avatar_url)")
+    .select(`id, body, created_at, author:profiles!world_chat_messages_author_id_fkey(${PERSON})`)
     .eq("world_id", worldId)
     .order("created_at", { ascending: false })
     .limit(limit)
@@ -589,7 +600,7 @@ export async function sendChat(db: Db, worldId: string, text: string) {
 export async function fetchParticipants(db: Db, worldId: string, viewerId: string, limit: number): Promise<PersonSummary[]> {
   const { data, error } = await db
     .from("world_members")
-    .select("person:profiles!world_members_user_id_fkey(id, username, display_name, avatar_url, bio)")
+    .select(`person:profiles!world_members_user_id_fkey(id, username, display_name, avatar_url, bio, ${VERIFICATION_EMBED})`)
     .eq("world_id", worldId)
     .neq("user_id", viewerId)
     .order("joined_at", { ascending: false })
@@ -600,7 +611,7 @@ export async function fetchParticipants(db: Db, worldId: string, viewerId: strin
   const following = await viewerFollowsSet(db, viewerId, people.map((p) => p.id));
   return [...people.filter((p) => !following.has(p.id)), ...people.filter((p) => following.has(p.id))]
     .slice(0, limit)
-    .map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id) }));
+    .map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id), verified: !!p.verification }));
 }
 
 // -------------------------------------------------------------- support hub
@@ -629,7 +640,7 @@ export function supportError(e: PostgrestError, admin = false): Error {
 type RequestRow = Database["public"]["Tables"]["support_requests"]["Row"] & { creator: ProfileRow | null };
 const REQUEST_SELECT =
   "id, creator_id, title, description, url, category, ask, target, supporter_count, status, featured, created_at, " +
-  "creator:profiles!support_requests_creator_id_fkey(id, username, display_name, avatar_url)";
+  `creator:profiles!support_requests_creator_id_fkey(${PERSON})`;
 
 async function viewerVisits(db: Db, viewerId: string, ids: string[]) {
   if (!ids.length) return new Map<string, { confirmed: boolean; feedback: boolean }>();
@@ -855,4 +866,49 @@ export async function adminAudit(db: Db, limit: number): Promise<AdminAuditEntry
     summary: a.summary,
     createdAt: new Date(a.created_at),
   }));
+}
+
+// ------------------------------------------------------------- admin users
+
+type LookupRow = Database["public"]["Functions"]["admin_user_lookup"]["Returns"][number];
+
+function toLookup(u: LookupRow, following: Set<string>): { person: Person; verification: Verification | null } {
+  return {
+    person: {
+      id: u.id, name: u.display_name, handle: u.username, avatarUrl: u.avatar_url, bio: u.bio,
+      viewerFollows: following.has(u.id), verified: !!u.verification_type,
+    },
+    verification: u.verification_type
+      ? {
+          type: u.verification_type as VerificationType,
+          note: u.note ?? "",
+          verifiedAt: new Date(u.verified_at!),
+          verifiedBy: u.verified_by_username ? toAuthor({ id: u.verified_by_username, username: u.verified_by_username, display_name: u.verified_by_username, avatar_url: null }) : null,
+        }
+      : null,
+  };
+}
+
+export async function adminFindUserProfile(db: Db, adminId: string, handle: string) {
+  const { data, error } = await db.rpc("admin_user_lookup", { p_handle: handle });
+  if (error) throw supportError(error, true);
+  if (!data[0]) return null;
+  return toLookup(data[0], await viewerFollowsSet(db, adminId, [data[0].id]));
+}
+
+export async function adminVerify(db: Db, userId: string, type: VerificationType, note: string) {
+  const { error } = await db.rpc("admin_verify_user", { p_user: userId, p_type: type, p_note: note });
+  if (error) throw supportError(error, true);
+}
+
+export async function adminUnverify(db: Db, userId: string, note: string) {
+  const { error } = await db.rpc("admin_unverify_user", { p_user: userId, p_note: note });
+  if (error) throw supportError(error, true);
+}
+
+export async function adminVerifiedUsers(db: Db, adminId: string) {
+  const { data, error } = await db.rpc("admin_verified_users");
+  if (error) throw supportError(error, true);
+  const following = await viewerFollowsSet(db, adminId, data.map((u) => u.id));
+  return data.map((u) => toLookup(u, following) as { person: Person; verification: Verification });
 }

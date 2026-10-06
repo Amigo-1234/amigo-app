@@ -10,6 +10,7 @@ import { createDemoWorlds } from "./demoWorlds";
 import type {
   AppNotification,
   Author,
+  VerificationType,
   DataSource,
   MediaItem,
   NotificationKind,
@@ -53,6 +54,13 @@ const peopleList: PersonRecord[] = [
   { id: "tomi", name: "Tomi Adeyemi", handle: "tomiadeyemi", bio: "Reminding you to drink water since 2019.", avatarUrl: "https://i.pravatar.cc/160?img=68", joinedAt: days(30) },
 ];
 const people = new Map(peopleList.map((p) => [p.id, p]));
+
+/** Admin-set verification (see AdminUsersApi). Members have no way to change this. */
+interface VerificationRecord { type: VerificationType; note: string; at: Date; by: string | null }
+const verifications = new Map<string, VerificationRecord>([
+  ["mira", { type: "creator", note: "Confirmed through her label's press contact.", at: days(20), by: null }],
+  ["ama", { type: "notable", note: "Photographer with published work; checked portfolio + press.", at: days(45), by: null }],
+]);
 
 const follows = new Set<string>([
   "me->ama", "me->leo",
@@ -163,7 +171,7 @@ function watch<T>(sub: Subscription<T>, read: () => T): () => void {
 
 const author = (id: string): Author => {
   const p = people.get(id)!;
-  return { id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl };
+  return { id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl, verified: verifications.has(p.id) };
 };
 
 const replyCount = (id: string) => records.filter((r) => r.parentId === id).length;
@@ -209,6 +217,7 @@ function profileOf(p: PersonRecord, viewerId: string): Profile {
     handle: p.handle,
     bio: p.bio,
     avatarUrl: p.avatarUrl,
+    verified: verifications.has(p.id),
     followerCount: [...follows].filter((e) => e.endsWith(`->${p.id}`)).length,
     followingCount: [...follows].filter((e) => e.startsWith(`${p.id}->`)).length,
     postCount: records.filter((r) => r.authorId === p.id && !r.parentId).length,
@@ -220,6 +229,7 @@ function profileOf(p: PersonRecord, viewerId: string): Profile {
 
 const summary = (p: PersonRecord, viewerId: string): PersonSummary => ({
   id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl, viewerFollows: follows.has(edge(viewerId, p.id)), bio: p.bio,
+  verified: verifications.has(p.id),
 });
 
 const followerCount = (id: string) => [...follows].filter((e) => e.endsWith(`->${id}`)).length;
@@ -332,6 +342,10 @@ const demoWorlds = createDemoWorlds({
 
 const demoSupport = createDemoSupport({
   personIds: () => peopleList.map((p) => p.id),
+  verification: {
+    get: (id) => verifications.get(id) ?? null,
+    set: (id, v) => (v ? verifications.set(id, v) : verifications.delete(id)),
+  },
   handleOf: (id) => people.get(id)?.handle ?? null,
   author,
   summary: (id, viewerId) => summary(people.get(id)!, viewerId),

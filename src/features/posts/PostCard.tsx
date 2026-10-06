@@ -11,6 +11,7 @@ import { useMediaViewer } from "./MediaViewer";
 import { useLike, useSharePost } from "./usePostActions";
 import { profileHref } from "../profile/links";
 import "./PostCard.css";
+import { VerifiedBadge } from "../../ui/VerifiedBadge";
 
 const COLLAPSE_AT = 480;
 
@@ -79,10 +80,12 @@ export const PostCard = memo(function PostCard({
           {authorHref ? (
             <Link to={authorHref} className="post__name post__name--link" id={nameId}>
               {post.author.name}
+              <VerifiedBadge verified={post.author.verified} />
             </Link>
           ) : (
             <span className="post__name" id={nameId}>
               {post.author.name}
+              <VerifiedBadge verified={post.author.verified} />
             </span>
           )}
           <span className="post__meta">

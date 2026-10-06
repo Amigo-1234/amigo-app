@@ -3,6 +3,7 @@ import { Flag, HandHeart, LayoutDashboard, Orbit, ShieldAlert, UsersRound } from
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
+import { AdminUsers } from "../features/admin/AdminUsers";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
@@ -58,12 +59,7 @@ export default function AdminScreen() {
         {section === "" && <AdminOverview />}
         {section === "support" && <SupportAdmin />}
         {section === "worlds" && <AdminWorlds />}
-        {section === "users" && (
-          <AdminPlaceholder
-            title="Users"
-            body="Searching, suspending and managing accounts isn't built yet. To adjust someone's Support Credits, use Support Hub → Credits."
-          />
-        )}
+        {section === "users" && <AdminUsers />}
         {section === "reports" && (
           <AdminPlaceholder
             title="Reports"

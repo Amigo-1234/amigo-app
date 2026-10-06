@@ -14,6 +14,7 @@ import { FollowButton } from "../profile/FollowButton";
 import { profileHref } from "../profile/links";
 import { PersonRow } from "../profile/PersonRow";
 import { worldErrorText } from "./useWorlds";
+import { VerifiedBadge } from "../../ui/VerifiedBadge";
 
 const pts = (n: number) => `${n} ${n === 1 ? "pt" : "pts"}`;
 
@@ -59,6 +60,7 @@ export function Leaderboard({
                 <span className="leaderboard__names">
                   <span className="leaderboard__name">
                     {r.person.name}
+                    <VerifiedBadge verified={r.person.verified} size={14} />
                     {me && <span className="leaderboard__you"> (you)</span>}
                   </span>
                   <span className="leaderboard__handle">@{r.person.handle}</span>
@@ -91,6 +93,7 @@ export function WinnerCard({ winner }: { winner: LeaderboardEntry }) {
         {href ? (
           <Link to={href} className="winner__name">
             {winner.person.name}
+            <VerifiedBadge verified={winner.person.verified} />
           </Link>
         ) : (
           <span className="winner__name">{winner.person.name}</span>
@@ -213,6 +216,7 @@ export function WorldChat({
                 <div className="chat-msg__body">
                   <span className="chat-msg__meta">
                     {href ? <Link to={href} className="chat-msg__name">{m.author.name}</Link> : <span className="chat-msg__name">{m.author.name}</span>}
+                    <VerifiedBadge verified={m.author.verified} size={13} />
                     <time dateTime={m.createdAt.toISOString()} aria-label={timeAgoLong(m.createdAt)}>
                       {timeAgo(m.createdAt)}
                     </time>

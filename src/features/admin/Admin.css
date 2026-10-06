@@ -229,3 +229,30 @@
     justify-content: flex-start;
   }
 }
+
+.admin-user {
+  display: grid;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.admin-user__who {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.admin-user__status {
+  font-size: var(--text-sm);
+}
+
+.admin-user__form {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-linkish {
+  text-align: left;
+  cursor: pointer;
+}

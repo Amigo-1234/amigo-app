@@ -45,8 +45,24 @@ per-viewer rotation. Your own requests, ones you already supported, and non-open
 
 ## Admin (`/admin`)
 
-Navigation: Overview · Support Hub · Worlds · Users · Reports. Only Support Hub is fully built;
-Worlds lists Worlds read-only (created with SQL), Users and Reports say plainly what isn't built yet.
+Navigation: Overview · Support Hub · Worlds · Users · Reports. Support Hub is fully built; Users has
+verification (below); Worlds lists Worlds read-only (created with SQL); Reports says plainly what
+isn't built yet.
+
+### Verification (Admin → Users)
+
+Admins can verify someone (type: notable person, creator, business, organization, Amigo team, plus a
+private note), change the type, or remove it. The badge shows beside the name on posts, replies,
+profiles, people lists/search, Support Hub, World leaderboards/winner and chat. Nobody can verify
+themselves, and there's no application flow yet.
+
+Supabase: migration `20261006180000_profile_verification.sql` adds `profile_verifications`
+(one row per verified person). It's a separate table so the existing profile-editing policy and
+column grants can never reach it. Clients can read only `user_id`, `verification_type` and
+`verified_at` (column grants — the note is never readable); there are no client write grants or
+policies. Writes go through `admin_verify_user` / `admin_unverify_user`, which require
+`is_admin()` and write to `admin_audit_log`. Every person embed in the app's queries includes the
+verification so the badge appears everywhere.
 
 Support Hub admin: requests by status (approve / reject with refund / remove / close / reopen /
 feature / unfeature), a supporter inspector (time from opening to confirming), reports, suspicious

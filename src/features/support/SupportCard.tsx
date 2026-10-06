@@ -4,6 +4,7 @@ import type { SupportRequest } from "../../data";
 import { timeAgo, timeAgoLong } from "../../lib/time";
 import { askOf, categoryLabel, hostOf } from "../../data/supportRules";
 import { Avatar } from "../../ui/Avatar";
+import { VerifiedBadge } from "../../ui/VerifiedBadge";
 
 const STATUS_LABEL: Record<SupportRequest["status"], string> = {
   pending: "Waiting for review",
@@ -41,7 +42,10 @@ export function SupportCard({ r }: { r: SupportRequest }) {
         <span className="support-card__top">
           <Avatar name={r.creator.name} src={r.creator.avatarUrl} seed={r.creator.id} size="sm" />
           <span className="support-card__who">
-            <span className="support-card__name">{r.creator.name}</span>
+            <span className="support-card__name">
+              {r.creator.name}
+              <VerifiedBadge verified={r.creator.verified} size={14} />
+            </span>
             <span className="support-card__meta">
               {categoryLabel(r.category)} · <time dateTime={r.createdAt.toISOString()} aria-label={timeAgoLong(r.createdAt)}>{timeAgo(r.createdAt)}</time>
             </span>

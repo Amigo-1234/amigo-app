@@ -20,6 +20,7 @@ import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
 import "./ProfileScreen.css";
 import "../features/support/Support.css";
+import { VerifiedBadge } from "../ui/VerifiedBadge";
 
 const TABS: { id: ProfileTab; label: string }[] = [
   { id: "posts", label: "Posts" },
@@ -121,7 +122,10 @@ function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; 
         </div>
       </div>
 
-      <h2 className="profile__name">{profile.name}</h2>
+      <h2 className="profile__name">
+        {profile.name}
+        <VerifiedBadge verified={profile.verified} size={20} />
+      </h2>
       <p className="profile__handle">@{profile.handle}</p>
 
       {profile.bio && (

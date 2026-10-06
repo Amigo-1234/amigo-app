@@ -530,6 +530,35 @@ select pg_temp.check('reputation entries cannot be negative',
   (select count(*) = 1 from pg_constraint where conrelid = 'public.support_ledger'::regclass and pg_get_constraintdef(oid) like '%reputation >= 0%'));
 select pg_temp.check('every admin action is in the audit log', pg_temp.q(:D, 'select count(*) from public.admin_audit(50)')::int = 4);
 
+-- ------------------------------------------------------------ verification
+-- :D is an admin (added in the support hub section).
+
+select pg_temp.must_fail('people cannot verify themselves', :B,
+  $$insert into public.profile_verifications (user_id, verification_type) values ('00000000-0000-0000-0000-00000000000b', 'creator')$$, '42501');
+select pg_temp.must_fail('non-admin cannot call verify', :B, $$select public.admin_verify_user('00000000-0000-0000-0000-00000000000b', 'creator')$$, '42501');
+select pg_temp.must_fail('non-admin cannot look up users', :B, $$select * from public.admin_user_lookup('ama_mensah')$$, '42501');
+select pg_temp.act_as(:D);
+select public.admin_verify_user(:B, 'creator', 'Checked their channel');
+select pg_temp.act_as_admin();
+select pg_temp.check('admin verifies a user', pg_temp.q(null, $$select verification_type from public.profile_verifications where user_id = '00000000-0000-0000-0000-00000000000b'$$) = 'creator');
+select pg_temp.must_fail('the admin note is private', :B, $$select note from public.profile_verifications$$, '42501');
+select pg_temp.must_fail('verified people cannot edit their verification', :B,
+  $$update public.profile_verifications set verification_type = 'amigo' where user_id = '00000000-0000-0000-0000-00000000000b'$$, '42501');
+select pg_temp.must_fail('verified people cannot remove it either', :B,
+  $$delete from public.profile_verifications where user_id = '00000000-0000-0000-0000-00000000000b'$$, '42501');
+select pg_temp.must_fail('profile edits cannot touch verification', :B,
+  $$update public.profiles set verified = true where id = '00000000-0000-0000-0000-00000000000b'$$, '42703');
+select pg_temp.must_fail('unknown verification type rejected', :D, $$select public.admin_verify_user('00000000-0000-0000-0000-00000000000b', 'king')$$, 'SP006');
+select pg_temp.check('admin lookup shows type and note',
+  pg_temp.q(:D, $$select verification_type || '|' || note from public.admin_user_lookup('@LEO_PARK')$$) = 'creator|Checked their channel');
+select pg_temp.act_as(:D);
+select public.admin_unverify_user(:B, 'test over');
+select pg_temp.act_as_admin();
+select pg_temp.check('admin removes verification', (select count(*) = 0 from public.profile_verifications where user_id = :B));
+select pg_temp.must_fail('removing twice is an error', :D, $$select public.admin_unverify_user('00000000-0000-0000-0000-00000000000b')$$, 'SP006');
+select pg_temp.check('verification changes are audit-logged',
+  (select count(*) = 2 from public.admin_audit_log where target_id = :B and action in ('user.verify', 'user.unverify')));
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');

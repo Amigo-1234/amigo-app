@@ -385,6 +385,21 @@ try {
   ok("support: admin credit adjustment", found?.wallet.credits === 0 && (await q.fetchWallet(nina)).credits === 3);
   ok("support: audit log", (await q.adminAudit(leo, 20)).filter((a) => a.admin.id === ids.leo).length === 4);
 
+  // verification (admin-only)
+  await rejects("verify: non-admin denied", () => q.adminVerify(omar, ids.omar, "creator", "me"), "not-admin");
+  const { error: selfVerifyErr } = await omar.from("profile_verifications").insert({ user_id: ids.omar, verification_type: "creator" });
+  ok("verify: cannot verify yourself directly", selfVerifyErr?.code === "42501", selfVerifyErr?.code);
+  await q.adminVerify(leo, ids.nina, "creator", "checked her channel");
+  const ninaHandle2 = (await q.fetchProfile(nina, ids.nina)).username;
+  ok("verify: profile shows the badge", (await q.fetchProfileByHandle(omar, ninaHandle2, ids.omar))?.verified === true);
+  ok("verify: post authors carry the badge", (await q.fetchFeed(omar, "latest", 50, ids.omar)).posts.find((x) => x.author.id === ids.nina)?.author.verified === true);
+  ok("verify: search results carry the badge", (await q.searchPeople(omar, ninaHandle2, ids.omar, 5)).find((x) => x.id === ids.nina)?.verified === true);
+  const { error: noteErr } = await omar.from("profile_verifications").select("note");
+  ok("verify: admin note is private", noteErr?.code === "42501", noteErr?.code);
+  ok("verify: admin lookup has type + note", (await q.adminFindUserProfile(leo, ids.leo, ninaHandle2))?.verification?.note === "checked her channel");
+  await q.adminUnverify(leo, ids.nina, "test over");
+  ok("verify: removed", (await q.fetchProfileByHandle(omar, ninaHandle2, ids.omar))?.verified === false && (await q.adminVerifiedUsers(leo, ids.leo)).every((u) => u.person.id !== ids.nina));
+
   // private surfaces
   const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });
   ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);

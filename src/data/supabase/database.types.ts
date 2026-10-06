@@ -347,6 +347,45 @@ export type Database = {
           },
         ];
       };
+      profile_verifications: {
+        Row: {
+          note: string;
+          user_id: string;
+          verification_type: string;
+          verified_at: string;
+          verified_by: string | null;
+        };
+        Insert: {
+          note?: string;
+          user_id: string;
+          verification_type: string;
+          verified_at?: string;
+          verified_by?: string | null;
+        };
+        Update: {
+          note?: string;
+          user_id?: string;
+          verification_type?: string;
+          verified_at?: string;
+          verified_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profile_verifications_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "profile_verifications_verified_by_fkey";
+            columns: ["verified_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           avatar_url: string | null;
@@ -854,6 +893,10 @@ export type Database = {
       admin_support_resolve_report: { Args: { p_outcome: string; p_report: string }; Returns: undefined };
       admin_support_supporters: { Args: { p_request: string }; Returns: { avatar_url: string | null; confirmed_at: string | null; display_name: string; opened_at: string; seconds: number | null; user_id: string; username: string }[] };
       admin_support_suspicious: { Args: never; Returns: { at: string; avatar_url: string | null; detail: string; display_name: string; kind: string; request_id: string | null; user_id: string; username: string }[] };
+      admin_unverify_user: { Args: { p_note?: string; p_user: string }; Returns: undefined };
+      admin_user_lookup: { Args: { p_handle: string }; Returns: { avatar_url: string | null; bio: string; display_name: string; id: string; note: string | null; username: string; verification_type: string | null; verified_at: string | null; verified_by_username: string | null }[] };
+      admin_verified_users: { Args: never; Returns: { avatar_url: string | null; bio: string; display_name: string; id: string; note: string | null; username: string; verification_type: string | null; verified_at: string | null; verified_by_username: string | null }[] };
+      admin_verify_user: { Args: { p_note?: string; p_type: string; p_user: string }; Returns: undefined };
       can_view_post: { Args: { p_post_id: string }; Returns: boolean };
       confirm_support: { Args: { p_request: string }; Returns: { credits: number; reputation: number }[] };
       create_post: {

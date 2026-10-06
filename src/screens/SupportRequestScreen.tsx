@@ -16,6 +16,7 @@ import { Button, IconButton } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
 import "../features/support/Support.css";
+import { VerifiedBadge } from "../ui/VerifiedBadge";
 
 export default function SupportRequestScreen() {
   const { requestId = "" } = useParams();
@@ -62,7 +63,10 @@ function RequestView({ r }: { r: SupportRequest }) {
         <div className="support-detail__creator">
           <Avatar name={r.creator.name} src={r.creator.avatarUrl} seed={r.creator.id} size="md" />
           <span>
-            {href ? <Link to={href} className="support-detail__name">{r.creator.name}</Link> : <span className="support-detail__name">{r.creator.name}</span>}
+            <span>
+              {href ? <Link to={href} className="support-detail__name">{r.creator.name}</Link> : <span className="support-detail__name">{r.creator.name}</span>}
+              <VerifiedBadge verified={r.creator.verified} />
+            </span>
             <span className="support-detail__meta">
               @{r.creator.handle} · <time dateTime={r.createdAt.toISOString()} title={fullTimestamp(r.createdAt)}>{timeAgo(r.createdAt)}</time>
             </span>

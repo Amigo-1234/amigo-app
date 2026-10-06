@@ -17,6 +17,8 @@ export interface Author {
   name: string;
   handle: string;
   avatarUrl: string | null;
+  /** Set only by Amigo admins (see AdminUsersApi). Shown as a badge beside the name. */
+  verified?: boolean;
 }
 
 /**
@@ -64,6 +66,7 @@ export interface PersonSummary {
   name: string;
   handle: string;
   avatarUrl: string | null;
+  verified?: boolean;
   viewerFollows: boolean;
   /** Present where a short bio helps (search results, suggestions). */
   bio?: string;
@@ -120,6 +123,7 @@ export interface Profile {
   handle: string;
   bio: string;
   avatarUrl: string | null;
+  verified?: boolean;
   followerCount: number;
   followingCount: number;
   postCount: number;
@@ -540,9 +544,32 @@ export interface SupportAdminApi {
   audit(adminId: string, limit: number): Promise<AdminAuditEntry[]>;
 }
 
+/** Why someone is verified. Public: whether they're verified. Admin-only: the type and note. */
+export type VerificationType = "notable" | "creator" | "business" | "organization" | "amigo";
+
+export interface Verification {
+  type: VerificationType;
+  /** Private admin note (e.g. how it was checked). Never shown publicly. */
+  note: string;
+  verifiedAt: Date;
+  verifiedBy: Author | null;
+}
+
+/**
+ * Admin → Users. Verification is set only here; there is no member-facing
+ * API to request or change it (the backend refuses anyone who isn't an admin).
+ */
+export interface AdminUsersApi {
+  find(adminId: string, handle: string): Promise<{ person: PersonSummary; verification: Verification | null } | null>;
+  verify(adminId: string, userId: string, type: VerificationType, note: string): Promise<void>;
+  unverify(adminId: string, userId: string, note: string): Promise<void>;
+  listVerified(adminId: string): Promise<{ person: PersonSummary; verification: Verification }[]>;
+}
+
 export interface AdminApi {
   isAdmin(viewerId: string): Promise<boolean>;
   support: SupportAdminApi;
+  users: AdminUsersApi;
 }
 
 export interface Subscription<T> {
