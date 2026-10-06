@@ -2,12 +2,15 @@
  * In-memory data source for UI development (`npm run dev:demo`).
  * Never bundled into production builds unless VITE_DATA_SOURCE=demo.
  *
- * Preview states with a query param: ?demo=loading | empty | error | slow | signedout
+ * Preview states with a query param: ?demo=loading | empty | error | slow | signedout | postfail
  */
+import { mentionedHandles } from "../lib/mentions";
 import type {
+  AppNotification,
   Author,
   DataSource,
   MediaItem,
+  NotificationKind,
   PersonSummary,
   Post,
   Profile,
@@ -99,6 +102,9 @@ let records: PostRecord[] = [
   ]),
   rec("p18", "zoe", "Two coffees, one view.", minutes(60 * 8), 301, [img("amigo-cafe1", 1080, 1350), img("amigo-cafe2", 1080, 1350)]),
   rec("p19", "leo", "Summit, lake, the long way down.", minutes(60 * 12), 188, [img("amigo-summit", 1600, 1067), img("amigo-lake", 1080, 1350), img("amigo-path", 1080, 1080)]),
+  rec("p20", "rosa", "Thanks @samokafor for the playlist tips — kilometre 15 is sorted 🏃‍♀️", minutes(60 * 3), 22),
+  rec("me3", "me", "Sunday market haul. Too many tomatoes, no regrets.", days(4), 18, [img("amigo-haul", 1080, 1350)]),
+  rec("me4", "me", "New desk setup is done. Cable management is a lifestyle.", days(8), 31),
   rec("p16", "rosa", "Long run playlist recommendations? Need something for kilometre 15 onwards.", minutes(60 * 60), 37),
   // replies
   rec("r1", "tomi", "the plan is vibes. always has been.", minutes(15), 9, [], "p2"),
@@ -110,6 +116,9 @@ let records: PostRecord[] = [
   rec("r7", "leo", "Rooftop crew when?", minutes(2), 1, [], "p1"),
   rec("r8", "leo", "Count me in for football if there's still space", minutes(60 * 20), 3, [], "p15"),
   rec("r9", "mira", "Anything by Little Simz. Trust me.", minutes(60 * 50), 8, [], "p16"),
+  rec("r10", "kofi", "Instagram. Kidding. Mostly.", minutes(60 * 6), 2, [], "me2"),
+  rec("r11", "ama", "Same!! Our family chat is exactly this", minutes(7), 1, [], "r5"),
+  rec("r12", "mira", "@samokafor you'd love the second one", minutes(60 * 26), 0, [], "p17"),
 ];
 
 // ------------------------------------------------------------------ helpers
@@ -202,6 +211,110 @@ function failIfError() {
   if (scenario === "error") throw new Error("Demo network error");
 }
 
+
+// ------------------------------------------------------------ notifications
+// Created only by the "server" rules below (the same rules as the Supabase
+// triggers): no self-notifications, one row per (recipient, actor, kind, post),
+// and a notification is only shown while it is still true.
+
+interface NoteRecord {
+  id: string;
+  recipientId: string;
+  actorId: string;
+  kind: NotificationKind;
+  postId: string | null;
+  createdAt: Date;
+  readAt: Date | null;
+}
+
+const notes: NoteRecord[] = [];
+let noteSeq = 0;
+
+function notify(recipientId: string | undefined, actorId: string, kind: NotificationKind, postId: string | null, at = new Date()) {
+  if (!recipientId || recipientId === actorId) return;
+  if (notes.some((n) => n.recipientId === recipientId && n.actorId === actorId && n.kind === kind && n.postId === postId)) return;
+  notes.push({ id: `n${++noteSeq}`, recipientId, actorId, kind, postId, createdAt: at, readAt: null });
+}
+
+const onFollow = (followerId: string, followeeId: string, at?: Date) => notify(followeeId, followerId, "follow", null, at);
+const onLike = (userId: string, postId: string, at?: Date) => notify(records.find((r) => r.id === postId)?.authorId, userId, "like", postId, at);
+function onPost(r: PostRecord, at = r.createdAt) {
+  const parentAuthor = r.parentId ? records.find((x) => x.id === r.parentId)?.authorId : undefined;
+  if (parentAuthor) notify(parentAuthor, r.authorId, "reply", r.id, at);
+  for (const handle of mentionedHandles(r.text)) {
+    const p = peopleList.find((x) => x.handle === handle);
+    if (p && p.id !== parentAuthor) notify(p.id, r.authorId, "mention", r.id, at);
+  }
+}
+
+function isLive(n: NoteRecord): boolean {
+  const post = n.postId ? records.find((r) => r.id === n.postId) : null;
+  if (n.postId && !post) return false;
+  if (n.kind === "like") return post!.likers.has(n.actorId);
+  if (n.kind === "follow") return follows.has(edge(n.actorId, n.recipientId));
+  return true;
+}
+
+const inbox = (viewerId: string) =>
+  scenario === "empty" ? [] : notes.filter((n) => n.recipientId === viewerId && isLive(n)).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+function toNotification(n: NoteRecord): AppNotification {
+  const post = n.postId ? records.find((r) => r.id === n.postId)! : null;
+  const parent = post?.parentId ? records.find((r) => r.id === post.parentId) : null;
+  return {
+    id: n.id,
+    kind: n.kind,
+    actor: author(n.actorId),
+    createdAt: n.createdAt,
+    read: n.readAt !== null,
+    post: post ? { id: post.id, text: post.text, media: post.media } : null,
+    inReplyToReply: n.kind === "reply" ? Boolean(parent?.parentId) : undefined,
+  };
+}
+
+// Seed: Sam's inbox, built through the same rules as live events.
+{
+  const hours = (n: number) => minutes(60 * n);
+  const like = (who: string, postId: string, at: Date) => {
+    records.find((r) => r.id === postId)!.likers.add(who);
+    onLike(who, postId, at);
+  };
+  [["mira", 9], ["ama", 25], ["leo", 33], ["zoe", 48], ["kofi", 70], ["tomi", 95]].forEach(([who, m]) => like(who as string, "me1", minutes(m as number)));
+  onFollow("zoe", "me", hours(5));
+  onFollow("kofi", "me", hours(7));
+  onFollow("ama", "me", days(12));
+  onFollow("leo", "me", days(15));
+  like("jun", "me2", hours(30));
+  like("rosa", "me2", hours(31));
+  ["ama", "leo", "mira", "zoe", "kofi"].forEach((who, i) => like(who, "me3", new Date(days(4).getTime() + (i + 1) * 3_600_000)));
+  ["ama", "leo", "rosa", "kofi", "mira", "jun", "zoe", "tomi"].forEach((who, i) => like(who, "me4", new Date(days(8).getTime() + (i + 1) * 6 * 3_600_000)));
+  records.filter((r) => r.parentId || r.text.includes("@")).forEach((r) => onPost(r));
+  const dayAgo = Date.now() - 86_400_000;
+  notes.forEach((n) => { if (n.createdAt.getTime() < dayAgo) n.readAt = n.createdAt; });
+}
+
+/**
+ * Demo/test hook: make someone else act, through the same rules a real
+ * backend applies (e.g. __amigoDemo.act("mira", "like", "me2")).
+ */
+(globalThis as { __amigoDemo?: unknown }).__amigoDemo = {
+  act(actorId: string, action: "like" | "unlike" | "follow" | "unfollow" | "reply" | "post", target: string, text = "") {
+    if (!people.has(actorId)) throw new Error(`unknown person ${actorId}`);
+    const r = records.find((x) => x.id === target);
+    if (action === "like" && r) { r.likers.add(actorId); onLike(actorId, target); }
+    if (action === "unlike" && r) r.likers.delete(actorId);
+    if (action === "follow" && actorId !== target) { follows.add(edge(actorId, target)); onFollow(actorId, target); }
+    if (action === "unfollow") follows.delete(edge(actorId, target));
+    if (action === "reply" || action === "post") {
+      const created = rec(`x${Date.now()}${noteSeq}`, actorId, text, new Date(), 0, [], action === "reply" ? target : null);
+      records = [created, ...records];
+      onPost(created);
+    }
+    emit();
+  },
+  notificationCount: (recipientId: string) => notes.filter((n) => n.recipientId === recipientId).length,
+};
+
 // -------------------------------------------------------------------- auth
 
 const viewerFromPerson = (p: PersonRecord): Viewer => ({ id: p.id, name: p.name, handle: p.handle, email: "sam@example.com", avatarUrl: p.avatarUrl });
@@ -259,7 +372,9 @@ export const demoSource: DataSource = {
       // Demo keeps media as in-memory blob URLs for this session only.
       const media: MediaItem[] = input.media.map((m) => ({ type: "image", url: URL.createObjectURL(m.blob), width: m.width, height: m.height, alt: m.alt }));
       const id = `p${Date.now()}`;
-      records = [rec(id, v.id, input.text.trim(), new Date(), 0, media), ...records];
+      const created = rec(id, v.id, input.text.trim(), new Date(), 0, media);
+      records = [created, ...records];
+      onPost(created);
       emit();
       return { id };
     }, 900),
@@ -267,7 +382,10 @@ export const demoSource: DataSource = {
   setLiked: (postId, viewerId, liked) =>
     later(() => {
       const r = records.find((x) => x.id === postId);
-      if (r) liked ? r.likers.add(viewerId) : r.likers.delete(viewerId);
+      if (r && liked) {
+        r.likers.add(viewerId);
+        onLike(viewerId, postId);
+      } else r?.likers.delete(viewerId);
       emit();
     }, 250),
 
@@ -282,14 +400,16 @@ export const demoSource: DataSource = {
 
   addReply: (postId, v, text) =>
     later(() => {
-      records = [...records, rec(`r${Date.now()}`, v.id, text, new Date(), 0, [], postId)];
+      const created = rec(`r${Date.now()}`, v.id, text, new Date(), 0, [], postId);
+      records = [...records, created];
+      onPost(created);
       emit();
     }),
 
   getFollowingIds: (viewerId) => later(() => new Set([...follows].filter((e) => e.startsWith(`${viewerId}->`)).map((e) => e.split("->")[1]))),
   getPeopleSuggestions: (viewerId, max) =>
     later(() => peopleList.filter((p) => p.id !== viewerId && !follows.has(edge(viewerId, p.id))).slice(0, max).map((p) => summary(p, viewerId))),
-  follow: (viewerId, id) => later(() => { follows.add(edge(viewerId, id)); emit(); }, 300),
+  follow: (viewerId, id) => later(() => { follows.add(edge(viewerId, id)); onFollow(viewerId, id); emit(); }, 300),
   unfollow: (viewerId, id) => later(() => { follows.delete(edge(viewerId, id)); emit(); }, 300),
 
   discovery: {
@@ -339,6 +459,30 @@ export const demoSource: DataSource = {
           .sort(order === "top" ? (a, b) => likes(b) - likes(a) || newest(a, b) : newest);
         return { posts: matches.slice(0, limit).map(toPost), hasMore: matches.length > limit };
       }),
+  },
+
+  notifications: {
+    subscribeNotifications(viewerId, limit, sub) {
+      return watch(sub, () => {
+        const list = inbox(viewerId);
+        return { items: list.slice(0, limit).map(toNotification), hasMore: list.length > limit };
+      });
+    },
+    subscribeUnreadCount(viewerId, sub) {
+      return watch(sub, () => inbox(viewerId).filter((n) => !n.readAt).length);
+    },
+    markRead: (viewerId, ids) =>
+      later(() => {
+        failIfError();
+        notes.forEach((n) => { if (n.recipientId === viewerId && ids.includes(n.id) && !n.readAt) n.readAt = new Date(); });
+        emit();
+      }, 200),
+    markAllRead: (viewerId) =>
+      later(() => {
+        failIfError();
+        notes.forEach((n) => { if (n.recipientId === viewerId && !n.readAt) n.readAt = new Date(); });
+        emit();
+      }, 300),
   },
 
   profiles: {

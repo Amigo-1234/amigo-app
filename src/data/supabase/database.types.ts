@@ -39,6 +39,58 @@ export type Database = {
           },
         ];
       };
+      notifications: {
+        Row: {
+          actor_id: string;
+          created_at: string;
+          id: string;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          post_id: string | null;
+          read_at: string | null;
+          recipient_id: string;
+        };
+        Insert: {
+          actor_id: string;
+          created_at?: string;
+          id?: string;
+          kind: Database["public"]["Enums"]["notification_kind"];
+          post_id?: string | null;
+          read_at?: string | null;
+          recipient_id: string;
+        };
+        Update: {
+          actor_id?: string;
+          created_at?: string;
+          id?: string;
+          kind?: Database["public"]["Enums"]["notification_kind"];
+          post_id?: string | null;
+          read_at?: string | null;
+          recipient_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "notifications_actor_id_fkey";
+            columns: ["actor_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "notifications_recipient_id_fkey";
+            columns: ["recipient_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       post_likes: {
         Row: {
           created_at: string;
@@ -322,6 +374,7 @@ export type Database = {
           user_id: string;
         }[];
       };
+      mark_notifications_read: { Args: { p_ids?: string[] }; Returns: number };
       set_post_like: { Args: { p_liked: boolean; p_post_id: string }; Returns: undefined };
       suggested_profiles: {
         Args: { p_limit?: number };
@@ -344,10 +397,12 @@ export type Database = {
           isSetofReturn: true;
         };
       };
+      unread_notification_count: { Args: never; Returns: number };
       viewer_follows: { Args: { p_author: string }; Returns: boolean };
     };
     Enums: {
       media_kind: "image" | "video";
+      notification_kind: "follow" | "like" | "reply" | "mention";
       post_visibility: "public" | "followers";
     };
     CompositeTypes: {
@@ -465,6 +520,7 @@ export const Constants = {
   public: {
     Enums: {
       media_kind: ["image", "video"],
+      notification_kind: ["follow", "like", "reply", "mention"],
       post_visibility: ["public", "followers"],
     },
   },

@@ -8,11 +8,13 @@ export function FeedFooter({
   loading,
   onMore,
   endLabel = "You're all caught up",
+  loadingLabel = "Loading more posts",
 }: {
   hasMore: boolean;
   loading: boolean;
   onMore: () => void;
   endLabel?: string;
+  loadingLabel?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -30,7 +32,7 @@ export function FeedFooter({
   return (
     <div ref={ref}>
       {loading ? (
-        <div role="status" aria-label="Loading more posts">
+        <div role="status" aria-label={loadingLabel}>
           <PostSkeleton />
         </div>
       ) : (

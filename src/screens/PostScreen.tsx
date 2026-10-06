@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { profileHref } from "../features/profile/links";
-import { ArrowLeft, CircleAlert, MessageCircle, SearchX } from "lucide-react";
+import { ArrowLeft, CircleAlert, CornerLeftUp, MessageCircle, SearchX } from "lucide-react";
 import { dataSource, type Post, type Reply } from "../data";
 import { POST_MAX_LENGTH } from "../features/composer/Composer";
 import { describeError } from "../features/feed/errors";
@@ -87,6 +87,12 @@ export default function PostScreen() {
 
       {post.status === "ready" && post.data && (
         <>
+          {post.data.replyTo && (
+            <Link to={`/post/${post.data.replyTo.postId}`} className="thread-up">
+              <CornerLeftUp size={16} aria-hidden="true" />
+              Show the post this replies to
+            </Link>
+          )}
           <PostCard post={post.data} variant="focus" />
           <ReplyComposer postId={post.data.id} replyingTo={post.data.author.handle} />
           <section aria-label="Replies">

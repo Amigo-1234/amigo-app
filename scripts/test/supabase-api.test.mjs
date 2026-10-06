@@ -9,6 +9,7 @@
  *     node scripts/test/supabase-api.test.mjs
  *
  * Realtime, Storage and Auth (GoTrue) are not covered here — see README.
+ * (Notifications are written by triggers; their Realtime delivery is untested locally.)
  */
 import { createHmac, randomUUID } from "node:crypto";
 import http from "node:http";
@@ -65,7 +66,7 @@ const rejects = async (label, fn, code) => {
 };
 
 const tag = randomUUID().slice(0, 8);
-const ids = { ama: randomUUID(), leo: randomUUID(), zoe: randomUUID() };
+const ids = { ama: randomUUID(), leo: randomUUID(), zoe: randomUUID(), nina: randomUUID(), omar: randomUUID() };
 try {
   for (const [name, id] of Object.entries(ids)) {
     await db.query("insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)", [id, `${name}-${tag}@example.com`, { display_name: `${name} ${tag}` }]);
@@ -226,6 +227,72 @@ try {
   ok("multi-image post on Profile Media with all media", inMedia?.media.length === 3);
   await rejects("5 images rejected (schema allows 4)", () => q.createPost(ama, "too many", { media: [1, 2, 3, 4, 5].map((n) => m(10 + n, 10, 10)) }), "unknown");
   await rejects("image-only post needs no text", async () => { await q.createPost(ama, "", { media: [m(20, 800, 800)] }); throw Object.assign(new Error("ok"), { code: "accepted" }); }, "accepted");
+
+  // notifications (Phase 6) — two fresh people so their inboxes start empty
+  const nina = asUser(ids.nina), omar = asUser(ids.omar);
+  const ninaHandle = (await q.fetchProfile(nina, ids.nina)).username;
+  const inbox = async (who, limit = 50) => (await q.fetchNotifications(who, limit)).items;
+  ok("new inbox is empty", (await inbox(nina)).length === 0 && (await q.fetchUnreadCount(nina)) === 0);
+
+  await q.follow(omar, ids.omar, ids.nina);
+  let n = await inbox(nina);
+  ok("follow → notification with actor", n.length === 1 && n[0].kind === "follow" && n[0].actor.id === ids.omar && n[0].post === null && !n[0].read);
+  ok("unread count", (await q.fetchUnreadCount(nina)) === 1);
+  ok("the actor gets nothing", (await inbox(omar)).length === 0);
+
+  const np = await q.createPost(nina, `nina's photo ${tag}`, { media: [{ kind: "image", storage_path: `${ids.nina}/n.jpg`, mime_type: "image/jpeg", width: 800, height: 600 }] });
+  await q.setLike(omar, np.id, true);
+  await q.setLike(omar, np.id, false);
+  ok("unliked → like notification hidden", !(await inbox(nina)).some((x) => x.kind === "like"));
+  await q.setLike(omar, np.id, true);
+  n = (await inbox(nina)).filter((x) => x.kind === "like");
+  ok("like → unlike → like = one like notification", n.length === 1);
+  ok("like carries a preview of your post with media", n[0].post?.id === np.id && n[0].post.text === `nina's photo ${tag}` && n[0].post.media.length === 1 && /n\.jpg$/.test(n[0].post.media[0].url));
+  await q.setLike(nina, np.id, true);
+  ok("liking your own post: no self-notification", (await inbox(nina)).filter((x) => x.kind === "like").length === 1);
+
+  const or1 = await q.createPost(omar, "nice one", { parentId: np.id });
+  n = await inbox(nina);
+  ok("reply → 'replied to your post'", n[0].kind === "reply" && n[0].post?.id === or1.id && n[0].post.text === "nice one" && n[0].inReplyToReply === false);
+  const nr = await q.createPost(nina, "thanks!", { parentId: or1.id });
+  ok("reply to your reply notifies its author", (await inbox(omar)).some((x) => x.kind === "reply" && x.post?.id === nr.id));
+  const or2 = await q.createPost(omar, `you're welcome @${ninaHandle}`, { parentId: nr.id });
+  n = await inbox(nina);
+  ok("→ 'replied to your reply' (mention folded in)", n[0].kind === "reply" && n[0].post?.id === or2.id && n[0].inReplyToReply === true && !n.some((x) => x.kind === "mention"));
+  const om = await q.createPost(omar, `Shout out to @${ninaHandle.toUpperCase()} (not nina@${ninaHandle}.com)`);
+  n = await inbox(nina);
+  ok("mention → notification", n[0].kind === "mention" && n[0].post?.id === om.id && n.filter((x) => x.kind === "mention").length === 1);
+  const fetched = await q.fetchPost(nina, or2.id, ids.nina);
+  ok("opened reply knows what it replies to", fetched?.replyTo?.postId === nr.id);
+
+  // pagination + order
+  const page = await q.fetchNotifications(nina, 2);
+  ok("pagination: limit + hasMore, newest first", page.items.length === 2 && page.hasMore && page.items[0].createdAt >= page.items[1].createdAt);
+
+  // privacy
+  const { data: peek } = await omar.from("notifications").select("id").eq("recipient_id", ids.nina);
+  ok("someone else's notifications are invisible", Array.isArray(peek) && peek.length === 0);
+  const { error: anonErr } = await anon.from("notifications").select("id").limit(1);
+  ok("anon cannot read notifications", anonErr?.code === "42501", anonErr?.code);
+  const { error: forgeErr } = await omar.from("notifications").insert({ recipient_id: ids.nina, actor_id: ids.leo, kind: "follow" });
+  ok("notifications cannot be forged", forgeErr?.code === "42501", forgeErr?.code);
+  const { error: delErr } = await nina.from("notifications").delete().eq("recipient_id", ids.nina);
+  ok("notifications cannot be deleted by clients", delErr?.code === "42501", delErr?.code);
+
+  // read state
+  const before = await q.fetchUnreadCount(nina);
+  const firstId = (await inbox(nina))[0].id;
+  await q.markNotificationsRead(omar, [firstId]);
+  ok("marking someone else's notification read does nothing", (await q.fetchUnreadCount(nina)) === before);
+  await q.markNotificationsRead(nina, [firstId]);
+  ok("mark one read", (await q.fetchUnreadCount(nina)) === before - 1 && (await inbox(nina))[0].read === true);
+  await q.markNotificationsRead(nina);
+  ok("mark all read", (await q.fetchUnreadCount(nina)) === 0 && (await inbox(nina)).every((x) => x.read));
+
+  await omar.rpc("delete_post", { p_post_id: or2.id });
+  ok("deleted post's notification disappears", !(await inbox(nina)).some((x) => x.post?.id === or2.id));
+  await q.unfollow(omar, ids.omar, ids.nina);
+  ok("undone follow disappears", !(await inbox(nina)).some((x) => x.kind === "follow"));
 
   // private surfaces
   const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });

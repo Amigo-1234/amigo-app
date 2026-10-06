@@ -5,7 +5,7 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { ProfileError, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
+import { ProfileError, type AppNotification, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
@@ -95,6 +95,7 @@ export async function fetchPost(db: Db, postId: string, viewerId: string | null)
   const { data, error } = await db.from("posts").select(POST_SELECT).eq("id", postId).maybeSingle().returns<PostRow | null>();
   if (error) throw dataError(error);
   if (!data) return null;
+  await attachParents(db, [data]);
   return toPost(db, data, await likedSet(db, viewerId, [data.id]));
 }
 
@@ -352,4 +353,71 @@ export async function fetchExplore(db: Db, viewerId: string): Promise<ExploreFee
     conversations: map(conversations.data!),
     media: map(media.data!),
   };
+}
+
+// ------------------------------------------------------------ notifications
+//
+// Rows are written only by database triggers. RLS returns the viewer's own
+// notifications, and only those still true (see 20261006150000_notifications.sql),
+// so no extra filtering is needed here.
+
+type NotificationRow = {
+  id: string;
+  kind: AppNotification["kind"];
+  created_at: string;
+  read_at: string | null;
+  actor: ProfileRow | null;
+  post: { id: string; body: string; parent_id: string | null; media: MediaRow[] } | null;
+};
+
+const NOTIFICATION_SELECT =
+  "id, kind, created_at, read_at, " +
+  "actor:profiles!notifications_actor_id_fkey(id, username, display_name, avatar_url), " +
+  "post:posts!notifications_post_id_fkey(id, body, parent_id, media:post_media(kind, bucket, storage_path, width, height, alt, position))";
+
+export async function fetchNotifications(db: Db, limit: number): Promise<NotificationPage> {
+  const { data, error } = await db
+    .from("notifications")
+    .select(NOTIFICATION_SELECT)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(limit + 1)
+    .returns<NotificationRow[]>();
+  if (error) throw dataError(error);
+  const rows = data.slice(0, limit);
+
+  // "Replied to your reply" vs "to your post": is the replied-to post itself a reply?
+  const parentIds = [...new Set(rows.flatMap((r) => (r.kind === "reply" && r.post?.parent_id ? [r.post.parent_id] : [])))];
+  const parentIsReply = new Set<string>();
+  if (parentIds.length) {
+    const parents = await db.from("posts").select("id, parent_id").in("id", parentIds);
+    if (parents.error) throw dataError(parents.error);
+    for (const p of parents.data) if (p.parent_id) parentIsReply.add(p.id);
+  }
+
+  return {
+    items: rows.map((r) => ({
+      id: r.id,
+      kind: r.kind,
+      actor: toAuthor(r.actor),
+      createdAt: new Date(r.created_at),
+      read: r.read_at !== null,
+      post: r.post ? { id: r.post.id, text: r.post.body, media: toMedia(db, r.post.media ?? []) } : null,
+      inReplyToReply: r.kind === "reply" ? parentIsReply.has(r.post?.parent_id ?? "") : undefined,
+    })),
+    hasMore: data.length > limit,
+  };
+}
+
+export async function fetchUnreadCount(db: Db): Promise<number> {
+  const { data, error } = await db.rpc("unread_notification_count");
+  if (error) throw dataError(error);
+  return data;
+}
+
+/** ids: the notifications to mark read; omit for all of them. */
+export async function markNotificationsRead(db: Db, ids?: string[]) {
+  if (ids && ids.length === 0) return;
+  const { error } = await db.rpc("mark_notifications_read", ids ? { p_ids: ids } : {});
+  if (error) throw dataError(error);
 }

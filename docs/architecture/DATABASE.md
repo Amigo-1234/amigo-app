@@ -53,8 +53,12 @@ Reads go straight to tables (RLS) or to `SECURITY INVOKER` functions:
 | `set_post_like(post_id, liked)` | Idempotent like toggle. |
 | `delete_post(post_id)` | Author-only soft delete. |
 | `suggested_profiles(limit)` | People you don't follow yet (signed-in only). |
+| `unread_notification_count()` | Your unread notifications (a number). |
+| `mark_notifications_read(ids)` | Mark some (or, with null, all) of your notifications read. |
 
 Search and Explore are plain RLS-protected table reads, documented in [SEARCH.md](SEARCH.md).
+Notifications are written by triggers and read from the `notifications` table; see
+[NOTIFICATIONS.md](NOTIFICATIONS.md).
 
 ## Row Level Security review
 
@@ -68,6 +72,7 @@ revoked first and added back per column.
 | post_media | read if the post is visible | insert only on **own** posts, path in **own** folder |
 | post_likes | — | read likes on visible posts; insert/delete **own** only |
 | follows | — | read graph; insert/delete as **self** only |
+| notifications | — | read **own**, still-true rows; update `read_at` on own rows; no insert/delete (triggers only) |
 | legacy.* | — | — (no schema usage; not exposed by the API) |
 | storage.objects | public bucket URLs only, no listing | write/replace/delete in **own** `<uid>/` folder; list own folder only |
 
@@ -83,14 +88,15 @@ Function execute rights are explicit: PostgreSQL's built-in `PUBLIC` execute def
 (migration `20261006140000`), and the test suite fails if any `public` function is executable by
 `PUBLIC`. **Every migration that adds a function must `revoke … from public` and grant explicitly.**
 
-Tested by `supabase/tests/database.test.sql` (68 checks) and
-`scripts/test/supabase-api.test.mjs` (66 checks through PostgREST).
+Tested by `supabase/tests/database.test.sql` (94 checks) and
+`scripts/test/supabase-api.test.mjs` (95 checks through PostgREST).
 
 ## Realtime
 
-Only `posts` is in the `supabase_realtime` publication. Likes, replies and
+`posts` and `notifications` are in the `supabase_realtime` publication. Likes, replies and
 reposts surface as counter updates on the post row, so clients never stream
-the likes table. Realtime respects the same RLS select policies.
+the likes table; each person subscribes only to their own notifications. Realtime respects
+the same RLS select policies.
 
 ## Storage
 
@@ -116,18 +122,6 @@ create table public.bookmarks (
   created_at timestamptz default now(),
   primary key (user_id, post_id));
 -- RLS: owner-only select/insert/delete. Backfill from legacy.saved_post_archive.
-
-create type notification_kind as enum ('like','reply','follow','repost','mention');
-create table public.notifications (
-  id bigint generated always as identity primary key,
-  recipient_id uuid references public.profiles on delete cascade,
-  actor_id uuid references public.profiles on delete cascade,
-  kind notification_kind not null,
-  post_id uuid references public.posts on delete cascade,
-  created_at timestamptz default now(),
-  read_at timestamptz);
--- Written by triggers on post_likes/posts/follows (SECURITY DEFINER), RLS: recipient reads/updates read_at only.
--- Index (recipient_id, created_at desc). Realtime: yes (filtered by recipient_id).
 
 create table public.conversations (id uuid primary key default gen_random_uuid(),
   created_at timestamptz default now(), last_message_at timestamptz);

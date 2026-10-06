@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { Composer, type ComposerHandle } from "../features/composer/Composer";
 import { PublishStatusBar } from "./PublishStatusBar";
 import { useComposer } from "../state/composer";
+import { badgeText, notificationsLabel, useUnread } from "../state/notifications";
 import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
 import { Wordmark } from "../ui/Brand";
@@ -19,6 +20,8 @@ export function AppShell() {
   const composer = useComposer();
   const composerRef = useRef<ComposerHandle>(null);
   const { pathname } = useLocation();
+  const { unread } = useUnread();
+  const badge = badgeText(unread);
 
   useEffect(() => window.scrollTo(0, 0), [pathname]);
 
@@ -58,12 +61,22 @@ export function AppShell() {
 
           <nav className="sidebar__nav">
             {nav.map(({ to, label, icon: Icon }) => (
-              <NavLink key={to} to={to} end={to === "/"} className={(a) => `side-link ${navClass(to)(a)}`} title={label}>
+              <NavLink
+                key={to}
+                to={to}
+                end={to === "/"}
+                className={(a) => `side-link ${navClass(to)(a)}`}
+                title={label}
+                aria-label={to === "/notifications" ? notificationsLabel(unread) : undefined}
+              >
                 {({ isActive: routeActive }) => {
                   const isActive = routeActive || (to === meHref && onMe);
                   return (
                   <>
-                    <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
+                    <span className="nav-icon">
+                      <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
+                      {to === "/notifications" && badge && <span className="nav-badge" aria-hidden="true">{badge}</span>}
+                    </span>
                     <span className="side-link__label">{label}</span>
                   </>
                   );

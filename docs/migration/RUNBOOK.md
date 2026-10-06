@@ -44,7 +44,7 @@ The migration needs **HTTPS only**. It talks to Supabase through the Data API (s
 
 ## 1. Review RLS
 
-- Run `supabase/tests/database.test.sql` (63 checks). It must end with `ALL DATABASE TESTS PASSED`.
+- Run `supabase/tests/database.test.sql` (94 checks). It must end with `ALL DATABASE TESTS PASSED`.
   It rolls back, so it's safe on any database: use `psql` where a connection is possible,
   otherwise the SQL editor or the MCP SQL tool.
 - Dashboard → Advisors → Security: no warnings expected.
@@ -72,6 +72,8 @@ npm run migrate:run                # second run must create nothing
 - Point a local build at the dry-run project (`.env.local`, `VITE_DATA_SOURCE=supabase`).
 - Sign in **with an old Firebase password**. It should work on the first try (legacy-sign-in).
 - Post with a photo, like, reply, follow, sign out and in, and reset a password.
+- With a second account: follow, like, reply and @mention the first one, and check its
+  notifications arrive **live** (Realtime can't be tested on the local stack).
 
 ## 5. Vercel preview
 

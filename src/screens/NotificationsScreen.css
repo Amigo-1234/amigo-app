@@ -1,0 +1,131 @@
+.notifications {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notification {
+  border-bottom: 1px solid var(--border);
+}
+
+.notification__link {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-3);
+  color: var(--text);
+  text-decoration: none;
+  transition: background-color var(--dur-fast) ease;
+}
+
+a.notification__link:hover {
+  background: var(--surface-hover);
+}
+
+a.notification__link:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--focus-ring);
+}
+
+/* Unread: tinted row + dot + bolder text, plus "Unread" for screen readers — never color alone. */
+.notification.is-unread .notification__link {
+  background: color-mix(in srgb, var(--accent-soft) 55%, transparent);
+}
+
+.notification.is-unread a.notification__link:hover {
+  background: var(--accent-soft);
+}
+
+.notification__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  padding-top: 4px;
+  color: var(--text-2);
+}
+
+.notification--like .notification__icon {
+  color: var(--coral-500);
+}
+
+.notification--follow .notification__icon {
+  color: var(--accent-text);
+}
+
+.notification__body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.notification__avatars {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.notification__text {
+  font-size: var(--text-md);
+  line-height: 1.4;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.notification__text strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.notification.is-unread .notification__text {
+  color: var(--text);
+}
+
+.notification__time {
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.notification__preview {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-md);
+  line-height: 1.45;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Your own post (likes): quieter, so the other person's words stand out on replies/mentions. */
+.notification__preview.is-own {
+  color: var(--text-3);
+  -webkit-line-clamp: 2;
+}
+
+.notification__thumb {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--surface-2);
+}
+
+.notification__unread {
+  flex: none;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 12px;
+}
+
+.notification__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+}

@@ -214,6 +214,95 @@ select pg_temp.check('soft-deleted reply hidden', pg_temp.q(:A, format('select c
 select pg_temp.check('soft delete decrements parent reply_count', (select reply_count = 0 from public.posts where id = (select id from t where k = 'b_reply')));
 select pg_temp.must_fail('cannot reply to a deleted post', :A, format($$select public.create_post('late', %L)$$, (select id from t where k = 'b_reply2')), '23503');
 
+-- ---------------------------------------------------------- notifications
+-- So far: B replied to A's a1 and liked it; C liked then unliked it; C follows A.
+
+select pg_temp.check('reply, like and follow notify the recipient',
+  pg_temp.q(:A, $$select string_agg(kind::text || ':' || right(actor_id::text, 1), ',' order by kind, actor_id) from public.notifications$$)
+    = 'follow:c,like:b,reply:b');
+select pg_temp.check('undone like is hidden from the recipient',
+  (select count(*) = 1 from public.notifications where recipient_id = :A and actor_id = :C and kind = 'like')
+  and pg_temp.q(:A, $$select count(*) from public.notifications where kind = 'like' and actor_id = '00000000-0000-0000-0000-00000000000c'$$)::int = 0);
+select pg_temp.check('unread count counts only live notifications', pg_temp.q(:A, 'select public.unread_notification_count()')::int = 3);
+select pg_temp.check('replying to yourself notifies nobody', (select count(*) = 0 from public.notifications where recipient_id = :B));
+
+select pg_temp.act_as(:C);
+select public.set_post_like((select id from t where k = 'a1'), true);
+select pg_temp.act_as_admin();
+select pg_temp.check('like → unlike → like keeps one notification',
+  (select count(*) = 1 from public.notifications where recipient_id = :A and actor_id = :C and kind = 'like')
+  and pg_temp.q(:A, 'select public.unread_notification_count()')::int = 4);
+
+select pg_temp.act_as(:C);
+delete from public.follows where followee_id = :A;
+select pg_temp.act_as_admin();
+select pg_temp.check('unfollow hides the follow notification', pg_temp.q(:A, $$select count(*) from public.notifications where kind = 'follow'$$)::int = 0);
+select pg_temp.act_as(:C);
+insert into public.follows (followee_id) values (:A);
+select pg_temp.act_as_admin();
+select pg_temp.check('follow → unfollow → follow keeps one notification',
+  (select count(*) = 1 from public.notifications where recipient_id = :A and kind = 'follow')
+  and pg_temp.q(:A, $$select count(*) from public.notifications where kind = 'follow'$$)::int = 1);
+
+select pg_temp.act_as(:C);
+insert into t select 'c_reply', (public.create_post('Nice reply @leo_park', (select id from t where k = 'b_reply'))).id;
+insert into t select 'c_mention', (public.create_post('hey @Leo_Park and @ama_mensah! mail x@zoe_laurent.com or @nobody_here, @ama_mensah again')).id;
+select pg_temp.act_as_admin();
+select pg_temp.check('reply to a reply notifies the reply''s author',
+  (select count(*) = 1 from public.notifications where recipient_id = :B and kind = 'reply' and post_id = (select id from t where k = 'c_reply')));
+select pg_temp.check('reply to a reply does not notify the thread root',
+  (select count(*) = 0 from public.notifications where recipient_id = :A and post_id = (select id from t where k = 'c_reply')));
+select pg_temp.check('mention inside a reply to you is not a second notification',
+  (select count(*) = 0 from public.notifications where recipient_id = :B and kind = 'mention' and post_id = (select id from t where k = 'c_reply')));
+select pg_temp.check('mentions are case-insensitive, once per person',
+  (select count(*) = 2 from public.notifications where kind = 'mention' and post_id = (select id from t where k = 'c_mention'))
+  and (select count(*) = 1 from public.notifications where recipient_id = :A and kind = 'mention'));
+select pg_temp.check('email addresses and unknown names are not mentions',
+  (select count(*) = 0 from public.notifications where recipient_id = :C));
+
+select pg_temp.act_as(:A);
+insert into t select 'a_private2', (public.create_post('Just us: @leo_park @zoe_laurent @ama_mensah', null, '[]', 'followers')).id;
+select pg_temp.act_as_admin();
+select pg_temp.check('followers-only mention notifies followers only',
+  (select string_agg(right(recipient_id::text, 1), ',') = 'c' from public.notifications where post_id = (select id from t where k = 'a_private2')));
+
+select pg_temp.act_as_admin();
+insert into public.follows (follower_id, followee_id) values (:D, :A);
+select pg_temp.check('writes without a signed-in actor (legacy import) notify nobody',
+  (select count(*) = 0 from public.notifications where actor_id = :D));
+
+-- privacy
+select pg_temp.check('people cannot read someone else''s notifications',
+  pg_temp.q(:B, $$select count(*) from public.notifications where recipient_id <> '00000000-0000-0000-0000-00000000000b'$$)::int = 0
+  and pg_temp.q(:B, 'select count(*) from public.notifications')::int = pg_temp.q(:B, 'select public.unread_notification_count()')::int);
+select pg_temp.must_fail('anon cannot read notifications', null, 'select count(*) from public.notifications', '42501');
+select pg_temp.must_fail('anon cannot read the unread count', null, 'select public.unread_notification_count()', '42501');
+select pg_temp.must_fail('notifications cannot be forged', :B,
+  $$insert into public.notifications (recipient_id, actor_id, kind) values ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000c', 'follow')$$, '42501');
+select pg_temp.must_fail('notifications cannot be deleted by clients', :A, 'delete from public.notifications', '42501');
+select pg_temp.must_fail('only read_at is writable', :A, $$update public.notifications set kind = 'like'$$, '42501');
+select pg_temp.must_fail('notify() is not callable by users', :B,
+  $$select public.notify('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000c', 'follow', null)$$, '42501');
+select pg_temp.check('marking someone else''s notifications read changes nothing',
+  pg_temp.q(:B, format('select public.mark_notifications_read(array[%L]::uuid[])',
+    (select id from public.notifications where recipient_id = :A and kind = 'follow')))::int = 0
+  and pg_temp.q(:B, $$with u as (update public.notifications set read_at = now() where recipient_id = '00000000-0000-0000-0000-00000000000a' returning 1) select count(*) from u$$)::int = 0
+  and (select count(*) = 0 from public.notifications where recipient_id = :A and read_at is not null));
+
+-- read state
+select pg_temp.check('mark one read',
+  pg_temp.q(:A, format('select public.mark_notifications_read(array[%L]::uuid[])',
+    (select id from public.notifications where recipient_id = :A and kind = 'follow')))::int = 1
+  and pg_temp.q(:A, 'select public.unread_notification_count()')::int = 4);
+select pg_temp.check('mark all read', pg_temp.q(:A, 'select public.mark_notifications_read()')::int = 4
+  and pg_temp.q(:A, 'select public.unread_notification_count()')::int = 0);
+
+select pg_temp.act_as(:C);
+select public.delete_post((select id from t where k = 'c_reply'));
+select pg_temp.act_as_admin();
+select pg_temp.check('deleting a post hides its notifications',
+  pg_temp.q(:B, format('select count(*) from public.notifications where post_id = %L', (select id from t where k = 'c_reply')))::int = 0);
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');
@@ -229,6 +318,7 @@ select pg_temp.check('no public-schema function is executable by PUBLIC',
 select pg_temp.must_fail('anon cannot call create_post', null, $$select public.create_post('x')$$, '42501');
 select pg_temp.must_fail('anon cannot call set_post_like', null, $$select public.set_post_like(gen_random_uuid(), true)$$, '42501');
 select pg_temp.must_fail('anon cannot call delete_post', null, $$select public.delete_post(gen_random_uuid())$$, '42501');
+select pg_temp.must_fail('trigger functions not callable by users', :A, $$select public.mentioned_usernames('@x')$$, '42501');
 select pg_temp.must_fail('anon cannot call suggested_profiles', null, $$select public.suggested_profiles(3)$$, '42501');
 select pg_temp.must_fail('trigger helpers not callable by users', :A, $$select public.generate_username('x')$$, '42501');
 

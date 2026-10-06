@@ -54,7 +54,12 @@ npm run build                # typecheck (app + scripts) + production build
 
   Search is an optional `DataSource` capability (`discovery`). See
   [docs/architecture/SEARCH.md](docs/architecture/SEARCH.md).
-- Notifications, Messages and Moments are placeholders for later phases.
+- **Notifications** (`/notifications`): follows, likes, replies (to your post or your reply) and
+  @mentions, with grouped likes/follows, read/unread state, "Mark all read" and a live unread
+  badge in the sidebar (and on the Home bell on phones). Created only by the backend; optional
+  `DataSource` capability (`notifications`). See
+  [docs/architecture/NOTIFICATIONS.md](docs/architecture/NOTIFICATIONS.md).
+- Messages and Moments are placeholders for later phases.
 
 ## Backend (Supabase)
 
@@ -64,7 +69,7 @@ npm run build                # typecheck (app + scripts) + production build
 | Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
 | Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
 | Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
-| Tests | `npm run db:test`: 68 database/RLS checks, rolled back after running · `npm run test:api`: 72 checks through PostgREST |
+| Tests | `npm run db:test`: 94 database/RLS checks, rolled back after running · `npm run test:api`: 95 checks through PostgREST |
 
 To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
 [`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied

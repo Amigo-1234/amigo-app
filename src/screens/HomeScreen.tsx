@@ -9,6 +9,7 @@ import { FeedFooter } from "../features/feed/FeedFooter";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
 import { pendingAsPost, usePublishing } from "../state/publishing";
+import { badgeText, notificationsEnabled, notificationsLabel, useUnread } from "../state/notifications";
 import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
@@ -27,6 +28,8 @@ export default function HomeScreen() {
   const composer = useComposer();
   const viewer = useViewer();
   const publishing = usePublishing();
+  const { unread } = useUnread();
+  const badge = notificationsEnabled ? badgeText(unread) : null;
   // Optimistic posts, until the real post shows up in the feed.
   const feedIds = new Set(feed.posts.map((p) => p.id));
   const pending = publishing.pending.filter((p) => !(p.status === "sent" && p.postId && feedIds.has(p.postId)));
@@ -42,8 +45,11 @@ export default function HomeScreen() {
         title="Home"
         brandOnMobile
         actions={
-          <Link to="/notifications" className="icon-btn icon-btn--md mobile-only" aria-label="Notifications" title="Notifications">
-            <Bell size={22} aria-hidden="true" />
+          <Link to="/notifications" className="icon-btn icon-btn--md mobile-only" aria-label={notificationsLabel(unread)} title="Notifications">
+            <span className="nav-icon">
+              <Bell size={22} aria-hidden="true" />
+              {badge && <span className="nav-badge" aria-hidden="true">{badge}</span>}
+            </span>
           </Link>
         }
       >

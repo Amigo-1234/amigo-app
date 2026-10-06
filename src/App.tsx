@@ -6,6 +6,7 @@ import HomeScreen from "./screens/HomeScreen";
 import { ComingSoonScreen } from "./screens/ComingSoonScreen";
 import { AppShell } from "./shell/AppShell";
 import { ComposerProvider } from "./state/composer";
+import { NotificationsProvider, notificationsEnabled } from "./state/notifications";
 import { PublishingProvider } from "./state/publishing";
 import { SessionProvider, useSession, useViewer } from "./state/session";
 import { profilesEnabled } from "./features/profile/links";
@@ -19,6 +20,7 @@ const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
 const FollowListScreen = lazy(() => import("./screens/FollowListScreen"));
 const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
 const ExploreScreen = lazy(() => import("./screens/ExploreScreen"));
+const NotificationsScreen = lazy(() => import("./screens/NotificationsScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
@@ -52,9 +54,11 @@ function Root() {
   return (
     <ComposerProvider>
       <PublishingProvider>
-        <MediaViewerProvider>
-          <AppShell />
-        </MediaViewerProvider>
+        <NotificationsProvider>
+          <MediaViewerProvider>
+            <AppShell />
+          </MediaViewerProvider>
+        </NotificationsProvider>
       </PublishingProvider>
     </ComposerProvider>
   );
@@ -91,7 +95,11 @@ const router = createBrowserRouter([
       },
       {
         path: "notifications",
-        element: <ComingSoonScreen title="Notifications" icon={Bell} body="Likes, replies and new followers will show up here." />,
+        element: notificationsEnabled ? (
+          <NotificationsScreen />
+        ) : (
+          <ComingSoonScreen title="Notifications" icon={Bell} body="Likes, replies and new followers will show up here." />
+        ),
       },
       {
         path: "messages",

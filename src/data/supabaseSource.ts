@@ -7,7 +7,9 @@
  *
  * Realtime: one channel per open feed/post, listening to `posts` changes
  * only. Likes and replies arrive as counter updates on the post row, so we
- * never subscribe to the likes firehose.
+ * never subscribe to the likes firehose. Notifications listen to the
+ * viewer's own `notifications` rows (Realtime applies RLS, so nobody receives
+ * anyone else's).
  */
 import type { AuthError as SupabaseAuthError, RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase/client";
@@ -281,6 +283,38 @@ export const supabaseSource: DataSource = {
     explore: (viewerId) => q.fetchExplore(supabase, viewerId),
     searchPeople: (query, viewerId, limit) => q.searchPeople(supabase, query, viewerId, limit),
     searchPosts: (query, viewerId, opts) => q.searchPosts(supabase, query, viewerId, opts),
+  },
+
+  notifications: {
+    subscribeNotifications(viewerId, limit, sub) {
+      return liveQuery(
+        "notifications",
+        () => q.fetchNotifications(supabase, limit),
+        sub,
+        (ch, refresh) =>
+          ch.on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${viewerId}` }, refresh),
+      );
+    },
+
+    subscribeUnreadCount(viewerId, sub) {
+      return liveQuery(
+        "notifications:unread",
+        () => q.fetchUnreadCount(supabase),
+        sub,
+        (ch, refresh) =>
+          ch.on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${viewerId}` }, refresh),
+      );
+    },
+
+    async markRead(_viewerId, ids) {
+      await q.markNotificationsRead(supabase, ids);
+      invalidate();
+    },
+
+    async markAllRead() {
+      await q.markNotificationsRead(supabase);
+      invalidate();
+    },
   },
 
   profiles: {

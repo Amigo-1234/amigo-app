@@ -211,6 +211,59 @@ export interface DiscoveryApi {
   ): Promise<PostPage>;
 }
 
+// ------------------------------------------------------------ notifications
+
+/**
+ * What happened. Only kinds the product actually has: reposts, messages,
+ * Moments and system notices get their own kinds when those features exist.
+ */
+export type NotificationKind = "follow" | "like" | "reply" | "mention";
+
+/** The post a notification is about, trimmed to what a preview needs. */
+export interface NotificationPost {
+  id: string;
+  text: string;
+  media: MediaItem[];
+}
+
+/**
+ * One event. Backends store and return individual events; grouping
+ * ("Mira and 4 others liked your post") is a presentation concern
+ * (src/features/notifications/group.ts), so no event is ever lost.
+ */
+export interface AppNotification {
+  id: string;
+  kind: NotificationKind;
+  actor: Author;
+  createdAt: Date;
+  read: boolean;
+  /** like: your post. reply: the new reply. mention: the post that mentions you. follow: null. */
+  post: NotificationPost | null;
+  /** reply only: the reply answers one of your replies rather than a top-level post. */
+  inReplyToReply?: boolean;
+}
+
+export interface NotificationPage {
+  items: AppNotification[];
+  hasMore: boolean;
+}
+
+/**
+ * Notifications. Optional capability: demo and Supabase provide it, the legacy
+ * Firebase source does not (the Notifications tab stays a placeholder there).
+ * Notifications are created by the backend from real actions, never by the
+ * client, and a backend only returns ones that are still true (an undone
+ * like or follow, or a deleted post, drops out).
+ */
+export interface NotificationsApi {
+  /** Newest first. Pushes updates when notifications arrive or change. */
+  subscribeNotifications(viewerId: string, limit: number, sub: Subscription<NotificationPage>): Unsubscribe;
+  /** Live unread count for badges. */
+  subscribeUnreadCount(viewerId: string, sub: Subscription<number>): Unsubscribe;
+  markRead(viewerId: string, ids: string[]): Promise<void>;
+  markAllRead(viewerId: string): Promise<void>;
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
@@ -230,6 +283,8 @@ export interface DataSource {
   profiles?: ProfilesApi;
   /** Optional capability — see DiscoveryApi. */
   discovery?: DiscoveryApi;
+  /** Optional capability — see NotificationsApi. */
+  notifications?: NotificationsApi;
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;
