@@ -354,3 +354,36 @@
   background: var(--coral-400);
   color: var(--on-accent);
 }
+
+.post__world {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 2px 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+
+.post__world a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.post__world a:hover {
+  text-decoration: underline;
+}
+
+.post__world-entry {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}

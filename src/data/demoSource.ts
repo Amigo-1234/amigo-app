@@ -5,6 +5,7 @@
  * Preview states with a query param: ?demo=loading | empty | error | slow | signedout | postfail
  */
 import { mentionedHandles } from "../lib/mentions";
+import { createDemoWorlds } from "./demoWorlds";
 import type {
   AppNotification,
   Author,
@@ -71,7 +72,11 @@ interface PostRecord {
   /** Likes from people outside the demo cast, to make counts realistic. */
   baseLikes: number;
   likers: Set<string>;
+  /** When each liker liked it (World scores only count likes made before the World ended). */
+  likedAt?: Map<string, Date>;
   parentId: string | null;
+  worldId?: string | null;
+  entry?: boolean;
 }
 
 const img = (seed: string, w: number, h: number): MediaItem => ({ type: "image", url: `https://picsum.photos/seed/${seed}/${w}/${h}`, width: w, height: h });
@@ -174,7 +179,23 @@ function toPost(r: PostRecord): Post {
     likedByViewer: r.likers.has("me"),
     replyCount: replyCount(r.id),
     replyTo: parent ? { postId: parent.id, handle: people.get(parent.authorId)!.handle } : null,
+    world: r.worldId ? worldChip(r) : null,
   };
+}
+
+function worldChip(r: PostRecord) {
+  const info = demoWorlds.worldInfo(r.worldId);
+  return info ? { ...info, entry: Boolean(r.entry) } : null;
+}
+
+function like(r: PostRecord, userId: string) {
+  r.likers.add(userId);
+  (r.likedAt ??= new Map()).set(userId, new Date());
+}
+
+function unlike(r: PostRecord, userId: string) {
+  r.likers.delete(userId);
+  r.likedAt?.delete(userId);
 }
 
 const newest = (a: PostRecord, b: PostRecord) => b.createdAt.getTime() - a.createdAt.getTime();
@@ -293,6 +314,21 @@ function toNotification(n: NoteRecord): AppNotification {
   notes.forEach((n) => { if (n.createdAt.getTime() < dayAgo) n.readAt = n.createdAt; });
 }
 
+const demoWorlds = createDemoWorlds({
+  records: () => records,
+  addRecord: (r) => { records = [...records, r]; },
+  personIds: () => peopleList.map((p) => p.id),
+  author,
+  summary: (id, viewerId) => summary(people.get(id)!, viewerId),
+  follows: (a, b) => follows.has(edge(a, b)),
+  toPost: (r) => toPost(r as PostRecord),
+  emit,
+  watch,
+  later,
+  img,
+  scenario,
+});
+
 /**
  * Demo/test hook: make someone else act, through the same rules a real
  * backend applies (e.g. __amigoDemo.act("mira", "like", "me2")).
@@ -301,18 +337,20 @@ function toNotification(n: NoteRecord): AppNotification {
   act(actorId: string, action: "like" | "unlike" | "follow" | "unfollow" | "reply" | "post", target: string, text = "") {
     if (!people.has(actorId)) throw new Error(`unknown person ${actorId}`);
     const r = records.find((x) => x.id === target);
-    if (action === "like" && r) { r.likers.add(actorId); onLike(actorId, target); }
-    if (action === "unlike" && r) r.likers.delete(actorId);
+    if (action === "like" && r) { like(r, actorId); onLike(actorId, target); }
+    if (action === "unlike" && r) unlike(r, actorId);
     if (action === "follow" && actorId !== target) { follows.add(edge(actorId, target)); onFollow(actorId, target); }
     if (action === "unfollow") follows.delete(edge(actorId, target));
     if (action === "reply" || action === "post") {
       const created = rec(`x${Date.now()}${noteSeq}`, actorId, text, new Date(), 0, [], action === "reply" ? target : null);
+      if (action === "reply") created.worldId = r?.worldId ?? null;
       records = [created, ...records];
       onPost(created);
     }
     emit();
   },
   notificationCount: (recipientId: string) => notes.filter((n) => n.recipientId === recipientId).length,
+  worlds: demoWorlds.hooks,
 };
 
 // -------------------------------------------------------------------- auth
@@ -371,8 +409,10 @@ export const demoSource: DataSource = {
       }
       // Demo keeps media as in-memory blob URLs for this session only.
       const media: MediaItem[] = input.media.map((m) => ({ type: "image", url: URL.createObjectURL(m.blob), width: m.width, height: m.height, alt: m.alt }));
+      if (input.world) demoWorlds.checkPost(input.world.id, v.id, input.world.entry);
       const id = `p${Date.now()}`;
       const created = rec(id, v.id, input.text.trim(), new Date(), 0, media);
+      if (input.world) Object.assign(created, { worldId: input.world.id, entry: input.world.entry });
       records = [created, ...records];
       onPost(created);
       emit();
@@ -383,9 +423,9 @@ export const demoSource: DataSource = {
     later(() => {
       const r = records.find((x) => x.id === postId);
       if (r && liked) {
-        r.likers.add(viewerId);
+        like(r, viewerId);
         onLike(viewerId, postId);
-      } else r?.likers.delete(viewerId);
+      } else if (r) unlike(r, viewerId);
       emit();
     }, 250),
 
@@ -401,6 +441,7 @@ export const demoSource: DataSource = {
   addReply: (postId, v, text) =>
     later(() => {
       const created = rec(`r${Date.now()}`, v.id, text, new Date(), 0, [], postId);
+      created.worldId = records.find((x) => x.id === postId)?.worldId ?? null;
       records = [...records, created];
       onPost(created);
       emit();
@@ -411,6 +452,10 @@ export const demoSource: DataSource = {
     later(() => peopleList.filter((p) => p.id !== viewerId && !follows.has(edge(viewerId, p.id))).slice(0, max).map((p) => summary(p, viewerId))),
   follow: (viewerId, id) => later(() => { follows.add(edge(viewerId, id)); onFollow(viewerId, id); emit(); }, 300),
   unfollow: (viewerId, id) => later(() => { follows.delete(edge(viewerId, id)); emit(); }, 300),
+
+  get worlds() {
+    return demoWorlds.api;
+  },
 
   discovery: {
     explore: (viewerId) =>

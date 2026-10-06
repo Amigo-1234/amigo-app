@@ -294,12 +294,58 @@ try {
   await q.unfollow(omar, ids.omar, ids.nina);
   ok("undone follow disappears", !(await inbox(nina)).some((x) => x.kind === "follow"));
 
+  // worlds (admin-created via SQL, as in production)
+  const wslug = `api-${tag}`;
+  await db.query(
+    `insert into public.worlds (slug, title, tagline, starts_at, ends_at, competition, entries_close_at, entry_limit, points_reaction, points_reply, prize)
+     values ($1, 'API Night', 'testing', now() - interval '10 minutes', now() + interval '1 hour', true, now() + interval '30 minutes', 1, 1, 2, 'Bragging rights'),
+            ($2, 'Later', '', now() + interval '1 day', now() + interval '1 day 1 hour', false, null, 1, 1, 2, null)`,
+    [wslug, `later-${tag}`],
+  );
+  let ws = await q.fetchWorlds(nina, ids.nina);
+  let w = ws.find((x) => x.slug === wslug);
+  ok("worlds listed with competition settings", w?.competition?.scoring.reply === 2 && w.competition.prize === "Bragging rights" && w.participantCount === 0 && !w.viewerJoined);
+  const { error: wInsErr } = await nina.from("worlds").insert({ slug: `mine-${tag}`, title: "x", starts_at: new Date().toISOString(), ends_at: new Date(Date.now() + 1e6).toISOString() });
+  ok("clients cannot create Worlds", wInsErr?.code === "42501", wInsErr?.code);
+  await q.joinWorld(nina, w.id, ids.nina);
+  await q.joinWorld(omar, w.id, ids.omar);
+  await q.joinWorld(nina, w.id, ids.nina); // idempotent
+  w = await q.fetchWorld(nina, wslug, ids.nina);
+  ok("join: count, joined state, faces", w.participantCount === 2 && w.viewerJoined && w.participantsPreview.some((p) => p.id === ids.omar));
+  await rejects("must join before posting", () => q.createWorldPost(leo, w.id, false, "hi"), "not-joined");
+  const later = ws.find((x) => x.slug === `later-${tag}`);
+  await q.joinWorld(nina, later.id, ids.nina);
+  await rejects("cannot post before a World starts", () => q.createWorldPost(nina, later.id, false, "early"), "not-live");
+  await rejects("no entries before a World starts", () => q.createWorldPost(nina, later.id, true, "x"), "not-live");
+  const entry = await q.createWorldPost(nina, w.id, true, `my entry ${tag}`);
+  await rejects("entry limit", () => q.createWorldPost(nina, w.id, true, "another"), "entry-limit");
+  await q.setLike(omar, entry.id, true);
+  await q.setLike(nina, entry.id, true);
+  await q.createPost(omar, "ha", { parentId: entry.id });
+  const lb = await q.fetchLeaderboard(leo, w.id, ids.leo);
+  ok("leaderboard: 1 like + 1 reply from others = 3 pts", lb.length === 1 && lb[0].person.id === ids.nina && lb[0].points === 3 && lb[0].rank === 1 && lb[0].entries === 1);
+  const entries = await q.fetchWorldPosts(omar, w.id, ids.omar, { entriesOnly: true, limit: 10 });
+  ok("entries list with World chip", entries.posts.length === 1 && entries.posts[0].world?.slug === wslug && entries.posts[0].world.entry === true);
+  const allPosts = await q.fetchWorldPosts(omar, w.id, ids.omar, { entriesOnly: false, limit: 10 });
+  ok("World posts exclude replies", allPosts.posts.length === 1);
+  const { data: anonBoard, error: anonBoardErr } = await anon.rpc("world_leaderboard", { p_world_id: w.id });
+  ok("leaderboard readable signed out", !anonBoardErr && anonBoard.length === 1);
+  await q.sendChat(nina, w.id, "hello room");
+  await rejects("non-members cannot chat", () => q.sendChat(leo, w.id, "hi"), "not-joined");
+  const chat = await q.fetchChat(omar, w.id, 50);
+  ok("chat readable with authors", chat.length === 1 && chat[0].author.id === ids.nina && chat[0].text === "hello room");
+  const here = await q.fetchParticipants(nina, w.id, ids.nina, 10);
+  ok("participants exclude you", here.length === 1 && here[0].id === ids.omar);
+  await q.leaveWorld(omar, w.id, ids.omar);
+  ok("leave updates the count", (await q.fetchWorld(nina, wslug, ids.nina)).participantCount === 1);
+
   // private surfaces
   const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });
   ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);
   const { error: genErr } = await ama.rpc("generate_username", { seed: "x" });
   ok("internal helpers blocked", genErr?.code === "42501", genErr?.code);
 } finally {
+  await db.query("delete from public.worlds where slug like $1", [`%-${tag}`]);
   await db.query("delete from auth.users where id = any($1)", [Object.values(ids)]);
   await db.end();
   await vite.close();

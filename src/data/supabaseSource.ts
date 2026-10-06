@@ -238,7 +238,9 @@ export const supabaseSource: DataSource = {
     let created: { id: string };
     try {
       // One transaction: the post and all its post_media rows, in order.
-      created = await q.createPost(supabase, input.text, { media: uploaded });
+      created = input.world
+        ? await q.createWorldPost(supabase, input.world.id, input.world.entry, input.text, uploaded)
+        : await q.createPost(supabase, input.text, { media: uploaded });
     } catch (e) {
       cleanup(); // don't leave orphaned uploads behind
       throw e;
@@ -283,6 +285,66 @@ export const supabaseSource: DataSource = {
     explore: (viewerId) => q.fetchExplore(supabase, viewerId),
     searchPeople: (query, viewerId, limit) => q.searchPeople(supabase, query, viewerId, limit),
     searchPosts: (query, viewerId, opts) => q.searchPosts(supabase, query, viewerId, opts),
+  },
+
+  worlds: {
+    listWorlds: (viewerId) => q.fetchWorlds(supabase, viewerId),
+
+    subscribeWorld(slug, viewerId, sub) {
+      return liveQuery(
+        `world:${slug}`,
+        () => q.fetchWorld(supabase, slug, viewerId),
+        sub,
+        // participant_count changes arrive as updates on the worlds row.
+        (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "worlds", filter: `slug=eq.${slug}` }, refresh),
+      );
+    },
+
+    async join(worldId, viewerId) {
+      await q.joinWorld(supabase, worldId, viewerId);
+      invalidate();
+    },
+
+    async leave(worldId, viewerId) {
+      await q.leaveWorld(supabase, worldId, viewerId);
+      invalidate();
+    },
+
+    subscribeWorldPosts(worldId, viewerId, opts, sub) {
+      return liveQuery(
+        `world-posts:${worldId}:${opts.entriesOnly}`,
+        () => q.fetchWorldPosts(supabase, worldId, viewerId, opts),
+        sub,
+        (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `world_id=eq.${worldId}` }, refresh),
+      );
+    },
+
+    subscribeLeaderboard(worldId, viewerId, sub) {
+      return liveQuery(
+        `world-board:${worldId}`,
+        () => q.fetchLeaderboard(supabase, worldId, viewerId),
+        sub,
+        // Scores move with likes/replies, which surface as counter updates on the World's posts.
+        (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `world_id=eq.${worldId}` }, refresh),
+      );
+    },
+
+    subscribeChat(worldId, limit, sub) {
+      return liveQuery(
+        `world-chat:${worldId}`,
+        () => q.fetchChat(supabase, worldId, limit),
+        sub,
+        (ch, refresh) =>
+          ch.on("postgres_changes", { event: "INSERT", schema: "public", table: "world_chat_messages", filter: `world_id=eq.${worldId}` }, refresh),
+      );
+    },
+
+    async sendChat(worldId, _viewer, text) {
+      await q.sendChat(supabase, worldId, text);
+      invalidate();
+    },
+
+    listParticipants: (worldId, viewerId, limit) => q.fetchParticipants(supabase, worldId, viewerId, limit),
   },
 
   notifications: {

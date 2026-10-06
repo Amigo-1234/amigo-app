@@ -1,6 +1,6 @@
 import { memo, useState, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { Heart, MessageCircle, Share } from "lucide-react";
+import { Heart, MessageCircle, Share, Orbit } from "lucide-react";
 import type { Post } from "../../data";
 import { Avatar } from "../../ui/Avatar";
 import { formatCount } from "../../lib/format";
@@ -27,7 +27,18 @@ export interface PendingState {
   onDiscard: () => void;
 }
 
-export const PostCard = memo(function PostCard({ post, variant = "feed", pending }: { post: Post; variant?: "feed" | "focus"; pending?: PendingState }) {
+export const PostCard = memo(function PostCard({
+  post,
+  variant = "feed",
+  pending,
+  inWorld = false,
+}: {
+  post: Post;
+  variant?: "feed" | "focus";
+  pending?: PendingState;
+  /** Shown inside its own World: skip the World link, keep the Entry badge. */
+  inWorld?: boolean;
+}) {
   const navigate = useNavigate();
   const openMedia = useMediaViewer();
   const share = useSharePost();
@@ -94,6 +105,18 @@ export const PostCard = memo(function PostCard({ post, variant = "feed", pending
         <p className="post__reply-to">
           Replying to{" "}
           {replyToHref ? <Link to={replyToHref}>@{post.replyTo.handle}</Link> : <span>@{post.replyTo.handle}</span>}
+        </p>
+      )}
+
+      {post.world && (!inWorld || post.world.entry) && (
+        <p className="post__world">
+          {!inWorld && (
+            <Link to={`/worlds/${post.world.slug}`}>
+              <Orbit size={14} aria-hidden="true" />
+              {post.world.title}
+            </Link>
+          )}
+          {post.world.entry && <span className="post__world-entry">Entry</span>}
         </p>
       )}
 

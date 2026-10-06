@@ -5,7 +5,7 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { ProfileError, type AppNotification, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
+import { ProfileError, WorldError, type AppNotification, type LeaderboardEntry, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
@@ -19,13 +19,15 @@ export type PostRow = {
   like_count: number;
   reply_count: number;
   parent_id: string | null;
+  is_entry?: boolean;
+  world?: { slug: string; title: string } | null;
   author: ProfileRow | null;
   media: MediaRow[];
   parent?: { id: string; author: { username: string } | null } | null;
 };
 
 export const POST_SELECT =
-  "id, body, created_at, like_count, reply_count, parent_id, " +
+  "id, body, created_at, like_count, reply_count, parent_id, is_entry, world:worlds!posts_world_id_fkey(slug, title), " +
   "author:profiles!posts_author_id_fkey(id, username, display_name, avatar_url), " +
   "media:post_media(kind, bucket, storage_path, width, height, alt, position)";
 
@@ -60,6 +62,7 @@ export function toPost(db: Db, row: PostRow, liked: Set<string>): Post {
     likeCount: row.like_count,
     likedByViewer: liked.has(row.id),
     replyCount: row.reply_count,
+    world: row.world ? { slug: row.world.slug, title: row.world.title, entry: Boolean(row.is_entry) } : null,
   };
 }
 
@@ -420,4 +423,182 @@ export async function markNotificationsRead(db: Db, ids?: string[]) {
   if (ids && ids.length === 0) return;
   const { error } = await db.rpc("mark_notifications_read", ids ? { p_ids: ids } : {});
   if (error) throw dataError(error);
+}
+
+// ------------------------------------------------------------------- worlds
+//
+// Worlds are admin-created; clients only read them, join/leave, post, chat.
+// Rules (live window, membership, entries) are enforced by the database
+// (20261006160000_worlds.sql); AW00x error codes map to WorldError.
+
+const WORLD_ERRORS: Record<string, WorldErrorCode> = {
+  AW001: "not-live",
+  AW002: "not-joined",
+  AW003: "entries-closed",
+  AW004: "entry-limit",
+  AW005: "not-competition",
+};
+
+export function worldError(e: PostgrestError): Error {
+  const code = WORLD_ERRORS[e.code];
+  return code ? new WorldError(code, e.message) : dataError(e);
+}
+
+const WORLD_COLUMNS =
+  "id, slug, title, tagline, description, cover_url, starts_at, ends_at, competition, entries_close_at, entry_limit, " +
+  "points_reaction, points_reply, points_host_pick, prize, participant_count";
+
+type WorldRow = Pick<
+  Database["public"]["Tables"]["worlds"]["Row"],
+  | "id" | "slug" | "title" | "tagline" | "description" | "cover_url" | "starts_at" | "ends_at" | "competition" | "entries_close_at"
+  | "entry_limit" | "points_reaction" | "points_reply" | "points_host_pick" | "prize" | "participant_count"
+>;
+
+function toWorld(r: WorldRow, joined: boolean, preview: World["participantsPreview"]): World {
+  return {
+    id: r.id,
+    slug: r.slug,
+    title: r.title,
+    tagline: r.tagline,
+    description: r.description,
+    coverUrl: r.cover_url,
+    startsAt: new Date(r.starts_at),
+    endsAt: new Date(r.ends_at),
+    participantCount: r.participant_count,
+    viewerJoined: joined,
+    participantsPreview: preview,
+    competition:
+      r.competition && r.entries_close_at
+        ? {
+            scoring: { reaction: r.points_reaction, reply: r.points_reply, hostPick: r.points_host_pick },
+            entriesCloseAt: new Date(r.entries_close_at),
+            entryLimit: r.entry_limit,
+            prize: r.prize,
+          }
+        : null,
+  };
+}
+
+/** Joined state and a few faces (people the viewer follows first) for each World. */
+async function decorateWorlds(db: Db, rows: WorldRow[], viewerId: string): Promise<World[]> {
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const [mine, members, following] = await Promise.all([
+    db.from("world_members").select("world_id").eq("user_id", viewerId).in("world_id", ids),
+    db
+      .from("world_members")
+      .select("world_id, person:profiles!world_members_user_id_fkey(id, username, display_name, avatar_url)")
+      .in("world_id", ids)
+      .neq("user_id", viewerId)
+      .order("joined_at", { ascending: false })
+      .limit(40 * ids.length)
+      .returns<{ world_id: string; person: ProfileRow | null }[]>(),
+    fetchFollowingIds(db, viewerId),
+  ]);
+  if (mine.error) throw dataError(mine.error);
+  if (members.error) throw dataError(members.error);
+  const joined = new Set(mine.data.map((m) => m.world_id));
+  return rows.map((r) => {
+    const people = members.data.filter((m) => m.world_id === r.id && m.person).map((m) => m.person!);
+    const preview = [...people.filter((p) => following.has(p.id)), ...people.filter((p) => !following.has(p.id))].slice(0, 3).map(toAuthor);
+    return toWorld(r, joined.has(r.id), preview);
+  });
+}
+
+export async function fetchWorlds(db: Db, viewerId: string): Promise<World[]> {
+  const { data, error } = await db.from("worlds").select(WORLD_COLUMNS).order("starts_at", { ascending: true }).limit(200).returns<WorldRow[]>();
+  if (error) throw dataError(error);
+  return decorateWorlds(db, data, viewerId);
+}
+
+export async function fetchWorld(db: Db, slug: string, viewerId: string): Promise<World | null> {
+  const { data, error } = await db.from("worlds").select(WORLD_COLUMNS).eq("slug", slug.toLowerCase()).maybeSingle().returns<WorldRow | null>();
+  if (error) throw dataError(error);
+  return data ? (await decorateWorlds(db, [data], viewerId))[0] : null;
+}
+
+export async function joinWorld(db: Db, worldId: string, viewerId: string) {
+  const { error } = await db.from("world_members").insert({ world_id: worldId, user_id: viewerId });
+  if (error && error.code !== "23505") throw error.code === "42501" ? new WorldError("not-live", error.message) : dataError(error);
+}
+
+export async function leaveWorld(db: Db, worldId: string, viewerId: string) {
+  const { error } = await db.from("world_members").delete().eq("world_id", worldId).eq("user_id", viewerId);
+  if (error) throw dataError(error);
+}
+
+export async function createWorldPost(db: Db, worldId: string, entry: boolean, body: string, media: NewMedia[] = []) {
+  const { data, error } = await db.rpc("create_world_post", {
+    p_world_id: worldId,
+    p_body: body,
+    p_media: media as unknown as Json,
+    p_entry: entry,
+  });
+  if (error) throw worldError(error);
+  return data;
+}
+
+export async function fetchWorldPosts(db: Db, worldId: string, viewerId: string, opts: { entriesOnly: boolean; limit: number }) {
+  let req = db.from("posts").select(POST_SELECT).eq("world_id", worldId).is("parent_id", null);
+  if (opts.entriesOnly) req = req.eq("is_entry", true);
+  const { data, error } = await req.order("created_at", { ascending: false }).limit(opts.limit + 1).returns<PostRow[]>();
+  if (error) throw dataError(error);
+  const rows = data.slice(0, opts.limit);
+  const liked = await likedSet(db, viewerId, rows.map((r) => r.id));
+  return { posts: rows.map((r) => toPost(db, r, liked)), hasMore: data.length > opts.limit };
+}
+
+export async function fetchLeaderboard(db: Db, worldId: string, viewerId: string): Promise<LeaderboardEntry[]> {
+  const { data, error } = await db.rpc("world_leaderboard", { p_world_id: worldId, p_limit: 100 });
+  if (error) throw dataError(error);
+  if (data.length === 0) return [];
+  const ids = data.map((r) => r.user_id);
+  const [profiles, following] = await Promise.all([
+    db.from("profiles").select("id, username, display_name, avatar_url").in("id", ids),
+    viewerFollowsSet(db, viewerId, ids),
+  ]);
+  if (profiles.error) throw dataError(profiles.error);
+  const byId = new Map(profiles.data.map((p) => [p.id, p]));
+  return data.map((r) => ({
+    rank: r.rank,
+    person: toAuthor(byId.get(r.user_id) ?? null),
+    points: r.points,
+    entries: r.entries,
+    viewerFollows: following.has(r.user_id),
+  }));
+}
+
+export async function fetchChat(db: Db, worldId: string, limit: number): Promise<WorldChatMessage[]> {
+  const { data, error } = await db
+    .from("world_chat_messages")
+    .select("id, body, created_at, author:profiles!world_chat_messages_author_id_fkey(id, username, display_name, avatar_url)")
+    .eq("world_id", worldId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+    .returns<{ id: string; body: string; created_at: string; author: ProfileRow | null }[]>();
+  if (error) throw dataError(error);
+  return data.reverse().map((m) => ({ id: m.id, author: toAuthor(m.author), text: m.body, createdAt: new Date(m.created_at) }));
+}
+
+export async function sendChat(db: Db, worldId: string, text: string) {
+  const { error } = await db.from("world_chat_messages").insert({ world_id: worldId, body: text.trim() });
+  // RLS refuses non-members and Worlds that aren't live; the screen explains which.
+  if (error) throw error.code === "42501" ? new WorldError("not-joined", error.message) : dataError(error);
+}
+
+export async function fetchParticipants(db: Db, worldId: string, viewerId: string, limit: number): Promise<PersonSummary[]> {
+  const { data, error } = await db
+    .from("world_members")
+    .select("person:profiles!world_members_user_id_fkey(id, username, display_name, avatar_url, bio)")
+    .eq("world_id", worldId)
+    .neq("user_id", viewerId)
+    .order("joined_at", { ascending: false })
+    .limit(200)
+    .returns<{ person: (ProfileRow & { bio: string }) | null }[]>();
+  if (error) throw dataError(error);
+  const people = data.map((r) => r.person).filter((p): p is ProfileRow & { bio: string } => !!p);
+  const following = await viewerFollowsSet(db, viewerId, people.map((p) => p.id));
+  return [...people.filter((p) => !following.has(p.id)), ...people.filter((p) => following.has(p.id))]
+    .slice(0, limit)
+    .map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id) }));
 }

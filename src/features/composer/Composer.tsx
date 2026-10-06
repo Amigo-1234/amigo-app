@@ -50,8 +50,16 @@ function CharRing({ length }: { length: number }) {
 /**
  * The single composer used both inline on Home and in the global Create sheet.
  */
-export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet"; autoFocus?: boolean; onClose?: () => void }>(
-  function Composer({ variant = "inline", autoFocus = false, onClose }, handle) {
+/** Posting inside a World: no drafts (they belong to Home), its own placeholder and button label. */
+export interface ComposerWorld {
+  id: string;
+  entry: boolean;
+  placeholder: string;
+  submitLabel: string;
+}
+
+export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet"; autoFocus?: boolean; onClose?: () => void; world?: ComposerWorld }>(
+  function Composer({ variant = "inline", autoFocus = false, onClose, world }, handle) {
     const viewer = useViewer();
     const { publish } = usePublishing();
     const inputId = useId();
@@ -63,7 +71,7 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
     const [text, setText] = useState("");
     const [items, setItems] = useState<Item[]>([]);
     const [errors, setErrors] = useState<string[]>([]);
-    const [draft, setDraft] = useState<Draft | null>(() => loadDraft(viewer.id));
+    const [draft, setDraft] = useState<Draft | null>(() => (world ? null : loadDraft(viewer.id)));
     const [confirming, setConfirming] = useState(false);
     const [announce, setAnnounce] = useState("");
     const [dragOver, setDragOver] = useState(false);
@@ -92,10 +100,10 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
 
     // Keep a local text draft while writing (not while a restore offer is pending).
     useEffect(() => {
-      if (draft) return;
+      if (draft || world) return;
       const t = setTimeout(() => saveDraft(viewer.id, text, itemsRef.current.length), 500);
       return () => clearTimeout(t);
-    }, [text, viewer.id, draft]);
+    }, [text, viewer.id, draft, world]);
 
     // Free preview memory for anything still held when the composer goes away.
     useEffect(() => () => itemsRef.current.forEach((i) => i.previewUrl && URL.revokeObjectURL(i.previewUrl)), []);
@@ -192,8 +200,8 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
       if (!canPost) return;
       const media: NewMediaInput[] = ready.map((i) => ({ kind: "image", blob: i.blob!, width: i.width, height: i.height }));
       // Hand the previews to the publishing queue (it frees them when done).
-      publish({ text: trimmed, media }, ready.map((i) => i.previewUrl!));
-      clearDraft(viewer.id);
+      publish({ text: trimmed, media, ...(world ? { world: { id: world.id, entry: world.entry } } : {}) }, ready.map((i) => i.previewUrl!));
+      if (!world) clearDraft(viewer.id);
       setDraft(null);
       setText("");
       setItems([]);
@@ -215,7 +223,7 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
         ref={formRef}
         className={`composer composer--${variant}${dragOver ? " is-dragover" : ""}`}
         onSubmit={submit}
-        aria-label="Create a post"
+        aria-label={world ? (world.entry ? "Submit an entry" : "Post in this World") : "Create a post"}
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) {
             e.preventDefault();
@@ -232,7 +240,7 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
             </Button>
             <span className="composer__bar-title">New post</span>
             <Button type="submit" size="sm" disabled={!canPost}>
-              Post
+              {world?.submitLabel ?? "Post"}
             </Button>
           </div>
         )}
@@ -281,7 +289,7 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
               id={inputId}
               ref={textRef}
               className="composer__input"
-              placeholder={items.length ? "Add a caption…" : "What's happening?"}
+              placeholder={items.length ? "Add a caption…" : world?.placeholder ?? "What's happening?"}
               value={text}
               rows={items.length ? 1 : variant === "sheet" ? 3 : 2}
               onChange={(e) => {
@@ -376,7 +384,7 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
           <CharRing length={text.length} />
           {variant === "inline" && (
             <Button type="submit" size="sm" disabled={!canPost}>
-              Post
+              {world?.submitLabel ?? "Post"}
             </Button>
           )}
         </div>
@@ -394,7 +402,7 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
                 <Button type="button" variant="danger" onClick={discard}>
                   Discard
                 </Button>
-                {trimmed && (
+                {trimmed && !world && (
                   <Button
                     type="button"
                     variant="secondary"

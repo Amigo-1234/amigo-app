@@ -21,6 +21,8 @@ const FollowListScreen = lazy(() => import("./screens/FollowListScreen"));
 const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
 const ExploreScreen = lazy(() => import("./screens/ExploreScreen"));
 const NotificationsScreen = lazy(() => import("./screens/NotificationsScreen"));
+const WorldsScreen = lazy(() => import("./screens/WorldsScreen"));
+const WorldScreen = lazy(() => import("./screens/WorldScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
@@ -93,6 +95,12 @@ const router = createBrowserRouter([
           <ComingSoonScreen title="Explore" icon={Compass} body="Search for people and posts, and see what's happening across Amigo World." />
         ),
       },
+      ...(dataSource.worlds
+        ? [
+            { path: "worlds", element: <WorldsScreen /> },
+            { path: "worlds/:slug", element: <WorldScreen /> },
+          ]
+        : []),
       {
         path: "notifications",
         element: notificationsEnabled ? (

@@ -55,6 +55,8 @@ Reads go straight to tables (RLS) or to `SECURITY INVOKER` functions:
 | `suggested_profiles(limit)` | People you don't follow yet (signed-in only). |
 | `unread_notification_count()` | Your unread notifications (a number). |
 | `mark_notifications_read(ids)` | Mark some (or, with null, all) of your notifications read. |
+| `create_world_post(world, body, media, entry)` | Post or competition entry inside a World. |
+| `world_leaderboard(world, limit)` | Computed World points and ranks (anyone can read). |
 
 Search and Explore are plain RLS-protected table reads, documented in [SEARCH.md](SEARCH.md).
 Notifications are written by triggers and read from the `notifications` table; see
@@ -73,6 +75,9 @@ revoked first and added back per column.
 | post_likes | — | read likes on visible posts; insert/delete **own** only |
 | follows | — | read graph; insert/delete as **self** only |
 | notifications | — | read **own**, still-true rows; update `read_at` on own rows; no insert/delete (triggers only) |
+| worlds, world_host_picks | read | read; no writes (admins only) — see [WORLDS.md](WORLDS.md) |
+| world_members | — | read; join/leave as **self** before the World ends |
+| world_chat_messages | — | read; insert as **self**, members only, while live |
 | legacy.* | — | — (no schema usage; not exposed by the API) |
 | storage.objects | public bucket URLs only, no listing | write/replace/delete in **own** `<uid>/` folder; list own folder only |
 
@@ -88,12 +93,12 @@ Function execute rights are explicit: PostgreSQL's built-in `PUBLIC` execute def
 (migration `20261006140000`), and the test suite fails if any `public` function is executable by
 `PUBLIC`. **Every migration that adds a function must `revoke … from public` and grant explicitly.**
 
-Tested by `supabase/tests/database.test.sql` (94 checks) and
-`scripts/test/supabase-api.test.mjs` (95 checks through PostgREST).
+Tested by `supabase/tests/database.test.sql` (124 checks) and
+`scripts/test/supabase-api.test.mjs` (110 checks through PostgREST).
 
 ## Realtime
 
-`posts` and `notifications` are in the `supabase_realtime` publication. Likes, replies and
+`posts`, `notifications`, `worlds` and `world_chat_messages` are in the `supabase_realtime` publication. Likes, replies and
 reposts surface as counter updates on the post row, so clients never stream
 the likes table; each person subscribes only to their own notifications. Realtime respects
 the same RLS select policies.

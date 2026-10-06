@@ -44,7 +44,7 @@ The migration needs **HTTPS only**. It talks to Supabase through the Data API (s
 
 ## 1. Review RLS
 
-- Run `supabase/tests/database.test.sql` (94 checks). It must end with `ALL DATABASE TESTS PASSED`.
+- Run `supabase/tests/database.test.sql` (124 checks). It must end with `ALL DATABASE TESTS PASSED`.
   It rolls back, so it's safe on any database: use `psql` where a connection is possible,
   otherwise the SQL editor or the MCP SQL tool.
 - Dashboard → Advisors → Security: no warnings expected.

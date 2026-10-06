@@ -1,4 +1,5 @@
-import { Bell, Compass, House, Mail, UserRound, type LucideIcon } from "lucide-react";
+import { Bell, Compass, House, Mail, Orbit, UserRound, type LucideIcon } from "lucide-react";
+import { dataSource } from "../data";
 
 export interface NavItem {
   to: string;
@@ -8,11 +9,15 @@ export interface NavItem {
   mobile: boolean;
 }
 
+const worlds = !!dataSource.worlds;
+
 export const NAV: NavItem[] = [
   { to: "/", label: "Home", icon: House, mobile: true },
   { to: "/explore", label: "Explore", icon: Compass, mobile: true },
+  // Worlds only where the backend supports them; on phones they take Messages' slot (Messages isn't built yet).
+  ...(worlds ? [{ to: "/worlds", label: "Worlds", icon: Orbit, mobile: true }] : []),
   { to: "/notifications", label: "Notifications", icon: Bell, mobile: false },
-  { to: "/messages", label: "Messages", icon: Mail, mobile: true },
+  { to: "/messages", label: "Messages", icon: Mail, mobile: !worlds },
   // Resolved to the viewer's own /u/<handle> in AppShell.
   { to: "/profile", label: "Profile", icon: UserRound, mobile: true },
 ];

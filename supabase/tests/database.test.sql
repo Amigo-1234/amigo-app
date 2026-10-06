@@ -303,6 +303,122 @@ select pg_temp.act_as_admin();
 select pg_temp.check('deleting a post hides its notifications',
   pg_temp.q(:B, format('select count(*) from public.notifications where post_id = %L', (select id from t where k = 'c_reply')))::int = 0);
 
+-- ---------------------------------------------------------------- worlds
+
+select pg_temp.act_as_admin();
+insert into public.worlds (slug, title, starts_at, ends_at, competition, entries_close_at, entry_limit, points_reaction, points_reply, points_host_pick, prize) values
+  ('live-comp', 'Rage Bait Night', now() - interval '1 hour', now() + interval '1 hour', true, now() + interval '30 minutes', 1, 1, 2, 10, 'Bragging rights'),
+  ('closed-entries', 'Debate Night', now() - interval '2 hours', now() + interval '1 hour', true, now() - interval '1 hour', 1, 1, 2, 0, null);
+insert into public.worlds (slug, title, starts_at, ends_at) values
+  ('live-social', 'Game Night', now() - interval '1 hour', now() + interval '1 hour'),
+  ('upcoming', 'Watch Party', now() + interval '1 day', now() + interval '1 day 3 hours'),
+  ('finished', 'Photo Walk', now() - interval '3 days', now() - interval '2 days');
+insert into t select 'w_comp', id from public.worlds where slug = 'live-comp';
+insert into t select 'w_closed', id from public.worlds where slug = 'closed-entries';
+insert into t select 'w_social', id from public.worlds where slug = 'live-social';
+insert into t select 'w_up', id from public.worlds where slug = 'upcoming';
+insert into t select 'w_done', id from public.worlds where slug = 'finished';
+
+select pg_temp.must_fail('Worlds are admin-created only', :A,
+  $$insert into public.worlds (slug, title, starts_at, ends_at) values ('mine', 'Mine', now(), now() + interval '1 hour')$$, '42501');
+select pg_temp.must_fail('clients cannot edit Worlds', :A, $$update public.worlds set title = 'hacked'$$, '42501');
+do $$ begin
+  insert into public.worlds (slug, title, starts_at, ends_at, competition) values ('bad-one', 'Bad', now(), now() + interval '1 hour', true);
+  raise exception 'FAIL competition World without an entries window was accepted';
+exception when check_violation then raise notice 'ok  competition needs an entries window';
+end $$;
+do $$ begin
+  insert into public.worlds (slug, title, starts_at, ends_at) values ('bad-two', 'Bad', now(), now() - interval '1 hour');
+  raise exception 'FAIL World ending before it starts was accepted';
+exception when check_violation then raise notice 'ok  a World must end after it starts';
+end $$;
+select pg_temp.check('anon can read Worlds', pg_temp.q(null, $$select count(*) from public.worlds where slug in ('live-comp','finished')$$)::int = 2);
+
+select pg_temp.act_as(:A);
+insert into public.world_members (world_id) select id from t where k in ('w_comp', 'w_social', 'w_up', 'w_closed');
+select pg_temp.act_as(:B);
+insert into public.world_members (world_id) select id from t where k = 'w_comp';
+select pg_temp.act_as(:C);
+insert into public.world_members (world_id) select id from t where k = 'w_comp';
+select pg_temp.act_as_admin();
+select pg_temp.check('joining counts participants', (select participant_count = 3 from public.worlds where slug = 'live-comp'));
+select pg_temp.must_fail('cannot join a finished World', :A,
+  format($$insert into public.world_members (world_id) values (%L)$$, (select id from t where k = 'w_done')), '42501');
+select pg_temp.must_fail('cannot join on someone else''s behalf', :A,
+  format($$insert into public.world_members (world_id, user_id) values (%L, '00000000-0000-0000-0000-00000000000d')$$, (select id from t where k = 'w_comp')), '42501');
+select pg_temp.act_as(:A);
+delete from public.world_members where world_id = (select id from t where k = 'w_social');
+select pg_temp.act_as_admin();
+select pg_temp.check('leaving updates the count', (select participant_count = 0 from public.worlds where slug = 'live-social'));
+select pg_temp.must_fail('anon cannot see who joined', null, 'select count(*) from public.world_members', '42501');
+
+select pg_temp.must_fail('must join before posting in a World', :D,
+  format($$select public.create_world_post(%L, 'hi')$$, (select id from t where k = 'w_comp')), 'AW002');
+select pg_temp.must_fail('cannot post before a World starts', :A,
+  format($$select public.create_world_post(%L, 'early')$$, (select id from t where k = 'w_up')), 'AW001');
+select pg_temp.act_as_admin();
+insert into public.world_members (world_id, user_id) select id, '00000000-0000-0000-0000-00000000000a' from t where k = 'w_social';
+select pg_temp.must_fail('no entries in a World without competition', :A,
+  format($$select public.create_world_post(%L, 'entry', '[]', true)$$, (select id from t where k = 'w_social')), 'AW005');
+select pg_temp.must_fail('no entries after entries close', :A,
+  format($$select public.create_world_post(%L, 'late entry', '[]', true)$$, (select id from t where k = 'w_closed')), 'AW003');
+
+select pg_temp.act_as(:A);
+insert into t select 'a_entry', (public.create_world_post((select id from t where k = 'w_comp'), 'My entry', '[]', true)).id;
+insert into t select 'a_chat_post', (public.create_world_post((select id from t where k = 'w_comp'), 'just chatting')).id;
+select pg_temp.act_as(:B);
+insert into t select 'b_entry', (public.create_world_post((select id from t where k = 'w_comp'), 'B entry', '[]', true)).id;
+select pg_temp.act_as_admin();
+select pg_temp.must_fail('entry limit enforced', :A,
+  format($$select public.create_world_post(%L, 'second entry', '[]', true)$$, (select id from t where k = 'w_comp')), 'AW004');
+select pg_temp.check('World posts are tagged and public',
+  (select world_id = (select id from t where k = 'w_comp') and is_entry and visibility = 'public' from public.posts where id = (select id from t where k = 'a_entry'))
+  and (select not is_entry from public.posts where id = (select id from t where k = 'a_chat_post')));
+
+-- scoring: likes from others x1, replies from others x2, Amigo pick +10
+select pg_temp.act_as(:A);
+select public.set_post_like((select id from t where k = 'a_entry'), true);  -- own like: 0
+insert into t select 'a_self_reply', (public.create_post('replying to myself', (select id from t where k = 'a_entry'))).id;
+select pg_temp.act_as(:B);
+select public.set_post_like((select id from t where k = 'a_entry'), true);
+select pg_temp.act_as(:C);
+select public.set_post_like((select id from t where k = 'a_entry'), true);
+insert into t select 'c_wreply', (public.create_post('great entry', (select id from t where k = 'a_entry'))).id;
+select pg_temp.act_as_admin();
+insert into public.world_host_picks (world_id, post_id) select (select id from t where k = 'w_comp'), id from t where k = 'b_entry';
+select pg_temp.check('replies inherit the World and are never entries',
+  (select world_id = (select id from t where k = 'w_comp') and not is_entry from public.posts where id = (select id from t where k = 'c_wreply')));
+select pg_temp.check('leaderboard: Amigo pick 10 beats 2 likes + 1 reply (4); own likes/replies don''t count',
+  pg_temp.q(null, format($$select string_agg(right(user_id::text, 1) || ':' || points || '#' || rank, ',' order by rank) from public.world_leaderboard(%L)$$, (select id from t where k = 'w_comp'))) = 'b:10#1,a:4#2');
+select pg_temp.check('a like on an entry still notifies its author',
+  (select count(*) = 1 from public.notifications where recipient_id = :A and actor_id = :C and kind = 'like' and post_id = (select id from t where k = 'a_entry')));
+update public.post_likes set created_at = now() + interval '2 hours' where user_id = :C and post_id = (select id from t where k = 'a_entry');
+select pg_temp.check('likes after the World ends don''t count (leaderboard freezes)',
+  pg_temp.q(:B, format($$select points from public.world_leaderboard(%L) where user_id = '00000000-0000-0000-0000-00000000000a'$$, (select id from t where k = 'w_comp')))::int = 3);
+select pg_temp.check('a World without competition has no leaderboard',
+  pg_temp.q(:A, format('select count(*) from public.world_leaderboard(%L)', (select id from t where k = 'w_social')))::int = 0);
+select pg_temp.must_fail('Amigo picks are admin-only', :A,
+  format($$insert into public.world_host_picks (world_id, post_id) values (%L, %L)$$, (select id from t where k = 'w_comp'), (select id from t where k = 'a_entry')), '42501');
+
+-- chat
+select pg_temp.act_as(:A);
+insert into public.world_chat_messages (world_id, body) select id, 'hello World' from t where k = 'w_comp';
+select pg_temp.act_as_admin();
+select pg_temp.check('members chat while live', pg_temp.q(:B, 'select count(*) from public.world_chat_messages')::int = 1);
+select pg_temp.must_fail('non-members cannot chat', :D,
+  format($$insert into public.world_chat_messages (world_id, body) values (%L, 'hi')$$, (select id from t where k = 'w_comp')), '42501');
+select pg_temp.must_fail('no chat before a World starts', :A,
+  format($$insert into public.world_chat_messages (world_id, body) values (%L, 'hi')$$, (select id from t where k = 'w_up')), '42501');
+select pg_temp.must_fail('cannot chat as someone else', :A,
+  format($$insert into public.world_chat_messages (world_id, author_id, body) values (%L, '00000000-0000-0000-0000-00000000000b', 'forged')$$, (select id from t where k = 'w_comp')), '42501');
+select pg_temp.must_fail('empty chat message rejected', :A,
+  format($$insert into public.world_chat_messages (world_id, body) values (%L, '   ')$$, (select id from t where k = 'w_comp')), '23514');
+select pg_temp.must_fail('anon cannot read chat', null, 'select count(*) from public.world_chat_messages', '42501');
+select pg_temp.must_fail('chat cannot be edited', :A, $$update public.world_chat_messages set body = 'edited'$$, '42501');
+delete from public.worlds where slug = 'live-comp';
+select pg_temp.check('deleting a World keeps its posts',
+  (select world_id is null from public.posts where id = (select id from t where k = 'a_entry')));
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');

@@ -47,6 +47,8 @@ export interface Post {
   replyCount: number;
   /** Set when this post is a reply (shown on profile "Replies" tabs). */
   replyTo?: { postId: string; handle: string } | null;
+  /** Set when the post was made inside a World (shown as a chip linking to it). */
+  world?: { slug: string; title: string; entry: boolean } | null;
 }
 
 export interface Reply {
@@ -80,6 +82,8 @@ export interface NewPostInput {
   text: string;
   /** Ordered; the first item is the cover. */
   media: NewMediaInput[];
+  /** Post inside a World (only on backends with the worlds capability). entry: a competition entry. */
+  world?: { id: string; entry: boolean };
 }
 
 /** Product-wide limits for new posts. */
@@ -264,6 +268,101 @@ export interface NotificationsApi {
   markAllRead(viewerId: string): Promise<void>;
 }
 
+// ------------------------------------------------------------------- worlds
+
+/**
+ * Worlds: scheduled live social events, created by Amigo admins only (there is
+ * no client API to create or edit one). Status is derived from the times on
+ * the client, so a World flips to live or finished without a reload.
+ */
+export type WorldStatus = "upcoming" | "live" | "finished";
+
+/** Points per thing an entry earns while the World is running. */
+export interface WorldScoring {
+  /** Per like on your entry (your own like doesn't count). */
+  reaction: number;
+  /** Per reply to your entry from someone else. */
+  reply: number;
+  /** Bonus when Amigo picks your entry. 0 = no Amigo picks in this World. */
+  hostPick: number;
+}
+
+export interface WorldCompetition {
+  scoring: WorldScoring;
+  /** Entries can be submitted until this time; likes/replies keep counting until the World ends. */
+  entriesCloseAt: Date;
+  /** How many entries one person may submit. */
+  entryLimit: number;
+  /** Display-only prize description. No payments or payouts exist. */
+  prize: string | null;
+}
+
+export interface World {
+  id: string;
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  coverUrl: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  participantCount: number;
+  viewerJoined: boolean;
+  /** A few participants to show as faces (people the viewer follows first). */
+  participantsPreview: Author[];
+  /** null = a social World without points. */
+  competition: WorldCompetition | null;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  person: Author;
+  points: number;
+  entries: number;
+  viewerFollows: boolean;
+}
+
+export interface WorldChatMessage {
+  id: string;
+  author: Author;
+  text: string;
+  createdAt: Date;
+}
+
+export const WORLD_CHAT_MAX_LENGTH = 300;
+
+export type WorldErrorCode = "not-joined" | "not-live" | "entries-closed" | "entry-limit" | "not-competition" | "unknown";
+
+export class WorldError extends Error {
+  code: WorldErrorCode;
+  constructor(code: WorldErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/**
+ * Worlds. Optional capability: demo and Supabase provide it, the legacy
+ * Firebase source does not (the Worlds nav item is hidden there).
+ * Posting into a World goes through DataSource.createPost with input.world.
+ */
+export interface WorldsApi {
+  listWorlds(viewerId: string): Promise<World[]>;
+  /** By slug. Live: participant count and join state update. null = no such World. */
+  subscribeWorld(slug: string, viewerId: string, sub: Subscription<World | null>): Unsubscribe;
+  join(worldId: string, viewerId: string): Promise<void>;
+  leave(worldId: string, viewerId: string): Promise<void>;
+  /** Posts made in the World, newest first. entriesOnly: competition entries only. */
+  subscribeWorldPosts(worldId: string, viewerId: string, opts: { entriesOnly: boolean; limit: number }, sub: Subscription<PostPage>): Unsubscribe;
+  /** Ranked by points (ties: earliest first entry wins). Frozen once the World ends. */
+  subscribeLeaderboard(worldId: string, viewerId: string, sub: Subscription<LeaderboardEntry[]>): Unsubscribe;
+  /** Oldest first, the latest `limit` messages. */
+  subscribeChat(worldId: string, limit: number, sub: Subscription<WorldChatMessage[]>): Unsubscribe;
+  sendChat(worldId: string, viewer: Viewer, text: string): Promise<void>;
+  /** People who joined (excluding the viewer), people the viewer doesn't follow yet first. */
+  listParticipants(worldId: string, viewerId: string, limit: number): Promise<PersonSummary[]>;
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
@@ -285,6 +384,8 @@ export interface DataSource {
   discovery?: DiscoveryApi;
   /** Optional capability — see NotificationsApi. */
   notifications?: NotificationsApi;
+  /** Optional capability — see WorldsApi. */
+  worlds?: WorldsApi;
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;

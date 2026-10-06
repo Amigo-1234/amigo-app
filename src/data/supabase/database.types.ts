@@ -196,6 +196,7 @@ export type Database = {
           body: string;
           created_at: string;
           deleted_at: string | null;
+          is_entry: boolean;
           id: string;
           like_count: number;
           parent_id: string | null;
@@ -205,12 +206,14 @@ export type Database = {
           root_id: string | null;
           updated_at: string;
           visibility: Database["public"]["Enums"]["post_visibility"];
+          world_id: string | null;
         };
         Insert: {
           author_id?: string;
           body?: string;
           created_at?: string;
           deleted_at?: string | null;
+          is_entry?: boolean;
           id?: string;
           like_count?: number;
           parent_id?: string | null;
@@ -220,12 +223,14 @@ export type Database = {
           root_id?: string | null;
           updated_at?: string;
           visibility?: Database["public"]["Enums"]["post_visibility"];
+          world_id?: string | null;
         };
         Update: {
           author_id?: string;
           body?: string;
           created_at?: string;
           deleted_at?: string | null;
+          is_entry?: boolean;
           id?: string;
           like_count?: number;
           parent_id?: string | null;
@@ -235,6 +240,7 @@ export type Database = {
           root_id?: string | null;
           updated_at?: string;
           visibility?: Database["public"]["Enums"]["post_visibility"];
+          world_id?: string | null;
         };
         Relationships: [
           {
@@ -256,6 +262,13 @@ export type Database = {
             columns: ["repost_of_id"];
             isOneToOne: false;
             referencedRelation: "posts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "posts_world_id_fkey";
+            columns: ["world_id"];
+            isOneToOne: false;
+            referencedRelation: "worlds";
             referencedColumns: ["id"];
           },
           {
@@ -306,6 +319,185 @@ export type Database = {
         };
         Relationships: [];
       };
+      world_chat_messages: {
+        Row: {
+          author_id: string;
+          body: string;
+          created_at: string;
+          id: string;
+          world_id: string;
+        };
+        Insert: {
+          author_id?: string;
+          body: string;
+          created_at?: string;
+          id?: string;
+          world_id: string;
+        };
+        Update: {
+          author_id?: string;
+          body?: string;
+          created_at?: string;
+          id?: string;
+          world_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "world_chat_messages_author_id_fkey";
+            columns: ["author_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "world_chat_messages_world_id_fkey";
+            columns: ["world_id"];
+            isOneToOne: false;
+            referencedRelation: "worlds";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      world_members: {
+        Row: {
+          joined_at: string;
+          user_id: string;
+          world_id: string;
+        };
+        Insert: {
+          joined_at?: string;
+          user_id?: string;
+          world_id: string;
+        };
+        Update: {
+          joined_at?: string;
+          user_id?: string;
+          world_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "world_members_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "world_members_world_id_fkey";
+            columns: ["world_id"];
+            isOneToOne: false;
+            referencedRelation: "worlds";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      world_host_picks: {
+        Row: {
+          created_at: string;
+          post_id: string;
+          world_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          post_id: string;
+          world_id: string;
+        };
+        Update: {
+          created_at?: string;
+          post_id?: string;
+          world_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "world_host_picks_post_id_fkey";
+            columns: ["post_id"];
+            isOneToOne: false;
+            referencedRelation: "posts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "world_host_picks_world_id_fkey";
+            columns: ["world_id"];
+            isOneToOne: false;
+            referencedRelation: "worlds";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      worlds: {
+        Row: {
+          competition: boolean;
+          cover_url: string | null;
+          created_at: string;
+          created_by: string | null;
+          description: string;
+          ends_at: string;
+          entries_close_at: string | null;
+          entry_limit: number;
+          id: string;
+          participant_count: number;
+          points_host_pick: number;
+          points_reaction: number;
+          points_reply: number;
+          prize: string | null;
+          slug: string;
+          starts_at: string;
+          tagline: string;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          competition?: boolean;
+          cover_url?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string;
+          ends_at: string;
+          entries_close_at?: string | null;
+          entry_limit?: number;
+          id?: string;
+          participant_count?: number;
+          points_host_pick?: number;
+          points_reaction?: number;
+          points_reply?: number;
+          prize?: string | null;
+          slug: string;
+          starts_at: string;
+          tagline?: string;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          competition?: boolean;
+          cover_url?: string | null;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string;
+          ends_at?: string;
+          entries_close_at?: string | null;
+          entry_limit?: number;
+          id?: string;
+          participant_count?: number;
+          points_host_pick?: number;
+          points_reaction?: number;
+          points_reply?: number;
+          prize?: string | null;
+          slug?: string;
+          starts_at?: string;
+          tagline?: string;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "worlds_created_by_fkey";
+            columns: ["created_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -324,6 +516,7 @@ export type Database = {
           body: string;
           created_at: string;
           deleted_at: string | null;
+          is_entry: boolean;
           id: string;
           like_count: number;
           parent_id: string | null;
@@ -333,6 +526,7 @@ export type Database = {
           root_id: string | null;
           updated_at: string;
           visibility: Database["public"]["Enums"]["post_visibility"];
+          world_id: string | null;
         };
         SetofOptions: {
           from: "*";
@@ -342,6 +536,16 @@ export type Database = {
         };
       };
       delete_post: { Args: { p_post_id: string }; Returns: undefined };
+      create_world_post: {
+        Args: { p_body: string; p_entry?: boolean; p_media?: Json; p_world_id: string };
+        Returns: Database["public"]["Tables"]["posts"]["Row"];
+        SetofOptions: {
+          from: "*";
+          to: "posts";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       feed_posts: {
         Args: { p_before?: string; p_limit?: number; p_scope?: string };
         Returns: {
@@ -349,6 +553,7 @@ export type Database = {
           body: string;
           created_at: string;
           deleted_at: string | null;
+          is_entry: boolean;
           id: string;
           like_count: number;
           parent_id: string | null;
@@ -358,6 +563,7 @@ export type Database = {
           root_id: string | null;
           updated_at: string;
           visibility: Database["public"]["Enums"]["post_visibility"];
+          world_id: string | null;
         }[];
         SetofOptions: {
           from: "*";
@@ -399,6 +605,10 @@ export type Database = {
       };
       unread_notification_count: { Args: never; Returns: number };
       viewer_follows: { Args: { p_author: string }; Returns: boolean };
+      world_leaderboard: {
+        Args: { p_limit?: number; p_world_id: string };
+        Returns: { entries: number; first_entry_at: string; points: number; rank: number; user_id: string }[];
+      };
     };
     Enums: {
       media_kind: "image" | "video";
