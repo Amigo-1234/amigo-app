@@ -382,9 +382,20 @@ export function createDemoWorlds(ctx: DemoContext) {
       }),
   };
 
+  /** Replace an array's contents in place (other code holds references to it). */
+  const refill = <T,>(target: T[], from: T[]) => target.splice(0, target.length, ...from);
+
   return {
     api,
     checkPost,
+    /** Demo persistence (demoPersist.ts). */
+    persist: {
+      export: () => ({ worlds, chatSeq }),
+      import: (s: { worlds: WorldRecord[]; chatSeq: number }) => {
+        refill(worlds, s.worlds);
+        chatSeq = s.chatSeq;
+      },
+    },
     worldInfo: (worldId: string | null | undefined) => {
       const w = worldId ? byId(worldId) : undefined;
       return w ? { slug: w.slug, title: w.title } : null;

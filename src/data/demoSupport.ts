@@ -515,9 +515,24 @@ export function createDemoSupport(ctx: SupportDemoContext) {
     },
   };
 
+  const refill = <T,>(target: T[], from: T[]) => target.splice(0, target.length, ...from);
+  type Saved = { requests: RequestRecord[]; visits: VisitRecord[]; ledger: LedgerRecord[]; reports: typeof reports; auditLog: typeof auditLog; seq: number };
+
   return {
     api,
     admin,
+    /** Demo persistence (demoPersist.ts). */
+    persist: {
+      export: (): Saved => ({ requests, visits, ledger, reports, auditLog, seq }),
+      import: (s: Saved) => {
+        refill(requests, s.requests);
+        refill(visits, s.visits);
+        refill(ledger, s.ledger);
+        refill(reports, s.reports);
+        refill(auditLog, s.auditLog);
+        seq = s.seq;
+      },
+    },
     hooks: {
       /** Make someone else support a request (opened `secondsAgo` ago, confirmed now). */
       support(userId: string, requestId: string, secondsAgo = 120) {

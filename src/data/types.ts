@@ -593,6 +593,8 @@ export interface DataSource {
   discovery?: DiscoveryApi;
   /** Optional capability — see NotificationsApi. */
   notifications?: NotificationsApi;
+  /** Demo only: wipe the browser-saved demo state (the caller reloads). */
+  resetDemo?: () => Promise<void>;
   /** Optional capability — see WorldsApi. */
   worlds?: WorldsApi;
   /** Optional capability — see SupportApi. */

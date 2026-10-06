@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, LogOut, Monitor, Moon, ShieldCheck, Sun } from "lucide-react";
+import { ArrowLeft, LogOut, Monitor, Moon, RotateCcw, ShieldCheck, Sun } from "lucide-react";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { profilesEnabled } from "../features/profile/links";
 import { dataSource } from "../data";
@@ -31,6 +31,7 @@ export default function SettingsScreen() {
   const [name, setName] = useState(viewer.name);
   const [saving, setSaving] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const dirty = name.trim() && name.trim() !== viewer.name;
 
   async function saveName(e: FormEvent) {
@@ -97,6 +98,28 @@ export default function SettingsScreen() {
           <Link to="/admin" className="btn btn--secondary btn--md">
             <ShieldCheck size={18} aria-hidden="true" /> Amigo admin
           </Link>
+        </section>
+      )}
+
+      {dataSource.resetDemo && (
+        <section className="settings-group" aria-labelledby="set-demo">
+          <h3 id="set-demo" className="settings-group__title">Demo data</h3>
+          <p className="settings-meta">
+            This preview keeps your changes (profile edits, posts, messages…) in this browser. Resetting brings back the original demo.
+          </p>
+          <Button
+            variant="secondary"
+            icon={<RotateCcw size={18} aria-hidden="true" />}
+            loading={resetting}
+            onClick={async () => {
+              if (!window.confirm("Reset all demo data in this browser?")) return;
+              setResetting(true);
+              await dataSource.resetDemo!().catch(() => undefined);
+              window.location.assign("/");
+            }}
+          >
+            Reset demo data
+          </Button>
         </section>
       )}
 

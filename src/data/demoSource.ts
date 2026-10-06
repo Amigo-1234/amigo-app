@@ -5,6 +5,7 @@
  * Preview states with a query param: ?demo=loading | empty | error | slow | signedout | postfail
  */
 import { mentionedHandles } from "../lib/mentions";
+import { clearDemoState, loadDemoState, saveDemoState } from "./demoPersist";
 import { createDemoSupport } from "./demoSupport";
 import { createDemoWorlds } from "./demoWorlds";
 import type {
@@ -25,7 +26,16 @@ import type {
 } from "./types";
 import { HANDLE_PATTERN, ProfileError } from "./types";
 
-const scenario = new URLSearchParams(location.search).get("demo");
+const params = new URLSearchParams(location.search);
+// ?demo=reset wipes the saved demo state, then continues as a normal (persisted) demo.
+if (params.get("demo") === "reset") {
+  await clearDemoState();
+  params.delete("demo");
+  history.replaceState(history.state, "", `${location.pathname}${params.size ? `?${params}` : ""}${location.hash}`);
+}
+const scenario = params.get("demo");
+/** Test scenarios (?demo=empty, member, …) always start fresh and are never saved. */
+const persistOn = !scenario;
 const latency = scenario === "slow" ? 2500 : 450;
 
 // ------------------------------------------------------------------- people
@@ -146,7 +156,12 @@ let records: PostRecord[] = [
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-const emit = () => listeners.forEach((l) => l());
+const emit = () => {
+  listeners.forEach((l) => l());
+  if (persistOn) saveDemoState(exportState);
+};
+/** Uploaded images live as blob: URLs; the Blob itself is what gets saved. */
+const mediaBlobs = new Map<string, Blob>();
 /** Resolve with fn() after a fake network delay; a throw becomes a rejection, not an uncaught error. */
 const later = <T>(fn: () => T, ms = latency) =>
   new Promise<T>((resolve, reject) =>
@@ -362,6 +377,72 @@ const demoSupport = createDemoSupport({
   scenario,
 });
 
+// ------------------------------------------------------------- persistence
+
+let signedIn = scenario !== "signedout";
+
+type SavedMedia = MediaItem & { blob?: Blob };
+interface SavedState {
+  people: Pick<PersonRecord, "id" | "name" | "handle" | "bio" | "avatarUrl">[];
+  follows: string[];
+  records: (Omit<PostRecord, "media"> & { media: SavedMedia[] })[];
+  notes: NoteRecord[];
+  noteSeq: number;
+  verifications: Map<string, VerificationRecord>;
+  signedIn: boolean;
+  worlds: ReturnType<typeof demoWorlds.persist.export>;
+  support: ReturnType<typeof demoSupport.persist.export>;
+}
+
+const saveMedia = (m: MediaItem): SavedMedia => (mediaBlobs.has(m.url) ? { ...m, url: "", blob: mediaBlobs.get(m.url) } : m);
+const loadMedia = (m: SavedMedia): MediaItem => {
+  if (!m.blob) return m;
+  const { blob, ...rest } = m;
+  const url = URL.createObjectURL(blob);
+  mediaBlobs.set(url, blob);
+  return { ...rest, url };
+};
+
+function exportState(): SavedState {
+  return {
+    people: peopleList.map(({ id, name, handle, bio, avatarUrl }) => ({ id, name, handle, bio, avatarUrl })),
+    follows: [...follows],
+    records: records.map((r) => ({ ...r, media: r.media.map(saveMedia) })),
+    notes,
+    noteSeq,
+    verifications,
+    signedIn,
+    worlds: demoWorlds.persist.export(),
+    support: demoSupport.persist.export(),
+  };
+}
+
+function importState(s: SavedState) {
+  for (const saved of s.people) Object.assign(people.get(saved.id) ?? {}, saved);
+  follows.clear();
+  s.follows.forEach((e) => follows.add(e));
+  records = s.records.map((r) => ({ ...r, media: r.media.map(loadMedia) }));
+  notes.splice(0, notes.length, ...s.notes);
+  noteSeq = s.noteSeq;
+  verifications.clear();
+  s.verifications.forEach((v, k) => verifications.set(k, v));
+  signedIn = s.signedIn;
+  demoWorlds.persist.import(s.worlds);
+  demoSupport.persist.import(s.support);
+}
+
+if (persistOn) {
+  const saved = await loadDemoState<SavedState>();
+  if (saved) {
+    try {
+      importState(saved);
+    } catch (e) {
+      console.warn("Saved demo state couldn't be restored; starting fresh", e);
+      await clearDemoState();
+    }
+  }
+}
+
 /**
  * Demo/test hook: make someone else act, through the same rules a real
  * backend applies (e.g. __amigoDemo.act("mira", "like", "me2")).
@@ -390,9 +471,11 @@ const demoSupport = createDemoSupport({
 // -------------------------------------------------------------------- auth
 
 const viewerFromPerson = (p: PersonRecord): Viewer => ({ id: p.id, name: p.name, handle: p.handle, email: scenario === "member" ? "member@example.com" : OWNER_EMAIL, avatarUrl: p.avatarUrl });
-let signedIn = scenario !== "signedout";
 const viewerListeners = new Set<(v: Viewer | null) => void>();
-const emitViewer = () => viewerListeners.forEach((l) => l(signedIn ? viewerFromPerson(people.get("me")!) : null));
+const emitViewer = () => {
+  viewerListeners.forEach((l) => l(signedIn ? viewerFromPerson(people.get("me")!) : null));
+  if (persistOn) saveDemoState(exportState);
+};
 
 // ------------------------------------------------------------------- source
 
@@ -401,6 +484,10 @@ let failNextPost = scenario === "postfail";
 
 export const demoSource: DataSource = {
   kind: "demo",
+
+  resetDemo: async () => {
+    await clearDemoState({ stop: true });
+  },
   maxMediaPerPost: 4,
 
   onViewerChanged(cb) {
@@ -442,7 +529,11 @@ export const demoSource: DataSource = {
         throw new Error("Demo publish failure");
       }
       // Demo keeps media as in-memory blob URLs for this session only.
-      const media: MediaItem[] = input.media.map((m) => ({ type: "image", url: URL.createObjectURL(m.blob), width: m.width, height: m.height, alt: m.alt }));
+      const media: MediaItem[] = input.media.map((m) => {
+        const url = URL.createObjectURL(m.blob);
+        mediaBlobs.set(url, m.blob);
+        return { type: "image", url, width: m.width, height: m.height, alt: m.alt };
+      });
       if (input.world) demoWorlds.checkPost(input.world.id, v.id, input.world.entry);
       const id = `p${Date.now()}`;
       const created = rec(id, v.id, input.text.trim(), new Date(), 0, media);
