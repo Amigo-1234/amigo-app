@@ -212,6 +212,21 @@ try {
   const { error: anonSugg } = await anon.rpc("suggested_profiles", { p_limit: 3 });
   ok("suggestions are for signed-in people only", anonSugg?.code === "42501", anonSugg?.code);
 
+  // multi-image posts (Phase 5)
+  const m = (n, w, h) => ({ kind: "image", storage_path: `${ids.ama}/multi-${tag}-${n}.jpg`, mime_type: "image/jpeg", width: w, height: h, byte_size: 1000 + n });
+  const multiPost = await q.createPost(ama, `three photos ${tag}`, { media: [m(1, 1080, 1350), m(2, 1600, 900), m(3, 1000, 1000)] });
+  ok("create_post returns the new id", typeof multiPost.id === "string");
+  const readBack = await q.fetchPost(leo, multiPost.id, ids.leo);
+  ok("media come back in composer order with dimensions",
+    JSON.stringify(readBack.media.map((x) => `${x.width}x${x.height}`)) === JSON.stringify(["1080x1350", "1600x900", "1000x1000"]) &&
+    readBack.media.every((x, i) => x.url.endsWith(`multi-${tag}-${i + 1}.jpg`)));
+  const inFeed = (await q.fetchFeed(leo, "latest", 50, ids.leo)).posts.find((x) => x.id === multiPost.id);
+  ok("multi-image post in the feed with all media", inFeed?.media.length === 3);
+  const inMedia = (await q.fetchProfilePosts(leo, ids.ama, ids.leo, "media", 20)).posts.find((x) => x.id === multiPost.id);
+  ok("multi-image post on Profile Media with all media", inMedia?.media.length === 3);
+  await rejects("5 images rejected (schema allows 4)", () => q.createPost(ama, "too many", { media: [1, 2, 3, 4, 5].map((n) => m(10 + n, 10, 10)) }), "unknown");
+  await rejects("image-only post needs no text", async () => { await q.createPost(ama, "", { media: [m(20, 800, 800)] }); throw Object.assign(new Error("ok"), { code: "accepted" }); }, "accepted");
+
   // private surfaces
   const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });
   ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);

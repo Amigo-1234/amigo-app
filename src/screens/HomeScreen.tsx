@@ -8,6 +8,8 @@ import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { FeedFooter } from "../features/feed/FeedFooter";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
+import { pendingAsPost, usePublishing } from "../state/publishing";
+import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
 import { Button } from "../ui/Button";
 import { StateMessage } from "../ui/StateMessage";
@@ -23,6 +25,11 @@ export default function HomeScreen() {
   const tab: FeedTab = params.get("tab") === "following" ? "following" : "latest";
   const feed = useFeed(tab);
   const composer = useComposer();
+  const viewer = useViewer();
+  const publishing = usePublishing();
+  // Optimistic posts, until the real post shows up in the feed.
+  const feedIds = new Set(feed.posts.map((p) => p.id));
+  const pending = publishing.pending.filter((p) => !(p.status === "sent" && p.postId && feedIds.has(p.postId)));
 
   const setTab = (t: FeedTab) => {
     setParams(t === "latest" ? {} : { tab: t }, { replace: true });
@@ -82,6 +89,14 @@ export default function HomeScreen() {
       )}
 
       <section id="feed-panel" role="tabpanel" aria-labelledby={`tab-${tab}`} aria-busy={feed.status === "loading"}>
+        {pending.map((p) => (
+          <PostCard
+            key={p.localId}
+            post={pendingAsPost(p, viewer)}
+            pending={{ status: p.status, onRetry: () => publishing.retry(p.localId), onDiscard: () => publishing.discard(p.localId) }}
+          />
+        ))}
+
         {feed.status === "loading" && <FeedSkeleton />}
 
         {feed.status === "error" && (
@@ -93,7 +108,7 @@ export default function HomeScreen() {
           />
         )}
 
-        {feed.status === "ready" && feed.posts.length === 0 && !feed.loadingMore && (
+        {feed.status === "ready" && feed.posts.length === 0 && pending.length === 0 && !feed.loadingMore && (
           tab === "following" ? (
             <StateMessage
               icon={<UsersRound size={24} />}

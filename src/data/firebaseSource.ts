@@ -28,6 +28,7 @@ import {
 // LEGACY: kept only as the rollback path until the Supabase cutover is final.
 // Do not add features here.
 import { auth, db } from "../lib/firebase";
+import { blobToLegacyDataUrl } from "../lib/image";
 import { toHandle } from "../lib/handle";
 import {
   EMPTY_REACTIONS,
@@ -82,6 +83,8 @@ async function upsertUserDoc(user: User) {
 
 export const firebaseSource: DataSource = {
   kind: "firebase",
+  // The legacy document shape holds a single inline image.
+  maxMediaPerPost: 1,
 
   onViewerChanged(cb) {
     return onAuthStateChanged(auth, (user) => {
@@ -166,7 +169,8 @@ export const firebaseSource: DataSource = {
 
   async createPost(viewer, input) {
     // Same shape the prototype wrote, so old and new posts stay interchangeable.
-    await addDoc(collection(db, "posts"), {
+    const image = input.media[0] ? await blobToLegacyDataUrl(input.media[0].blob) : null;
+    const ref = await addDoc(collection(db, "posts"), {
       text: input.text.trim(),
       authorId: viewer.id,
       authorName: viewer.name,
@@ -174,9 +178,10 @@ export const firebaseSource: DataSource = {
       reactions: { ...EMPTY_REACTIONS },
       reacted: {},
       commentsCount: 0,
-      imageDataUrl: input.image?.dataUrl ?? null,
-      ...(input.image ? { imageWidth: input.image.width, imageHeight: input.image.height } : {}),
+      imageDataUrl: image?.dataUrl ?? null,
+      ...(image ? { imageWidth: image.width, imageHeight: image.height } : {}),
     });
+    return { id: ref.id };
   },
 
   async setLiked(postId, viewerId, liked) {

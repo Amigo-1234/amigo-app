@@ -163,3 +163,211 @@
 .char-ring--warn .char-ring__fill { stroke: #e0a100; }
 .char-ring--over .char-ring__fill { stroke: var(--danger); }
 .char-ring--over { color: var(--danger); }
+
+/* ---------- Multi-image composer ---------- */
+
+.composer {
+  position: relative;
+}
+
+.composer.is-dragover {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  border-radius: var(--radius-lg);
+}
+
+.composer__media {
+  margin-top: var(--space-2);
+}
+
+.composer__media .post-media {
+  margin-top: 0;
+}
+
+.composer-tile {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+.composer-tile.is-processing {
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+}
+
+.composer-tile[draggable="true"] {
+  cursor: grab;
+}
+
+.composer-tile__spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid var(--text-3);
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+
+.composer-tile__badge {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.composer-tile__btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  transition: background-color var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+
+.composer-tile__btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.85);
+}
+
+.composer-tile__btn:disabled {
+  opacity: 0.35;
+}
+
+.composer-tile__btn:focus-visible {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--coral-500);
+}
+
+.composer-tile__remove {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.composer-tile__order {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Desktop with a mouse: reorder arrows appear on hover or keyboard focus. */
+@media (hover: hover) {
+  .composer-tile__order {
+    opacity: 0;
+    transition: opacity var(--dur-fast) ease;
+  }
+  .composer-tile:hover .composer-tile__order,
+  .composer-tile:focus-within .composer-tile__order {
+    opacity: 1;
+  }
+}
+
+.composer__count {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.composer__errors {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3) var(--space-2) var(--space-6);
+  border-radius: var(--radius-md);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.composer__errors li + li {
+  margin-top: 2px;
+}
+
+.composer__draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-3) var(--space-4) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.composer--inline .composer__draft {
+  margin: 0 0 var(--space-3);
+}
+
+.composer__draft p {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.composer__draft strong {
+  color: var(--text);
+  font-weight: 650;
+  margin-right: 4px;
+}
+
+.composer__draft-note {
+  color: var(--text-3);
+}
+
+.composer__draft-actions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.composer__confirm {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--scrim);
+  border-radius: inherit;
+  animation: fade-in var(--dur-fast) ease;
+}
+
+.composer__confirm-panel {
+  width: min(360px, 100%);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--border);
+  animation: pop-in var(--dur-med) var(--ease-out);
+}
+
+.composer__confirm-panel h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 750;
+  letter-spacing: -0.025em;
+}
+
+.composer__confirm-panel p {
+  margin-top: var(--space-2);
+  color: var(--text-2);
+}
+
+.composer__confirm-actions {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}

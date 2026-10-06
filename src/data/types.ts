@@ -19,12 +19,20 @@ export interface Author {
   avatarUrl: string | null;
 }
 
+/**
+ * One attachment on a post. Posts carry an ordered array of these.
+ * "video" is modelled now so adding video uploads later doesn't change the post
+ * shape (see docs/architecture/MEDIA.md); the composer only creates images today.
+ */
 export type MediaItem = {
   type: "image" | "video";
   url: string;
   width?: number;
   height?: number;
   alt?: string;
+  /** Video only (future): poster image and duration. */
+  posterUrl?: string;
+  durationMs?: number;
 };
 
 export interface Post {
@@ -59,10 +67,23 @@ export interface PersonSummary {
   bio?: string;
 }
 
+/** A processed image ready to publish (already resized, re-encoded, metadata stripped). */
+export interface NewMediaInput {
+  kind: "image";
+  blob: Blob;
+  width: number;
+  height: number;
+  alt?: string;
+}
+
 export interface NewPostInput {
   text: string;
-  image?: { dataUrl: string; width: number; height: number } | null;
+  /** Ordered; the first item is the cover. */
+  media: NewMediaInput[];
 }
+
+/** Product-wide limits for new posts. */
+export const POST_MAX_LENGTH = 500;
 
 export type Unsubscribe = () => void;
 
@@ -199,6 +220,12 @@ export interface Subscription<T> {
 export interface DataSource {
   kind: "firebase" | "supabase" | "demo";
 
+  /**
+   * How many media items one new post may carry on this backend.
+   * Supabase: 4 (post_media.position 0–3, enforced by create_post). Legacy Firebase: 1.
+   */
+  maxMediaPerPost: number;
+
   /** Optional capability — see ProfilesApi. */
   profiles?: ProfilesApi;
   /** Optional capability — see DiscoveryApi. */
@@ -220,7 +247,8 @@ export interface DataSource {
   /** scope is a hint: backends that can filter server-side do; the feed hook filters again regardless. */
   subscribeLatestPosts(viewerId: string | null, limit: number, sub: Subscription<{ posts: Post[]; hasMore: boolean }>, scope?: FeedScope): Unsubscribe;
   subscribePost(postId: string, viewerId: string | null, sub: Subscription<Post | null>): Unsubscribe;
-  createPost(viewer: Viewer, input: NewPostInput): Promise<void>;
+  /** Resolves with the new post's id once it is stored. */
+  createPost(viewer: Viewer, input: NewPostInput): Promise<{ id: string }>;
   setLiked(postId: string, viewerId: string, liked: boolean): Promise<void>;
 
   // replies

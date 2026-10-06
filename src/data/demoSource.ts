@@ -93,6 +93,12 @@ let records: PostRecord[] = [
   rec("p13", "ama", "Shot this one on the walk home. No edits.", minutes(60 * 100), 340, [img("amigo-street", 1600, 1067)]),
   rec("p14", "kofi", "Football tonight. Who's watching? I've got snacks and zero chill.", minutes(60 * 5), 152),
   rec("p15", "tomi", "Five-a-side football at 7 this Saturday — we need two more players.", minutes(60 * 28), 44, [img("amigo-pitch", 1600, 1000)]),
+  rec("p17", "mira", "Tour diary, day one. Too many photos, not sorry.", minutes(60 * 33), 512, [
+    img("amigo-tour1", 1600, 1067), img("amigo-tour2", 1080, 1350), img("amigo-tour3", 1080, 1080),
+    img("amigo-tour4", 1600, 900), img("amigo-tour5", 1080, 1350), img("amigo-tour6", 1200, 1200),
+  ]),
+  rec("p18", "zoe", "Two coffees, one view.", minutes(60 * 8), 301, [img("amigo-cafe1", 1080, 1350), img("amigo-cafe2", 1080, 1350)]),
+  rec("p19", "leo", "Summit, lake, the long way down.", minutes(60 * 12), 188, [img("amigo-summit", 1600, 1067), img("amigo-lake", 1080, 1350), img("amigo-path", 1080, 1080)]),
   rec("p16", "rosa", "Long run playlist recommendations? Need something for kilometre 15 onwards.", minutes(60 * 60), 37),
   // replies
   rec("r1", "tomi", "the plan is vibes. always has been.", minutes(15), 9, [], "p2"),
@@ -205,8 +211,12 @@ const emitViewer = () => viewerListeners.forEach((l) => l(signedIn ? viewerFromP
 
 // ------------------------------------------------------------------- source
 
+/** ?demo=postfail: the first publish attempt fails, so retry can be tested. */
+let failNextPost = scenario === "postfail";
+
 export const demoSource: DataSource = {
   kind: "demo",
+  maxMediaPerPost: 4,
 
   onViewerChanged(cb) {
     viewerListeners.add(cb);
@@ -242,13 +252,17 @@ export const demoSource: DataSource = {
 
   createPost: (v, input) =>
     later(() => {
-      records = [
-        rec(`p${Date.now()}`, v.id, input.text.trim(), new Date(), 0,
-          input.image ? [{ type: "image", url: input.image.dataUrl, width: input.image.width, height: input.image.height }] : []),
-        ...records,
-      ];
+      if (failNextPost) {
+        failNextPost = false;
+        throw new Error("Demo publish failure");
+      }
+      // Demo keeps media as in-memory blob URLs for this session only.
+      const media: MediaItem[] = input.media.map((m) => ({ type: "image", url: URL.createObjectURL(m.blob), width: m.width, height: m.height, alt: m.alt }));
+      const id = `p${Date.now()}`;
+      records = [rec(id, v.id, input.text.trim(), new Date(), 0, media), ...records];
       emit();
-    }, 700),
+      return { id };
+    }, 900),
 
   setLiked: (postId, viewerId, liked) =>
     later(() => {

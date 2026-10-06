@@ -120,81 +120,109 @@
   font-size: var(--text-sm);
 }
 
-/* ---------- Media ---------- */
+/* ---------- Media ----------
+   One layout for every screen (see MediaLayout). Multi-image posts use a
+   fixed 4:3 frame so nothing jumps while images load. */
 
 .post-media {
+  position: relative;
   margin-top: var(--space-3);
   display: grid;
   gap: 3px;
   border-radius: var(--radius-lg);
   overflow: hidden;
-}
-
-.post-media--2,
-.post-media--4 {
-  grid-template-columns: 1fr 1fr;
-}
-
-.post-media--3 {
-  grid-template-columns: 2fr 1fr;
-  grid-template-rows: 1fr 1fr;
-}
-.post-media--3 > :first-child {
-  grid-row: span 2;
-}
-
-.media-tile {
-  position: relative;
-  display: block;
-  width: 100%;
-  overflow: hidden;
   background: var(--surface-2);
-  cursor: zoom-in;
+  isolation: isolate;
 }
 
-.post-media--1 .media-tile {
-  border-radius: var(--radius-lg);
-}
-
-.media-tile::after {
+.post-media::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   box-shadow: inset 0 0 0 1px var(--border);
   pointer-events: none;
+  z-index: 2;
+}
+
+.post-media--2,
+.post-media--3,
+.post-media--4 {
+  aspect-ratio: 4 / 3;
+  grid-template-columns: 1fr 1fr;
+}
+
+.post-media--3,
+.post-media--4 {
+  grid-template-rows: 1fr 1fr;
+}
+
+.post-media--3 > :first-child {
+  grid-row: span 2;
+}
+
+.media-tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.media-tile__open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+}
+
+.media-tile__open:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--coral-500);
 }
 
 .media-tile img,
 .media-tile video {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-
-.media-tile img {
   opacity: 0;
   transition: opacity var(--dur-med) ease;
 }
 
-.media-tile.is-loaded img {
+.media-tile.is-loaded img,
+.media-tile.is-loaded video {
   opacity: 1;
 }
 
-.media-tile--natural {
+.post-media--natural {
   min-height: 200px;
 }
 
-.media-tile--natural img {
+.post-media--natural img {
   height: auto;
   max-height: 560px;
+}
+
+.media-tile__more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  pointer-events: none;
 }
 
 .media-tile__failed {
   display: grid;
   place-items: center;
   height: 100%;
-  min-height: 160px;
+  min-height: 120px;
   color: var(--text-3);
   font-size: var(--text-sm);
 }
@@ -263,8 +291,66 @@
     padding: var(--space-5) var(--space-5) var(--space-2);
   }
 
-  /* Keep tall portraits from swallowing the desktop column; crop centered. */
-  .post--feed .post-media--1 .media-tile {
+  /* Keep tall portraits from swallowing the desktop column; crop centred. */
+  .post--feed .post-media--1 {
     max-height: 560px;
   }
+}
+
+/* ---------- Optimistic (publishing) ---------- */
+
+.post--sending .post-media,
+.post--sending .post__text {
+  opacity: 0.75;
+}
+
+.post__pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+
+.post__pending-text--error {
+  color: var(--danger);
+  flex: 1;
+}
+
+.post__pending-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+
+.post--sent .post__pending-spinner {
+  display: none;
+}
+
+.post__pending-btn {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: 10px;
+  font-weight: 620;
+  color: var(--text-2);
+}
+
+.post__pending-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.post__pending-btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.post__pending-btn--primary:hover {
+  background: var(--coral-400);
+  color: var(--on-accent);
 }

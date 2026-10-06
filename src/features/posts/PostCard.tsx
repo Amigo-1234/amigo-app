@@ -21,7 +21,13 @@ function isStatement(post: Post) {
 
 const INTERACTIVE = "a, button, video, input, textarea, [role='button']";
 
-export const PostCard = memo(function PostCard({ post, variant = "feed" }: { post: Post; variant?: "feed" | "focus" }) {
+export interface PendingState {
+  status: "sending" | "failed" | "sent";
+  onRetry: () => void;
+  onDiscard: () => void;
+}
+
+export const PostCard = memo(function PostCard({ post, variant = "feed", pending }: { post: Post; variant?: "feed" | "focus"; pending?: PendingState }) {
   const navigate = useNavigate();
   const openMedia = useMediaViewer();
   const share = useSharePost();
@@ -37,14 +43,19 @@ export const PostCard = memo(function PostCard({ post, variant = "feed" }: { pos
   const replyToHref = post.replyTo ? profileHref(post.replyTo.handle) : null;
 
   const onCardClick = (e: MouseEvent<HTMLElement>) => {
-    if (focus) return;
+    if (focus || pending) return;
     if ((e.target as HTMLElement).closest(INTERACTIVE)) return;
     if (window.getSelection()?.toString()) return; // let people select text
     navigate(href);
   };
 
   return (
-    <article className={`post post--${variant}`} aria-labelledby={nameId} onClick={onCardClick}>
+    <article
+      className={`post post--${variant}${pending ? ` post--pending post--${pending.status}` : ""}`}
+      aria-labelledby={nameId}
+      aria-busy={pending?.status === "sending" || undefined}
+      onClick={onCardClick}
+    >
       <header className="post__head">
         {authorHref ? (
           <Link to={authorHref} className="post__avatar-link" tabIndex={-1} aria-hidden="true">
@@ -65,7 +76,7 @@ export const PostCard = memo(function PostCard({ post, variant = "feed" }: { pos
           )}
           <span className="post__meta">
             <span className="post__handle">@{post.author.handle}</span>
-            {!focus && (
+            {!focus && !pending && (
               <>
                 <span aria-hidden="true"> · </span>
                 <Link to={href} className="post__time" title={fullTimestamp(post.createdAt)}>
@@ -97,7 +108,7 @@ export const PostCard = memo(function PostCard({ post, variant = "feed" }: { pos
         </div>
       )}
 
-      <PostMedia media={post.media} onOpen={(i) => openMedia(post.media[i])} />
+      <PostMedia media={post.media} onOpen={(i) => openMedia(post.media, i)} />
 
       {focus && (
         <p className="post__timestamp">
@@ -105,6 +116,26 @@ export const PostCard = memo(function PostCard({ post, variant = "feed" }: { pos
         </p>
       )}
 
+      {pending ? (
+        <footer className="post__pending" role="status">
+          {pending.status === "failed" ? (
+            <>
+              <span className="post__pending-text post__pending-text--error">Couldn't post. Your post is saved here.</span>
+              <button type="button" className="post__pending-btn post__pending-btn--primary" onClick={pending.onRetry}>
+                Retry
+              </button>
+              <button type="button" className="post__pending-btn" onClick={pending.onDiscard}>
+                Discard
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="post__pending-spinner" aria-hidden="true" />
+              <span className="post__pending-text">{pending.status === "sent" ? "Posted" : "Posting…"}</span>
+            </>
+          )}
+        </footer>
+      ) : (
       <footer className="post__actions">
         <button
           className={`action action--like${liked ? " is-active" : ""}`}
@@ -134,6 +165,7 @@ export const PostCard = memo(function PostCard({ post, variant = "feed" }: { pos
           <Share size={19} strokeWidth={1.9} aria-hidden="true" />
         </button>
       </footer>
+      )}
     </article>
   );
 });

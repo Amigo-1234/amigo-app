@@ -1,8 +1,9 @@
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation } from "react-router";
 import { profilesEnabled } from "../features/profile/links";
 import { Plus } from "lucide-react";
-import { Composer } from "../features/composer/Composer";
+import { Composer, type ComposerHandle } from "../features/composer/Composer";
+import { PublishStatusBar } from "./PublishStatusBar";
 import { useComposer } from "../state/composer";
 import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
@@ -16,6 +17,7 @@ import "./AppShell.css";
 export function AppShell() {
   const viewer = useViewer();
   const composer = useComposer();
+  const composerRef = useRef<ComposerHandle>(null);
   const { pathname } = useLocation();
 
   useEffect(() => window.scrollTo(0, 0), [pathname]);
@@ -116,9 +118,12 @@ export function AppShell() {
         ))}
       </nav>
 
-      <Sheet open={composer.open} onClose={() => composer.setOpen(false)} label="New post" fullscreenOnMobile>
-        <Composer variant="sheet" autoFocus onPosted={() => composer.setOpen(false)} onCancel={() => composer.setOpen(false)} />
+      {/* Esc, backdrop and Cancel all go through the composer, which asks before discarding. */}
+      <Sheet open={composer.open} onClose={() => composerRef.current?.requestClose()} label="New post" fullscreenOnMobile>
+        <Composer ref={composerRef} variant="sheet" autoFocus onClose={() => composer.setOpen(false)} />
       </Sheet>
+
+      {pathname !== "/" && <PublishStatusBar />}
     </div>
   );
 }

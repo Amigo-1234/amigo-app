@@ -27,7 +27,15 @@ npm run build                # typecheck (app + scripts) + production build
 
 ## Product so far
 
-- **Home**: Latest and Following feeds, composer, likes, replies, share, live updates.
+- **Home**: Latest and Following feeds, likes, replies, share, live updates.
+- **Composer** (inline on Home and the global Create sheet; one component):
+  - text, and up to 4 photos per post, with a live preview;
+  - reorder (buttons or drag) and remove photos;
+  - client-side resize and metadata stripping;
+  - optimistic publishing with Retry;
+  - discard confirmation and local text drafts.
+
+  See [docs/architecture/MEDIA.md](docs/architecture/MEDIA.md).
 - **Post**: conversation view with replies.
 - **Profiles** (`/u/:handle`):
   - a header with bio, join date and counts;
@@ -56,7 +64,7 @@ npm run build                # typecheck (app + scripts) + production build
 | Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
 | Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
 | Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
-| Tests | `npm run db:test`: 68 database/RLS checks, rolled back after running · `npm run test:api`: 66 checks through PostgREST |
+| Tests | `npm run db:test`: 68 database/RLS checks, rolled back after running · `npm run test:api`: 72 checks through PostgREST |
 
 To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
 [`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied

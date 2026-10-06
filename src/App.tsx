@@ -6,6 +6,7 @@ import HomeScreen from "./screens/HomeScreen";
 import { ComingSoonScreen } from "./screens/ComingSoonScreen";
 import { AppShell } from "./shell/AppShell";
 import { ComposerProvider } from "./state/composer";
+import { PublishingProvider } from "./state/publishing";
 import { SessionProvider, useSession, useViewer } from "./state/session";
 import { profilesEnabled } from "./features/profile/links";
 import { dataSource } from "./data";
@@ -50,9 +51,11 @@ function Root() {
   }
   return (
     <ComposerProvider>
-      <MediaViewerProvider>
-        <AppShell />
-      </MediaViewerProvider>
+      <PublishingProvider>
+        <MediaViewerProvider>
+          <AppShell />
+        </MediaViewerProvider>
+      </PublishingProvider>
     </ComposerProvider>
   );
 }

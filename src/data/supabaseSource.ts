@@ -135,6 +135,8 @@ supabase.auth.onAuthStateChange((event, session) => {
 
 export const supabaseSource: DataSource = {
   kind: "supabase",
+  // post_media.position is 0–3 and create_post rejects more than 4.
+  maxMediaPerPost: 4,
 
   onViewerChanged(cb) {
     viewerListeners.add(cb);
@@ -213,24 +215,34 @@ export const supabaseSource: DataSource = {
   },
 
   async createPost(viewer, input) {
-    let uploadedPath: string | null = null;
-    const media: q.NewMedia[] = [];
-    if (input.image) {
-      const blob = await (await fetch(input.image.dataUrl)).blob();
-      const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
-      uploadedPath = `${viewer.id}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await supabase.storage.from("post-media").upload(uploadedPath, blob, { contentType: blob.type, cacheControl: "31536000" });
-      if (error) throw q.dataError(error);
-      media.push({ kind: "image", storage_path: uploadedPath, mime_type: blob.type, width: input.image.width, height: input.image.height, byte_size: blob.size });
+    if (input.media.length > supabaseSource.maxMediaPerPost) throw new Error(`At most ${supabaseSource.maxMediaPerPost} images per post`);
+    // Upload in parallel, keep the composer's order. Paths live in the author's own folder (Storage RLS).
+    const uploads = await Promise.allSettled(
+      input.media.map(async (m) => {
+        const ext = m.blob.type === "image/png" ? "png" : m.blob.type === "image/webp" ? "webp" : m.blob.type === "image/gif" ? "gif" : "jpg";
+        const path = `${viewer.id}/${crypto.randomUUID()}.${ext}`;
+        const { error } = await supabase.storage.from("post-media").upload(path, m.blob, { contentType: m.blob.type, cacheControl: "31536000" });
+        if (error) throw q.dataError(error);
+        return { kind: "image" as const, storage_path: path, mime_type: m.blob.type, width: m.width, height: m.height, byte_size: m.blob.size };
+      }),
+    );
+    const uploaded = uploads.flatMap((u) => (u.status === "fulfilled" ? [u.value] : []));
+    const cleanup = () => uploaded.length && void supabase.storage.from("post-media").remove(uploaded.map((u) => u.storage_path));
+    const failed = uploads.find((u) => u.status === "rejected");
+    if (failed) {
+      cleanup();
+      throw (failed as PromiseRejectedResult).reason;
     }
+    let created: { id: string };
     try {
-      await q.createPost(supabase, input.text, { media });
+      // One transaction: the post and all its post_media rows, in order.
+      created = await q.createPost(supabase, input.text, { media: uploaded });
     } catch (e) {
-      // Don't leave an orphaned upload behind.
-      if (uploadedPath) void supabase.storage.from("post-media").remove([uploadedPath]);
+      cleanup(); // don't leave orphaned uploads behind
       throw e;
     }
     invalidate();
+    return { id: created.id };
   },
 
   async setLiked(postId, _viewerId, liked) {
