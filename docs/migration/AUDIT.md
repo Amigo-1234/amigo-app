@@ -60,14 +60,23 @@ Comments: `{authorId, authorName, createdAt, text}` (15) and `{userId, displayNa
 1. **Public reads:** `posts` and `users` can be read without authentication through the REST
    API. `users` docs include **email addresses**, so they're exposed to anyone.
 2. Collection listing is correctly denied (admin-only).
-3. **Recommended Firebase rule change:** deny reads on `users/*` *except* for
-   `displayName`/`avatarUrl`. Firestore rules can't filter fields, so in practice:
-   deny `users/*` reads from clients entirely. The live prototype only reads `users` on its
-   Friends page, so that page would break, and the Phase 1 app's "People to follow" rail
-   (Firebase build) would show nothing.
-   **Impact is limited to follow suggestions.** That's an acceptable trade-off, but it's
-   your call, so the rule change has not been applied. Proposed rules:
-   [firebase-rules-proposal.md](firebase-rules-proposal.md).
+3. **How the legacy app depends on `users`** (from `app.js` / `friend.js` on the live site):
+   - The Friends page reads the **whole** `users` collection (`getDocs`) to build the
+     following, followers and suggestion lists and the search, and re-writes the signed-in
+     person's email into their own doc on every login.
+   - The feed and chat (`app.js`) open their Firestore listeners **at page load, before
+     sign-in**, so they need anonymous read on `posts`, `comments` and `globalChat`.
+4. **Fix (prepared, applied with the Admin credentials):** [`firebase/firestore.rules`](../../firebase/firestore.rules)
+   - `users/*` becomes **owner-only**. Emails are no longer readable by anyone else.
+   - Follow lists are readable when signed in, and written only by the person acting.
+   - Posts, comments and chat keep their current read behaviour, so the legacy feed keeps
+     working. They hold no emails.
+   - Deployed with `npm run firebase:rules deploy`, which backs up the live rules, runs a
+     20-case test suite through Google's rules tester, and refuses to deploy if Firestore has
+     collections the rules don't cover. Rollback: `npm run firebase:rules rollback <previous>`.
+   - **Impact:** on the old site, the Friends page lists and search come up empty. Following
+     and unfollowing still work. Nothing else changes. The migration uses the Admin SDK and
+     isn't affected.
 
 ## What is deliberately not migrated
 

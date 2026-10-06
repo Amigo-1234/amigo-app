@@ -73,11 +73,11 @@ revoked first and added back per column.
 only public information.
 
 `SECURITY DEFINER` functions (`can_view_post`, `viewer_follows`, triggers,
-`delete_post`, `legacy_*`) all pin `search_path = ''`. Each answers one narrow
+`delete_post`, and the service-role-only `legacy_*` migration and sign-in helpers) all pin `search_path = ''`. Each answers one narrow
 question or performs one owner-checked action. Execute is revoked from
 everyone and granted back function by function.
 
-Tested by `supabase/tests/database.test.sql` (60 checks) and
+Tested by `supabase/tests/database.test.sql` (63 checks) and
 `scripts/test/supabase-api.test.mjs` (29 checks through PostgREST).
 
 ## Realtime

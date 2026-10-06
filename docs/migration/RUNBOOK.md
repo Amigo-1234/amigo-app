@@ -3,10 +3,26 @@
 Firebase stays untouched and keeps serving production until the very last
 step, and it stays available as the rollback path afterwards.
 
+## Secrets: where each one lives
+
+| Secret | Where | Used by |
+| --- | --- | --- |
+| `FIREBASE_SERVICE_ACCOUNT_BASE64` | cloud environment settings → environment variables (or a git-ignored `.env.local`) | extract, `firebase:rules` |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | cloud environment settings | migrate / validate |
+| `FIREBASE_WEB_API_KEY`, `LEGACY_SIGNIN_HASH_KEY`, `LEGACY_SIGNIN_ENABLED`, `ALLOWED_ORIGINS` | `supabase secrets set` | legacy-sign-in function |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (public) | Vercel env vars (Preview, later Production) | the app |
+
+Never in Git, docs, chat or Vercel: the service-account JSON and the Supabase secret key.
+`migration-data/` and `secrets/` are git-ignored. Reports and logs mask emails.
+
+The migration needs **HTTPS only**. It talks to Supabase through the Data API (service-role-only
+`legacy_*` import functions), Auth admin and Storage, so no direct Postgres connection is required.
+
 ## 0. One-time setup
 
-1. **Create the Supabase project** (organisation of your choice, region near your users,
-   e.g. `eu-west-2`).
+1. **Create the Supabase project** `amigo-world` (region `eu-west-2`, London: closest to the
+   current users). On the Free plan, an account can have only 2 *active* projects across all
+   its organisations.
 2. **Auth settings:**
    - Site URL = the production domain.
    - Add the Vercel preview URLs to Redirect URLs.
@@ -28,19 +44,21 @@ step, and it stays available as the rollback path afterwards.
 
 ## 1. Review RLS
 
-- `DATABASE_URL=… npm run db:test` must end with `ALL DATABASE TESTS PASSED`. It rolls back,
-  so it's safe on any database.
+- Run `supabase/tests/database.test.sql` (63 checks). It must end with `ALL DATABASE TESTS PASSED`.
+  It rolls back, so it's safe on any database: use `psql` where a connection is possible,
+  otherwise the SQL editor or the MCP SQL tool.
 - Dashboard → Advisors → Security: no warnings expected.
 - Read [DATABASE.md](../architecture/DATABASE.md#row-level-security-review).
 
 ## 2. Dry run (on a Supabase branch or a throwaway project)
 
 ```bash
-GOOGLE_APPLICATION_CREDENTIALS=secrets/firebase-service-account.json npm run migrate:extract   # read-only
+npm run migrate:extract            # read-only; keeps the previous snapshot
+npm run migrate:diff               # what changed in Firebase since the previous snapshot
 npm run migrate:audit
-npm run migrate:plan
-DATABASE_URL=… SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… npm run migrate:run
-npm run migrate:run      # second run must create nothing
+npm run migrate:plan               # counts before anything is written
+npm run migrate:run
+npm run migrate:run                # second run must create nothing
 ```
 
 ## 3. Verify
@@ -67,11 +85,14 @@ npm run migrate:run      # second run must create nothing
 
 1. Announce a short write freeze, or just accept that posts made during the next few minutes
    on the old app need the delta run.
-2. Run a fresh extract and `npm run migrate:run` against **production** Supabase. It only adds
-   what's new since the dry run.
+2. Run `npm run migrate:extract`, then `npm run migrate:diff`, then `npm run migrate:run`. The run
+   only adds what's new since the previous one.
 3. Run `npm run migrate:validate`; all checks must PASS.
-4. Set the same variables for the Vercel **Production** scope and redeploy.
-5. Smoke test: sign in, post, like, reply.
+4. **Back up** the database. Pro plan: daily backups are automatic; trigger or confirm one in
+   Database → Backups. Free plan: no automatic backups; run `npx supabase db dump` from a machine
+   that can reach Postgres.
+5. Set the same variables for the Vercel **Production** scope and redeploy.
+6. Smoke test: sign in, post, like, reply.
 
 ## Rollback
 
@@ -84,8 +105,9 @@ npm run migrate:run      # second run must create nothing
 
 ## Afterwards
 
-- Keep Firebase read-only for at least 30 days, and apply the
-  [proposed rules](firebase-rules-proposal.md) to stop the public email exposure.
+- Keep Firebase as a rollback source for at least 30 days. The email exposure is fixed by
+  `npm run firebase:rules deploy` (see [AUDIT.md](AUDIT.md#security-findings)), which can run
+  as soon as the Admin credentials exist.
 - Turn off legacy sign-in when `password_migrated_at is null` stops shrinking (see [AUTH.md](AUTH.md)).
 - Then remove `src/data/firebaseSource.ts`, `src/lib/firebase.ts` and the `firebase` dependency,
   and eventually `drop schema legacy cascade`.

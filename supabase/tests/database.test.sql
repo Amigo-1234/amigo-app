@@ -219,6 +219,9 @@ select pg_temp.must_fail('cannot reply to a deleted post', :A, format($$select p
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');
 select pg_temp.must_fail('legacy schema closed to anon', null, 'select count(*) from legacy.global_chat_archive', '42501');
 select pg_temp.must_fail('legacy lookup not callable by users', :A, $$select * from public.legacy_find_unmigrated_user('ama@example.com')$$, '42501');
+select pg_temp.must_fail('migration import API not callable by users', :A, $$select public.legacy_state()$$, '42501');
+select pg_temp.must_fail('migration import API not callable by anon', null, $$select public.legacy_validation_snapshot()$$, '42501');
+select pg_temp.must_fail('sign-in throttle not callable by users', :A, $$select public.legacy_signin_throttle('a', 'b')$$, '42501');
 select pg_temp.must_fail('trigger helpers not callable by users', :A, $$select public.generate_username('x')$$, '42501');
 
 -- ---------------------------------------------------------------- storage

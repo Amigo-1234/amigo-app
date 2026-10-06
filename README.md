@@ -33,7 +33,7 @@ npm run build                # typecheck (app + scripts) + production build
 | Generated types | [`src/data/supabase/database.types.ts`](src/data/supabase/database.types.ts) (`npm run db:types`) |
 | Data layer | [`src/data/supabase/queries.ts`](src/data/supabase/queries.ts) → [`src/data/supabaseSource.ts`](src/data/supabaseSource.ts). Screens only see the `DataSource` interface. |
 | Edge Function | [`supabase/functions/legacy-sign-in`](supabase/functions/legacy-sign-in): keeps Firebase passwords working ([AUTH.md](docs/migration/AUTH.md)) |
-| Tests | `npm run db:test`: 60 database/RLS checks, rolled back after running · `npm run test:api`: 29 checks through PostgREST |
+| Tests | `npm run db:test`: 63 database/RLS checks, rolled back after running · `npm run test:api`: 29 checks through PostgREST |
 
 To run the tests without Docker or a Supabase project, use plain Postgres 15+ with
 [`supabase/tests/local_supabase_shim.sql`](supabase/tests/local_supabase_shim.sql) applied
@@ -43,9 +43,10 @@ before the migrations (test-only stand-ins for `auth`/`storage`).
 
 ```bash
 npm run migrate:extract     # read-only snapshot of Firebase → migration-data/ (git-ignored, contains emails)
+npm run migrate:diff        # what changed since the previous snapshot (paths and field names only)
 npm run migrate:audit       # field shapes and data quality, no personal data printed
 npm run migrate:plan        # normalise every legacy format; list what would be skipped and why
-npm run migrate:run         # load into Supabase (idempotent) + validation report
+npm run migrate:run         # load into Supabase over HTTPS (idempotent) + validation report
 npm run migrate:validate    # re-check counts, counters, image checksums and a random sample
 ```
 
@@ -53,7 +54,7 @@ npm run migrate:validate    # re-check counts, counters, image checksums and a r
 - [Auth migration](docs/migration/AUTH.md)
 - [Cutover runbook](docs/migration/RUNBOOK.md)
 - [Local dry-run report](docs/migration/dry-run-report-local.md)
-- [Proposed Firebase rules](docs/migration/firebase-rules-proposal.md)
+- [Hardened Firestore rules](firebase/firestore.rules) (`npm run firebase:rules show|test|deploy|rollback`)
 
 ## Stack
 

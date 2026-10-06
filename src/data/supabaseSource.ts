@@ -94,7 +94,11 @@ const LEGACY_SIGNIN = import.meta.env.VITE_LEGACY_SIGNIN === "true";
 async function tryLegacySignIn(email: string, password: string): Promise<boolean> {
   if (!LEGACY_SIGNIN) return false;
   const { data, error } = await supabase.functions.invoke<{ status: string }>("legacy-sign-in", { body: { email, password } });
-  return !error && data?.status === "migrated";
+  if (data?.status === "migrated") return true;
+  // 429 from the bridge: surface it rather than claiming the password is wrong.
+  const status = (error as { context?: { status?: number } } | null)?.context?.status;
+  if (status === 429) throw new AuthError("rate-limited");
+  return false;
 }
 
 async function loadViewer(user: { id: string; email?: string | null }): Promise<Viewer> {

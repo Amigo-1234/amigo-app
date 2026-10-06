@@ -1,9 +1,11 @@
 /**
- * Step 3 — Load. Idempotent: every write first checks the legacy.* maps, so
- * running it again only fills in what is missing. Nothing is ever deleted.
+ * Step 3 — Load. Idempotent: every write is checked against the legacy.* maps
+ * (inside the import functions), so running it again only fills in what is
+ * missing. Nothing is ever deleted, and Firebase is never touched.
  */
-import type pg from "pg";
-import type { MigrationPlan, PlannedUser, Skip } from "./normalize.ts";
+import { createHash } from "node:crypto";
+import type { MigrationDb } from "./db.ts";
+import type { MigrationPlan, Skip } from "./normalize.ts";
 import type { AuthPort, StoragePort } from "./ports.ts";
 
 export type OrphanPolicy = "skip" | "placeholder";
@@ -36,21 +38,17 @@ export interface LoadResult {
 const tally = (): Tally => ({ created: 0, existing: 0, skipped: 0 });
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif" };
 
-export async function load(db: pg.Client, auth: AuthPort, storage: StoragePort, plan: MigrationPlan, opts: LoadOptions): Promise<LoadResult> {
+export async function load(db: MigrationDb, auth: AuthPort, storage: StoragePort, plan: MigrationPlan, opts: LoadOptions): Promise<LoadResult> {
   const r: LoadResult = {
     users: { ...tally(), linked: 0 }, posts: tally(), comments: tally(), media: tally(), likes: tally(), follows: tally(),
     reactionArchive: 0, savedArchive: 0, chatArchive: 0, skipped: [],
   };
   const skip = (s: Skip) => { r.skipped.push(s); opts.log(`  skip ${s.kind} ${s.ref}: ${s.reason}`); };
+  const state = await db.state();
 
   // ------------------------------------------------------------- users
   opts.log(`users (${plan.users.length})`);
-  const uidToUser = new Map<string, string>();
-  {
-    const { rows } = await db.query<{ firebase_uid: string; user_id: string }>("select firebase_uid, user_id from legacy.user_map");
-    for (const row of rows) uidToUser.set(row.firebase_uid, row.user_id);
-  }
-
+  const uidToUser = new Map(Object.entries(state.users));
   for (const u of plan.users) {
     if (uidToUser.has(u.firebaseUid)) { r.users.existing++; continue; }
     const placeholder = !u.email;
@@ -62,11 +60,11 @@ export async function load(db: pg.Client, auth: AuthPort, storage: StoragePort, 
     const email = u.email ?? `firebase-${u.firebaseUid.toLowerCase()}@legacy.amigo.invalid`;
 
     // Never create a second account for an email that already exists.
-    const existing = await db.query<{ id: string }>("select id from auth.users where lower(email) = lower($1) limit 1", [email]);
+    const existing = await db.rpc<string | null>("legacy_find_auth_user", { p_email: email });
     let userId: string;
     let method: "created" | "linked";
-    if (existing.rows[0]) {
-      userId = existing.rows[0].id;
+    if (existing) {
+      userId = existing;
       method = "linked";
       r.users.linked!++;
       opts.log(`  link ${u.firebaseUid} → existing auth user ${userId}`);
@@ -84,24 +82,15 @@ export async function load(db: pg.Client, auth: AuthPort, storage: StoragePort, 
       method = "created";
       r.users.created++;
     }
-
-    await db.query(
-      `insert into legacy.user_map (firebase_uid, user_id, link_method, email_at_migration)
-       values ($1, $2, $3, $4) on conflict (firebase_uid) do nothing`,
-      [u.firebaseUid, userId, method, u.email],
-    );
-    if (method === "created") await adoptLegacyProfile(db, userId, u);
+    await db.rpc("legacy_map_user", {
+      p_firebase_uid: u.firebaseUid, p_user_id: userId, p_link_method: method, p_email: u.email, p_created_at: u.createdAt,
+    });
     uidToUser.set(u.firebaseUid, userId);
   }
 
   // ------------------------------------------------------------- posts + comments
   opts.log(`posts and replies (${plan.posts.length})`);
-  const pathToPost = new Map<string, string>();
-  {
-    const { rows } = await db.query<{ firebase_path: string; post_id: string }>("select firebase_path, post_id from legacy.post_map");
-    for (const row of rows) pathToPost.set(row.firebase_path, row.post_id);
-  }
-
+  const pathToPost = new Map(Object.entries(state.posts));
   for (const p of plan.posts) {
     const t = p.kind === "post" ? r.posts : r.comments;
     if (pathToPost.has(p.firebasePath)) { t.existing++; continue; }
@@ -109,30 +98,18 @@ export async function load(db: pg.Client, auth: AuthPort, storage: StoragePort, 
     if (!authorId) { t.skipped++; skip({ kind: p.kind, ref: p.firebasePath, reason: "author account was not migrated" }); continue; }
     const parentId = p.parentFirebasePath ? pathToPost.get(p.parentFirebasePath) : null;
     if (p.parentFirebasePath && !parentId) { t.skipped++; skip({ kind: p.kind, ref: p.firebasePath, reason: "parent post was not migrated" }); continue; }
-
-    await db.query("begin");
-    try {
-      const { rows } = await db.query<{ id: string }>(
-        `insert into public.posts (author_id, body, parent_id, visibility, created_at, updated_at)
-         values ($1, $2, $3, 'public', $4, $4) returning id`,
-        [authorId, p.body, parentId, p.createdAt],
-      );
-      await db.query("insert into legacy.post_map (firebase_path, post_id, kind, raw_meta) values ($1, $2, $3, $4)", [
-        p.firebasePath, rows[0].id, p.kind, p.rawMeta,
-      ]);
-      await db.query("commit");
-      pathToPost.set(p.firebasePath, rows[0].id);
-      t.created++;
-    } catch (e) {
-      await db.query("rollback");
-      throw e;
-    }
+    const id = await db.rpc<string>("legacy_import_post", {
+      p_path: p.firebasePath, p_kind: p.kind, p_author_id: authorId, p_body: p.body, p_parent_id: parentId,
+      p_created_at: p.createdAt, p_raw_meta: p.rawMeta,
+    });
+    pathToPost.set(p.firebasePath, id);
+    t.created++;
   }
 
   // ------------------------------------------------------------- media
   const images = plan.posts.flatMap((p) => p.images.map((img, position) => ({ p, img, position })));
   opts.log(`media (${images.length})`);
-  const doneMedia = new Set((await db.query<{ source_key: string }>("select source_key from legacy.media_map")).rows.map((x) => x.source_key));
+  const doneMedia = new Set(state.media);
   for (const { p, img, position } of images) {
     if (doneMedia.has(img.sourceKey)) { r.media.existing++; continue; }
     const postId = pathToPost.get(p.firebasePath);
@@ -149,95 +126,63 @@ export async function load(db: pg.Client, auth: AuthPort, storage: StoragePort, 
       mimeType = res.headers.get("content-type")?.split(";")[0] ?? "";
       if (!EXT[mimeType]) { r.media.skipped++; skip({ kind: "image", ref: img.sourceKey, reason: `unsupported remote type ${mimeType}` }); continue; }
     }
-    const { createHash } = await import("node:crypto");
     const sha256 = createHash("sha256").update(bytes).digest("hex");
     // Deterministic path → a re-run overwrites the same object instead of adding one.
-    const fbPostId = p.firebasePath.split("/")[1];
-    const path = `${ownerId}/legacy/${fbPostId}-${position}.${EXT[mimeType]}`;
+    const path = `${ownerId}/legacy/${p.firebasePath.split("/")[1]}-${position}.${EXT[mimeType]}`;
     await storage.put("post-media", path, bytes, mimeType);
-
-    await db.query("begin");
-    try {
-      const { rows } = await db.query<{ id: string }>(
-        `insert into public.post_media (post_id, owner_id, position, kind, bucket, storage_path, mime_type, width, height, byte_size, created_at)
-         values ($1, $2, $3, 'image', 'post-media', $4, $5, $6, $7, $8, $9)
-         on conflict (bucket, storage_path) do update set byte_size = excluded.byte_size
-         returning id`,
-        [postId, ownerId, position, path, mimeType, img.width, img.height, bytes.length, p.createdAt],
-      );
-      await db.query("insert into legacy.media_map (source_key, media_id, sha256) values ($1, $2, $3)", [img.sourceKey, rows[0].id, sha256]);
-      await db.query("commit");
-      r.media.created++;
-    } catch (e) {
-      await db.query("rollback");
-      throw e;
-    }
+    const created = await db.rpc<boolean>("legacy_import_media", {
+      p_source_key: img.sourceKey, p_post_id: postId, p_owner_id: ownerId, p_position: position, p_storage_path: path,
+      p_mime_type: mimeType, p_width: img.width, p_height: img.height, p_byte_size: bytes.length, p_created_at: p.createdAt, p_sha256: sha256,
+    });
+    if (created) r.media.created++;
+    else r.media.existing++;
   }
 
   // ------------------------------------------------------------- likes
   opts.log("likes");
+  const likeRows: { user_id: string; post_id: string; created_at: string }[] = [];
   for (const p of plan.posts) {
     const postId = pathToPost.get(p.firebasePath);
     if (!postId) continue;
     for (const uid of p.likerUids) {
       const userId = uidToUser.get(uid);
       if (!userId) { r.likes.skipped++; skip({ kind: "like", ref: `${p.firebasePath} by ${uid}`, reason: "liker account was not migrated" }); continue; }
-      const res = await db.query(
-        "insert into public.post_likes (user_id, post_id, created_at) values ($1, $2, $3) on conflict do nothing",
-        [userId, postId, p.createdAt],
-      );
-      if (res.rowCount) r.likes.created++;
-      else r.likes.existing++;
+      likeRows.push({ user_id: userId, post_id: postId, created_at: p.createdAt });
     }
+  }
+  for (let i = 0; i < likeRows.length; i += 500) {
+    const batch = likeRows.slice(i, i + 500);
+    const n = await db.rpc<number>("legacy_import_likes", { p_rows: batch });
+    r.likes.created += n;
+    r.likes.existing += batch.length - n;
   }
 
   // ------------------------------------------------------------- follows
   opts.log(`follows (${plan.follows.length})`);
+  const followRows: { follower_id: string; followee_id: string; created_at: string | null }[] = [];
   for (const f of plan.follows) {
     const follower = uidToUser.get(f.followerUid);
     const followee = uidToUser.get(f.followeeUid);
     if (!follower || !followee) { r.follows.skipped++; skip({ kind: "follow", ref: `${f.followerUid}->${f.followeeUid}`, reason: "an account in this follow was not migrated" }); continue; }
-    const res = await db.query(
-      "insert into public.follows (follower_id, followee_id, created_at) values ($1, $2, coalesce($3::timestamptz, now())) on conflict do nothing",
-      [follower, followee, f.createdAt],
-    );
-    if (res.rowCount) r.follows.created++;
-    else r.follows.existing++;
+    followRows.push({ follower_id: follower, followee_id: followee, created_at: f.createdAt });
+  }
+  for (let i = 0; i < followRows.length; i += 500) {
+    const batch = followRows.slice(i, i + 500);
+    const n = await db.rpc<number>("legacy_import_follows", { p_rows: batch });
+    r.follows.created += n;
+    r.follows.existing += batch.length - n;
   }
 
   // ------------------------------------------------------------- archives
   opts.log("archives");
-  for (const a of plan.reactionArchive) {
-    const res = await db.query(
-      `insert into legacy.reaction_archive (firebase_post_path, firebase_uid, kind, user_id, post_id)
-       values ($1, $2, $3, $4, $5) on conflict do nothing`,
-      [a.postPath, a.uid, a.kind, uidToUser.get(a.uid) ?? null, pathToPost.get(a.postPath) ?? null],
-    );
-    r.reactionArchive += res.rowCount ?? 0;
-  }
-  for (const a of plan.savedArchive) {
-    const res = await db.query(
-      `insert into legacy.saved_post_archive (firebase_post_path, firebase_uid, user_id, post_id)
-       values ($1, $2, $3, $4) on conflict do nothing`,
-      [a.postPath, a.uid, uidToUser.get(a.uid) ?? null, pathToPost.get(a.postPath) ?? null],
-    );
-    r.savedArchive += res.rowCount ?? 0;
-  }
-  for (const m of plan.chatArchive) {
-    const res = await db.query(
-      `insert into legacy.global_chat_archive (firebase_id, firebase_uid, user_id, author_name, body, created_at)
-       values ($1, $2, $3, $4, $5, $6) on conflict do nothing`,
-      [m.id, m.uid, m.uid ? uidToUser.get(m.uid) ?? null : null, m.authorName, m.body, m.createdAt],
-    );
-    r.chatArchive += res.rowCount ?? 0;
-  }
+  const archived = await db.rpc<{ reactions: number; saved: number; chat: number }>("legacy_import_archives", {
+    p_reactions: plan.reactionArchive.map((a) => ({ post_path: a.postPath, uid: a.uid, kind: a.kind, user_id: uidToUser.get(a.uid) ?? null, post_id: pathToPost.get(a.postPath) ?? null })),
+    p_saved: plan.savedArchive.map((a) => ({ post_path: a.postPath, uid: a.uid, user_id: uidToUser.get(a.uid) ?? null, post_id: pathToPost.get(a.postPath) ?? null })),
+    p_chat: plan.chatArchive.map((m) => ({ id: m.id, uid: m.uid, user_id: m.uid ? uidToUser.get(m.uid) ?? null : null, author_name: m.authorName, body: m.body, created_at: m.createdAt })),
+  });
+  r.reactionArchive = archived.reactions;
+  r.savedArchive = archived.saved;
+  r.chatArchive = archived.chat;
 
   return r;
-}
-
-/** Give a freshly created profile its legacy name and join date. */
-async function adoptLegacyProfile(db: pg.Client, userId: string, u: PlannedUser) {
-  if (u.createdAt) {
-    await db.query("update public.profiles set created_at = least(created_at, $2::timestamptz) where id = $1", [userId, u.createdAt]);
-  }
 }

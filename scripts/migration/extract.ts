@@ -13,7 +13,7 @@
  *
  * Nothing is ever written to Firebase.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { parseArgs } from "node:util";
 import type { AuthUserRecord, Plain, RawDoc, Snapshot } from "./lib/snapshot.ts";
@@ -140,14 +140,42 @@ async function extractRest(): Promise<Snapshot> {
 
 // --------------------------------------------------------------- Admin source
 
-async function extractAdmin(): Promise<Snapshot> {
-  if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error("Set GOOGLE_APPLICATION_CREDENTIALS to a Firebase service-account JSON (Project settings → Service accounts).");
+/**
+ * Service-account credentials from FIREBASE_SERVICE_ACCOUNT_BASE64 (preferred:
+ * survives single-line secret stores) or FIREBASE_SERVICE_ACCOUNT_JSON.
+ * Parsed in memory only — never written to disk, never logged. Parse errors
+ * are reported without echoing the value.
+ */
+function serviceAccountCredential(cert: typeof import("firebase-admin/app").cert) {
+  const b64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+  const raw = b64 ? Buffer.from(b64, "base64").toString("utf8") : process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) return null;
+  let parsed: { project_id?: string; client_email?: string; private_key?: string };
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("Firebase service-account secret is not valid JSON (value not shown).");
   }
-  const { initializeApp, applicationDefault } = await import("firebase-admin/app");
+  if (!parsed.private_key || !parsed.client_email) throw new Error("Firebase service-account secret is missing private_key/client_email.");
+  if (parsed.project_id && parsed.project_id !== PROJECT_ID) {
+    throw new Error(`Service account belongs to project ${parsed.project_id}, expected ${PROJECT_ID}.`);
+  }
+  console.log(`using Firebase service account ${parsed.client_email.replace(/^(.{3}).*(@.*)$/, "$1…$2")}`);
+  return cert(parsed as Parameters<typeof cert>[0]);
+}
+
+async function extractAdmin(): Promise<Snapshot> {
+  const { initializeApp, applicationDefault, cert } = await import("firebase-admin/app");
+  const credential = serviceAccountCredential(cert) ?? (process.env.GOOGLE_APPLICATION_CREDENTIALS ? applicationDefault() : null);
+  if (!credential) {
+    throw new Error(
+      "No Firebase Admin credentials. Set FIREBASE_SERVICE_ACCOUNT_BASE64 (base64 of the service-account JSON) " +
+        "in the environment's secrets, or GOOGLE_APPLICATION_CREDENTIALS to a git-ignored file path.",
+    );
+  }
   const { getFirestore, Timestamp } = await import("firebase-admin/firestore");
   const { getAuth } = await import("firebase-admin/auth");
-  const app = initializeApp({ credential: applicationDefault(), projectId: PROJECT_ID });
+  const app = initializeApp({ credential, projectId: PROJECT_ID });
   const db = getFirestore(app);
 
   const toPlain = (v: unknown): Plain => {
@@ -227,6 +255,13 @@ async function extractAdmin(): Promise<Snapshot> {
 
 const snapshot = args.source === "rest" ? await extractRest() : await extractAdmin();
 mkdirSync(dirname(args.out!), { recursive: true });
+// Keep the previous snapshot so changes can be compared (npm run migrate:diff).
+if (existsSync(args.out!)) {
+  const prev = JSON.parse(readFileSync(args.out!, "utf8")) as Snapshot;
+  const archived = args.out!.replace(/\.json$/, `-${prev.meta.extractedAt.replace(/[:.]/g, "-")}.json`);
+  renameSync(args.out!, archived);
+  console.log(`previous snapshot kept as ${archived}`);
+}
 writeFileSync(args.out!, JSON.stringify(snapshot, null, 2), { mode: 0o600 });
 console.log(
   `Snapshot written to ${args.out} (${snapshot.meta.source}): ` +

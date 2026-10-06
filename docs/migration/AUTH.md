@@ -42,13 +42,20 @@ uids that appear in content but have no Firebase Auth record or email
   so their posts survive. If the real person turns up later, update that account's email in
   the dashboard and they can reset their password.
 
-### Turning it off
+### Turning it off, then removing the Firebase dependency
 
 When most active users have migrated (`select count(*) from legacy.user_map where password_migrated_at is null`):
 
-1. Set the Edge Function secret `LEGACY_SIGNIN_ENABLED=false` and the app env `VITE_LEGACY_SIGNIN=false`.
-2. Remaining people use "Forgot password?".
-3. Firebase can then be shut down.
+1. **Disable:** `supabase secrets set LEGACY_SIGNIN_ENABLED=false` (instant kill switch), and set
+   `VITE_LEGACY_SIGNIN=false` in Vercel and redeploy. Remaining people use "Forgot password?".
+2. **Remove the function:** `supabase functions delete legacy-sign-in` and
+   `supabase secrets unset FIREBASE_WEB_API_KEY LEGACY_SIGNIN_HASH_KEY LEGACY_SIGNIN_ENABLED`.
+3. **Remove client code:** `tryLegacySignIn` in `src/data/supabaseSource.ts`,
+   `src/data/firebaseSource.ts`, `src/data/legacy.ts`, `src/lib/firebase.ts` and the `firebase` dependency.
+4. **Remove database helpers** (new migration):
+   `drop function public.legacy_find_unmigrated_user, public.legacy_signin_throttle, public.legacy_signin_succeeded`,
+   the `public.legacy_*` import functions, and finally `drop schema legacy cascade`.
+5. Shut down the Firebase project.
 
 ## Security notes
 
@@ -57,6 +64,9 @@ When most active users have migrated (`select count(*) from legacy.user_map wher
 - Unknown emails, already-migrated accounts and wrong passwords all return the same
   `no_match` response, and Firebase is called in every case, so timing doesn't reveal which
   emails are migrated accounts.
-- Brute force is no easier than against Firebase directly, which rate-limits per IP.
-  Supabase rate limits apply on the sign-in itself.
+- **Rate limited:** 5 failed attempts per email and 20 per IP in 15 minutes
+  (`legacy.signin_attempts`). Only HMAC hashes of email and IP are stored, keyed with
+  `LEGACY_SIGNIN_HASH_KEY`. Limits apply equally to emails that don't exist, so a
+  `429` reveals nothing. A successful migration clears that email's counter.
+  Supabase's own sign-in rate limits apply on top.
 - Lock the function down with `ALLOWED_ORIGINS`, and turn it off when migration is done.

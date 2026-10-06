@@ -16,10 +16,13 @@
  *
  * The password is never stored or logged here. Every failure returns the same
  * response, so the function can't be used to probe which emails exist.
+ * Attempts are rate limited per email and per IP (legacy.signin_attempts),
+ * keyed by HMAC hashes so no raw email or IP is stored.
  *
  * Secrets (supabase secrets set …):
  *   LEGACY_SIGNIN_ENABLED=true     kill switch — anything else disables it
  *   FIREBASE_WEB_API_KEY=…         the public web API key of amigo-world-ebfab
+ *   LEGACY_SIGNIN_HASH_KEY=…       random 32+ byte string used to key the attempt hashes
  * SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the platform.
  */
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -42,6 +45,18 @@ const json = (req: Request, body: unknown, status = 200) =>
 
 // Same answer for unknown email, already-migrated account and wrong password.
 const NO_MATCH = { status: "no_match" };
+const encoder = new TextEncoder();
+
+async function keyed(value: string): Promise<string> {
+  const secret = Deno.env.get("LEGACY_SIGNIN_HASH_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, encoder.encode(value)));
+  return Array.from(sig, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function clientIp(req: Request): string {
+  return (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || req.headers.get("x-real-ip") || "unknown";
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors(req) });
@@ -66,6 +81,14 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  const emailKey = await keyed(`email:${email}`);
+  const { data: allowed, error: throttleError } = await admin.rpc("legacy_signin_throttle", {
+    p_email_key: emailKey,
+    p_ip_key: await keyed(`ip:${clientIp(req)}`),
+  });
+  if (throttleError) return json(req, { status: "error" }, 500);
+  if (!allowed) return json(req, { status: "rate_limited" }, 429);
+
   const { data: rows, error: lookupError } = await admin.rpc("legacy_find_unmigrated_user", { p_email: email });
   if (lookupError) return json(req, { status: "error" }, 500);
   const record = rows?.[0] as { user_id: string; firebase_uid: string } | undefined;
@@ -83,5 +106,6 @@ Deno.serve(async (req) => {
 
   const { error } = await admin.auth.admin.updateUserById(record.user_id, { password, email_confirm: true });
   if (error) return json(req, { status: "error" }, 500);
+  await admin.rpc("legacy_signin_succeeded", { p_email_key: emailKey });
   return json(req, { status: "migrated" });
 });

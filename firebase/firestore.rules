@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// Amigo World — legacy Firestore rules (rollback-period hardening).
+//
+// Goal: stop the public exposure of users/* (which holds email addresses)
+// without breaking the legacy app or the read-only migration:
+//
+//   * users/{uid}            owner-only. Emails are no longer retrievable by others.
+//   * following / followers  readable when signed in; written only by the person acting.
+//   * posts, comments, chat  unchanged reads. The legacy app opens these listeners at
+//                            page load, before sign-in; requiring auth would silently
+//                            kill its feed for people who sign in mid-session.
+//   * everything else        denied (unknown collections are checked before deploy).
+//
+// The migration uses the Admin SDK, which bypasses rules, so it is unaffected.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isUser(uid) { return signedIn() && request.auth.uid == uid; }
+
+    match /users/{uid} {
+      allow read, write: if isUser(uid);
+
+      match /following/{target} {
+        allow read: if signedIn();
+        allow write: if isUser(uid);
+      }
+      match /followers/{follower} {
+        allow read: if signedIn();
+        allow write: if isUser(follower);
+      }
+    }
+
+    match /posts/{postId} {
+      allow read: if true;
+      allow create: if signedIn();
+      // The legacy client updates like/reaction counters and arrays on other people's posts.
+      allow update: if signedIn();
+      allow delete: if false;
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if signedIn();
+        allow update, delete: if false;
+      }
+    }
+
+    match /globalChat/{messageId} {
+      allow read: if true;
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+  }
+}
