@@ -1,0 +1,250 @@
+/* ---------- Post ----------
+   Full-bleed on phones, separated by hairlines. Text runs the full column
+   width under the byline (not indented beside the avatar). */
+
+.post {
+  position: relative;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.post--feed {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .post--feed:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.post__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.post__byline {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.post__name {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post__meta {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post__time:hover {
+  color: var(--text-2);
+  text-decoration: underline;
+}
+
+.post__text {
+  margin-top: var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.post--focus .post__text {
+  font-size: var(--text-lg);
+  line-height: 1.45;
+}
+
+.post__text--statement {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+}
+
+.post--focus .post__text--statement {
+  font-size: 1.75rem;
+}
+
+.post__more {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.rich-link {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.rich-link:hover {
+  text-decoration: underline;
+}
+
+.post__timestamp {
+  margin-top: var(--space-4);
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+/* ---------- Media ---------- */
+
+.post-media {
+  margin-top: var(--space-3);
+  display: grid;
+  gap: 3px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.post-media--2,
+.post-media--4 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.post-media--3 {
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.post-media--3 > :first-child {
+  grid-row: span 2;
+}
+
+.media-tile {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  background: var(--surface-2);
+  cursor: zoom-in;
+}
+
+.post-media--1 .media-tile {
+  border-radius: var(--radius-lg);
+}
+
+.media-tile::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--border);
+  pointer-events: none;
+}
+
+.media-tile img,
+.media-tile video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.media-tile img {
+  opacity: 0;
+  transition: opacity var(--dur-med) ease;
+}
+
+.media-tile.is-loaded img {
+  opacity: 1;
+}
+
+.media-tile--natural {
+  min-height: 200px;
+}
+
+.media-tile--natural img {
+  height: auto;
+  max-height: 560px;
+}
+
+.media-tile__failed {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 160px;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+/* ---------- Actions ---------- */
+
+.post__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-2) calc(-1 * var(--space-2)) 0;
+}
+
+.post--focus .post__actions {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  height: 40px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+
+.action:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.action--share {
+  margin-left: auto;
+}
+
+.action--like.is-active {
+  color: var(--accent);
+}
+
+.action--like.is-active svg {
+  animation: like-pop 320ms var(--ease-out);
+}
+
+.action__count:empty {
+  display: none;
+}
+
+@keyframes like-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- Tablet / desktop ---------- */
+
+@media (min-width: 768px) {
+  .post {
+    padding: var(--space-5) var(--space-5) var(--space-2);
+  }
+
+  /* Keep tall portraits from swallowing the desktop column; crop centered. */
+  .post--feed .post-media--1 .media-tile {
+    max-height: 560px;
+  }
+}

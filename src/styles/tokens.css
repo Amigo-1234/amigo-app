@@ -1,0 +1,133 @@
+/* ==========================================================================
+   Amigo World — design tokens
+   One accent (Amigo Coral), warm neutrals, two themes.
+   Theme resolution: [data-theme] on <html> wins; otherwise follow the OS.
+   ========================================================================== */
+
+:root {
+  /* Type */
+  --font-display: "Bricolage Grotesque Variable", "Geist Variable", system-ui, sans-serif;
+  --font-body: "Geist Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --text-xs: 0.75rem;   /* 12 */
+  --text-sm: 0.8125rem; /* 13 */
+  --text-md: 0.9375rem; /* 15 — body / post text */
+  --text-lg: 1.0625rem; /* 17 */
+  --text-xl: 1.375rem;  /* 22 — screen titles */
+  --text-2xl: 1.75rem;  /* 28 */
+  --text-3xl: 2.5rem;   /* 40 */
+
+  /* Spacing (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Radii — rounded rectangles, not pills */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 999px;
+
+  /* Layout */
+  --column-width: 620px;
+  --rail-width: 340px;
+  --sidebar-width: 248px;
+  --sidebar-compact: 76px;
+  --topbar-height: 56px;
+  --bottomnav-height: 60px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 120ms;
+  --dur-med: 220ms;
+
+  /* Brand — Amigo Coral */
+  --coral-300: #ff9b83;
+  --coral-400: #ff7a5c;
+  --coral-500: #ff5a3c;
+  --coral-600: #e8452a;
+  --coral-700: #c4341c;
+  --on-accent: #1d0a05;
+
+  /* Light theme (default values) */
+  --bg: #f8f7f4;
+  --bg-elevated: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f0eee9;
+  --surface-3: #e6e3dd;
+  --surface-hover: rgba(24, 20, 14, 0.04);
+  --border: rgba(24, 20, 14, 0.09);
+  --border-strong: rgba(24, 20, 14, 0.16);
+  --text: #16130f;
+  --text-2: #5c5852;
+  --text-3: #8a857d;
+  --accent: var(--coral-500);
+  --accent-text: var(--coral-700);
+  --accent-soft: rgba(255, 90, 60, 0.12);
+  --danger: #c62b2b;
+  --danger-soft: rgba(198, 43, 43, 0.1);
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--coral-500);
+  --shadow-sm: 0 1px 2px rgba(24, 20, 14, 0.06);
+  --shadow-lg: 0 12px 40px rgba(24, 20, 14, 0.16), 0 2px 6px rgba(24, 20, 14, 0.06);
+  --scrim: rgba(18, 15, 11, 0.45);
+  --skeleton: #ebe8e2;
+  --skeleton-shine: #f4f2ee;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0c0c0e;
+    --bg-elevated: #151518;
+    --surface: #131316;
+    --surface-2: #1c1c20;
+    --surface-3: #26262b;
+    --surface-hover: rgba(255, 255, 255, 0.035);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.15);
+    --text: #f3f1ee;
+    --text-2: #a8a49e;
+    --text-3: #75726d;
+    --accent-text: var(--coral-400);
+    --accent-soft: rgba(255, 90, 60, 0.16);
+    --danger: #ff6b6b;
+    --danger-soft: rgba(255, 107, 107, 0.12);
+    --shadow-sm: none;
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+    --scrim: rgba(0, 0, 0, 0.65);
+    --skeleton: #1d1d21;
+    --skeleton-shine: #26262b;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0c0c0e;
+  --bg-elevated: #151518;
+  --surface: #131316;
+  --surface-2: #1c1c20;
+  --surface-3: #26262b;
+  --surface-hover: rgba(255, 255, 255, 0.035);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.15);
+  --text: #f3f1ee;
+  --text-2: #a8a49e;
+  --text-3: #75726d;
+  --accent-text: var(--coral-400);
+  --accent-soft: rgba(255, 90, 60, 0.16);
+  --danger: #ff6b6b;
+  --danger-soft: rgba(255, 107, 107, 0.12);
+  --shadow-sm: none;
+  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --scrim: rgba(0, 0, 0, 0.65);
+  --skeleton: #1d1d21;
+  --skeleton-shine: #26262b;
+  color-scheme: dark;
+}
