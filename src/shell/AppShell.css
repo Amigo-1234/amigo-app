@@ -327,3 +327,33 @@
   font-variant-numeric: tabular-nums;
   box-shadow: 0 0 0 2px var(--bg);
 }
+
+/* ---------- Messages: a wider main column, no rail ---------- */
+
+.shell--conversation .bottom-nav {
+  display: none;
+}
+
+.shell--conversation .main {
+  padding-bottom: 0;
+}
+
+@media (min-width: 900px) {
+  .shell--messages {
+    grid-template-columns: var(--sidebar-compact) minmax(0, 960px);
+  }
+
+  .shell--messages .main {
+    padding-bottom: 0;
+  }
+}
+
+@media (min-width: 1200px) {
+  .shell--messages {
+    grid-template-columns: var(--sidebar-width) minmax(0, calc(var(--column-width) + var(--rail-width)));
+  }
+
+  .shell--messages .rail {
+    display: none;
+  }
+}

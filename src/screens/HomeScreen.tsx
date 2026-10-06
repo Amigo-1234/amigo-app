@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router";
-import { ArrowUp, Bell, CircleAlert, Feather, HandHeart, UsersRound, WifiOff } from "lucide-react";
+import { ArrowUp, Bell, CircleAlert, Feather, HandHeart, Mail, UsersRound, WifiOff } from "lucide-react";
 import { supportEnabled } from "../features/support/useSupport";
 import { Composer } from "../features/composer/Composer";
 import { describeError } from "../features/feed/errors";
@@ -7,9 +7,11 @@ import { useFeed, type FeedTab } from "../features/feed/useFeed";
 import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { FeedFooter } from "../features/feed/FeedFooter";
+import { messagesInBottomBar } from "../shell/nav";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
 import { pendingAsPost, usePublishing } from "../state/publishing";
+import { messagesEnabled, messagesLabel, useUnreadMessages } from "../state/messages";
 import { badgeText, notificationsEnabled, notificationsLabel, useUnread } from "../state/notifications";
 import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
@@ -31,6 +33,8 @@ export default function HomeScreen() {
   const publishing = usePublishing();
   const { unread } = useUnread();
   const badge = notificationsEnabled ? badgeText(unread) : null;
+  const unreadMessages = useUnreadMessages();
+  const messagesBadge = badgeText(unreadMessages);
   // Optimistic posts, until the real post shows up in the feed.
   const feedIds = new Set(feed.posts.map((p) => p.id));
   const pending = publishing.pending.filter((p) => !(p.status === "sent" && p.postId && feedIds.has(p.postId)));
@@ -50,6 +54,15 @@ export default function HomeScreen() {
           {supportEnabled && (
             <Link to="/support" className="icon-btn icon-btn--md mobile-only" aria-label="Support Hub" title="Support Hub">
               <HandHeart size={22} aria-hidden="true" />
+            </Link>
+          )}
+          {/* On phones Worlds takes Messages' bottom-bar slot, so Messages lives here. */}
+          {messagesEnabled && !messagesInBottomBar && (
+            <Link to="/messages" className="icon-btn icon-btn--md mobile-only" aria-label={messagesLabel(unreadMessages)} title="Messages">
+              <span className="nav-icon">
+                <Mail size={22} aria-hidden="true" />
+                {messagesBadge && <span className="nav-badge" aria-hidden="true">{messagesBadge}</span>}
+              </span>
             </Link>
           )}
           <Link to="/notifications" className="icon-btn icon-btn--md mobile-only" aria-label={notificationsLabel(unread)} title="Notifications">

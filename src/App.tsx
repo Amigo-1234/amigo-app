@@ -6,6 +6,7 @@ import HomeScreen from "./screens/HomeScreen";
 import { ComingSoonScreen } from "./screens/ComingSoonScreen";
 import { AppShell } from "./shell/AppShell";
 import { ComposerProvider } from "./state/composer";
+import { MessagesProvider } from "./state/messages";
 import { NotificationsProvider, notificationsEnabled } from "./state/notifications";
 import { PublishingProvider } from "./state/publishing";
 import { SessionProvider, useSession, useViewer } from "./state/session";
@@ -26,6 +27,7 @@ const WorldScreen = lazy(() => import("./screens/WorldScreen"));
 const SupportScreen = lazy(() => import("./screens/SupportScreen"));
 const SupportRequestScreen = lazy(() => import("./screens/SupportRequestScreen"));
 const SupportNewScreen = lazy(() => import("./screens/SupportNewScreen"));
+const MessagesScreen = lazy(() => import("./screens/MessagesScreen"));
 const AdminScreen = lazy(() => import("./screens/AdminScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
@@ -61,9 +63,11 @@ function Root() {
     <ComposerProvider>
       <PublishingProvider>
         <NotificationsProvider>
-          <MediaViewerProvider>
-            <AppShell />
-          </MediaViewerProvider>
+          <MessagesProvider>
+            <MediaViewerProvider>
+              <AppShell />
+            </MediaViewerProvider>
+          </MessagesProvider>
         </NotificationsProvider>
       </PublishingProvider>
     </ComposerProvider>
@@ -122,10 +126,17 @@ const router = createBrowserRouter([
           <ComingSoonScreen title="Notifications" icon={Bell} body="Likes, replies and new followers will show up here." />
         ),
       },
-      {
-        path: "messages",
-        element: <ComingSoonScreen title="Messages" icon={Mail} body="Private conversations with your people, one-on-one and in groups." />,
-      },
+      ...(dataSource.messages
+        ? [
+            { path: "messages", element: <MessagesScreen /> },
+            { path: "messages/:conversationId", element: <MessagesScreen /> },
+          ]
+        : [
+            {
+              path: "messages",
+              element: <ComingSoonScreen title="Messages" icon={Mail} body="Private one-to-one conversations with your people." />,
+            },
+          ]),
       { path: "*", element: <NotFoundScreen /> },
     ],
   },

@@ -572,6 +572,113 @@ export interface AdminApi {
   users: AdminUsersApi;
 }
 
+// ----------------------------------------------------------------- messages
+
+/**
+ * Where a message of yours has got to. "sending"/"failed" exist only on this
+ * device; the rest come from the other person's read/delivered markers.
+ */
+export type MessageStatus = "sending" | "failed" | "sent" | "delivered" | "read";
+
+/** The message a reply answers, trimmed to what the quote needs. */
+export interface MessageQuote {
+  id: string;
+  fromViewer: boolean;
+  text: string;
+  hasImage: boolean;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  fromViewer: boolean;
+  text: string;
+  media: MediaItem[];
+  replyTo: MessageQuote | null;
+  createdAt: Date;
+  /** Your messages: sent → delivered → read. Theirs: always "read" or "delivered". */
+  status: MessageStatus;
+  /**
+   * End-to-end encrypted backends only: this device has no key for the message
+   * (sent before this device existed, or keys not received yet). text is empty.
+   */
+  undecryptable?: boolean;
+}
+
+/** One-to-one only (no groups yet). */
+export interface Conversation {
+  id: string;
+  peer: Author;
+  /** null for a conversation that has no messages yet. */
+  lastMessage: { text: string; hasImage: boolean; fromViewer: boolean; createdAt: Date; status: MessageStatus; undecryptable?: boolean } | null;
+  unreadCount: number;
+  /** You blocked them: nothing can be sent either way until you unblock. */
+  blockedByViewer: boolean;
+  /** false when either side has blocked the other. Who blocked whom is only shown to the blocker. */
+  canSend: boolean;
+}
+
+export interface ConversationView {
+  conversation: Conversation;
+  messages: DirectMessage[];
+}
+
+export interface NewMessageInput {
+  text: string;
+  image?: NewMediaInput | null;
+  replyToId?: string | null;
+}
+
+export type MessageReportReason = "spam" | "harassment" | "inappropriate" | "other";
+
+export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "unknown";
+
+export class MessageError extends Error {
+  code: MessageErrorCode;
+  constructor(code: MessageErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/** Longest message, in characters. Same limit on every backend. */
+export const MESSAGE_MAX_LENGTH = 2000;
+
+/**
+ * Direct messages. Optional capability.
+ *
+ * `encryption` says what the backend really does with message bodies:
+ *  - "e2e": encrypted on this device before upload; the server stores only
+ *    ciphertext (Supabase, see docs/architecture/MESSAGES.md).
+ *  - "none": not end-to-end encrypted (the demo keeps messages in this browser).
+ * The UI only ever says "end-to-end encrypted" when this is "e2e".
+ */
+export interface MessagesApi {
+  encryption: "none" | "e2e";
+  subscribeConversations(viewerId: string, sub: Subscription<Conversation[]>): Unsubscribe;
+  /** Conversations with unread messages (what the Messages badge shows). */
+  subscribeUnreadCount(viewerId: string, sub: Subscription<number>): Unsubscribe;
+  /** The conversation with this person, created if needed. Resolves with its id. */
+  openConversation(viewerId: string, peerId: string): Promise<string>;
+  /** null: no such conversation, or you're not in it. */
+  subscribeConversation(conversationId: string, viewerId: string, sub: Subscription<ConversationView | null>): Unsubscribe;
+  send(viewerId: string, conversationId: string, input: NewMessageInput): Promise<void>;
+  /** Marks everything in the conversation as read by you (the other person sees "Read"). */
+  markRead(viewerId: string, conversationId: string): Promise<void>;
+  /** Ephemeral: never stored. */
+  setTyping(viewerId: string, conversationId: string, typing: boolean): void;
+  subscribeTyping(conversationId: string, viewerId: string, cb: (peerTyping: boolean) => void): Unsubscribe;
+  block(viewerId: string, peerId: string): Promise<void>;
+  unblock(viewerId: string, peerId: string): Promise<void>;
+  /**
+   * Report a conversation. On an encrypted backend the server can't read
+   * messages, so the reporter's device includes the text of the messages
+   * they chose to share (messageIds) in the report.
+   */
+  report(viewerId: string, conversationId: string, input: { reason: MessageReportReason; note: string; messageIds: string[] }): Promise<void>;
+}
+
 export interface Subscription<T> {
   onData: (value: T) => void;
   onError: (error: Error) => void;
@@ -601,6 +708,8 @@ export interface DataSource {
   support?: SupportApi;
   /** Optional capability — see AdminApi. */
   admin?: AdminApi;
+  /** Optional capability — see MessagesApi. */
+  messages?: MessagesApi;
 
   // auth
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;

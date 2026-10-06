@@ -14,7 +14,7 @@ const worlds = !!dataSource.worlds;
 export const NAV: NavItem[] = [
   { to: "/", label: "Home", icon: House, mobile: true },
   { to: "/explore", label: "Explore", icon: Compass, mobile: true },
-  // Worlds only where the backend supports them; on phones they take Messages' slot (Messages isn't built yet).
+  // Worlds only where the backend supports them; on phones they take Messages' slot (Messages is then in the Home header).
   ...(worlds ? [{ to: "/worlds", label: "Worlds", icon: Orbit, mobile: true }] : []),
   // Support Hub: sidebar on larger screens; on phones it's in the Home header next to Notifications.
   ...(dataSource.support ? [{ to: "/support", label: "Support Hub", icon: HandHeart, mobile: false }] : []),
@@ -23,3 +23,6 @@ export const NAV: NavItem[] = [
   // Resolved to the viewer's own /u/<handle> in AppShell.
   { to: "/profile", label: "Profile", icon: UserRound, mobile: true },
 ];
+
+/** Whether phones get Messages in the bottom bar (otherwise it's in the Home header). */
+export const messagesInBottomBar = NAV.some((n) => n.to === "/messages" && n.mobile);

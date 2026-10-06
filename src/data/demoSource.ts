@@ -6,6 +6,7 @@
  */
 import { mentionedHandles } from "../lib/mentions";
 import { clearDemoState, loadDemoState, saveDemoState } from "./demoPersist";
+import { createDemoMessages } from "./demoMessages";
 import { createDemoSupport } from "./demoSupport";
 import { createDemoWorlds } from "./demoWorlds";
 import type {
@@ -14,6 +15,7 @@ import type {
   VerificationType,
   DataSource,
   MediaItem,
+  NewMediaInput,
   NotificationKind,
   PersonSummary,
   Post,
@@ -162,6 +164,11 @@ const emit = () => {
 };
 /** Uploaded images live as blob: URLs; the Blob itself is what gets saved. */
 const mediaBlobs = new Map<string, Blob>();
+function uploadMedia(m: NewMediaInput): MediaItem {
+  const url = URL.createObjectURL(m.blob);
+  mediaBlobs.set(url, m.blob);
+  return { type: "image", url, width: m.width, height: m.height, alt: m.alt };
+}
 /** Resolve with fn() after a fake network delay; a throw becomes a rejection, not an uncaught error. */
 const later = <T>(fn: () => T, ms = latency) =>
   new Promise<T>((resolve, reject) =>
@@ -377,6 +384,16 @@ const demoSupport = createDemoSupport({
   scenario,
 });
 
+const demoMessages = createDemoMessages({
+  author,
+  exists: (id) => people.has(id),
+  emit,
+  watch,
+  later,
+  img,
+  upload: uploadMedia,
+});
+
 // ------------------------------------------------------------- persistence
 
 let signedIn = scenario !== "signedout";
@@ -392,6 +409,7 @@ interface SavedState {
   signedIn: boolean;
   worlds: ReturnType<typeof demoWorlds.persist.export>;
   support: ReturnType<typeof demoSupport.persist.export>;
+  messages: ReturnType<typeof demoMessages.persist.export>;
 }
 
 const saveMedia = (m: MediaItem): SavedMedia => (mediaBlobs.has(m.url) ? { ...m, url: "", blob: mediaBlobs.get(m.url) } : m);
@@ -414,6 +432,7 @@ function exportState(): SavedState {
     signedIn,
     worlds: demoWorlds.persist.export(),
     support: demoSupport.persist.export(),
+    messages: demoMessages.persist.export(saveMedia),
   };
 }
 
@@ -429,6 +448,7 @@ function importState(s: SavedState) {
   signedIn = s.signedIn;
   demoWorlds.persist.import(s.worlds);
   demoSupport.persist.import(s.support);
+  if (s.messages) demoMessages.persist.import(s.messages as never, loadMedia as never);
 }
 
 if (persistOn) {
@@ -466,6 +486,7 @@ if (persistOn) {
   notificationCount: (recipientId: string) => notes.filter((n) => n.recipientId === recipientId).length,
   worlds: demoWorlds.hooks,
   support: demoSupport.hooks,
+  messages: demoMessages.hooks,
 };
 
 // -------------------------------------------------------------------- auth
@@ -528,12 +549,8 @@ export const demoSource: DataSource = {
         failNextPost = false;
         throw new Error("Demo publish failure");
       }
-      // Demo keeps media as in-memory blob URLs for this session only.
-      const media: MediaItem[] = input.media.map((m) => {
-        const url = URL.createObjectURL(m.blob);
-        mediaBlobs.set(url, m.blob);
-        return { type: "image", url, width: m.width, height: m.height, alt: m.alt };
-      });
+      // Demo keeps media as blob URLs; the Blobs are saved with the demo state.
+      const media: MediaItem[] = input.media.map(uploadMedia);
       if (input.world) demoWorlds.checkPost(input.world.id, v.id, input.world.entry);
       const id = `p${Date.now()}`;
       const created = rec(id, v.id, input.text.trim(), new Date(), 0, media);
@@ -588,6 +605,10 @@ export const demoSource: DataSource = {
 
   get admin() {
     return demoSupport.admin;
+  },
+
+  get messages() {
+    return demoMessages.api;
   },
 
   discovery: {

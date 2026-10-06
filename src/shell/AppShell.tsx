@@ -6,6 +6,7 @@ import { useIsAdmin } from "../features/admin/useAdmin";
 import { Composer, type ComposerHandle } from "../features/composer/Composer";
 import { PublishStatusBar } from "./PublishStatusBar";
 import { useComposer } from "../state/composer";
+import { messagesLabel, useUnreadMessages } from "../state/messages";
 import { badgeText, notificationsLabel, useUnread } from "../state/notifications";
 import { useViewer } from "../state/session";
 import { Avatar } from "../ui/Avatar";
@@ -24,6 +25,12 @@ export function AppShell() {
   const { unread } = useUnread();
   const isAdmin = useIsAdmin();
   const badge = badgeText(unread);
+  const unreadMessages = useUnreadMessages();
+  const messagesBadge = badgeText(unreadMessages);
+  const badgeFor = (to: string) => (to === "/notifications" ? badge : to === "/messages" ? messagesBadge : null);
+  const labelFor = (to: string) => (to === "/notifications" ? notificationsLabel(unread) : to === "/messages" ? messagesLabel(unreadMessages) : undefined);
+  const inMessages = pathname === "/messages" || pathname.startsWith("/messages/");
+  const inConversation = pathname.startsWith("/messages/");
 
   useEffect(() => window.scrollTo(0, 0), [pathname]);
 
@@ -49,7 +56,7 @@ export function AppShell() {
     `${isActive || (to === meHref && onMe) ? "active" : ""}`;
 
   return (
-    <div className="shell">
+    <div className={`shell${inMessages ? " shell--messages" : ""}${inConversation ? " shell--conversation" : ""}`}>
       <a href="#main" className="skip-link">
         Skip to content
       </a>
@@ -69,7 +76,7 @@ export function AppShell() {
                 end={to === "/"}
                 className={(a) => `side-link ${navClass(to)(a)}`}
                 title={label}
-                aria-label={to === "/notifications" ? notificationsLabel(unread) : undefined}
+                aria-label={labelFor(to)}
               >
                 {({ isActive: routeActive }) => {
                   const isActive = routeActive || (to === meHref && onMe);
@@ -77,7 +84,7 @@ export function AppShell() {
                   <>
                     <span className="nav-icon">
                       <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
-                      {to === "/notifications" && badge && <span className="nav-badge" aria-hidden="true">{badge}</span>}
+                      {badgeFor(to) && <span className="nav-badge" aria-hidden="true">{badgeFor(to)}</span>}
                     </span>
                     <span className="side-link__label">{label}</span>
                   </>
@@ -120,7 +127,7 @@ export function AppShell() {
 
       <nav className="bottom-nav" aria-label="Primary">
         {mobileItems.slice(0, 2).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end={to === "/"} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={label}>
+          <NavLink key={to} to={to} end={to === "/"} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={labelFor(to) ?? label}>
             {({ isActive }) => <Icon size={25} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />}
           </NavLink>
         ))}
@@ -128,14 +135,17 @@ export function AppShell() {
           <Plus size={24} strokeWidth={2.4} aria-hidden="true" />
         </button>
         {mobileItems.slice(2).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={label}>
+          <NavLink key={to} to={to} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={labelFor(to) ?? label}>
             {({ isActive }) =>
               to === meHref ? (
                 <span className={`bottom-avatar${isActive || onMe ? " is-active" : ""}`}>
                   <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="xs" />
                 </span>
               ) : (
-                <Icon size={25} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
+                <span className="nav-icon">
+                  <Icon size={25} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
+                  {badgeFor(to) && <span className="nav-badge" aria-hidden="true">{badgeFor(to)}</span>}
+                </span>
               )
             }
           </NavLink>

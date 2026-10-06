@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, CalendarDays, HandHeart, CircleAlert, Feather, Image as ImageIcon, MessageCircle, Settings, UserRoundX } from "lucide-react";
+import { ArrowLeft, CalendarDays, HandHeart, CircleAlert, Feather, Image as ImageIcon, Mail, MessageCircle, Settings, UserRoundX } from "lucide-react";
 import { dataSource, type Profile, type ProfileTab, type SupportProfileStats } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
@@ -14,6 +14,9 @@ import { RichText } from "../features/posts/RichText";
 import { formatCount } from "../lib/format";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
+import { messagesEnabled } from "../state/messages";
+import { useViewer } from "../state/session";
+import { useToast } from "../state/toast";
 import { Avatar } from "../ui/Avatar";
 import { Button, IconButton } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
@@ -106,6 +109,35 @@ export default function ProfileScreen() {
   );
 }
 
+/** Opens (or starts) the one-to-one conversation with this person. */
+function MessageButton({ profile }: { profile: Profile }) {
+  const viewer = useViewer();
+  const navigate = useNavigate();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="secondary"
+      size="md"
+      loading={busy}
+      icon={<Mail size={18} aria-hidden="true" />}
+      aria-label={`Message ${profile.name}`}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const id = await dataSource.messages!.openConversation(viewer.id, profile.id);
+          navigate(`/messages/${id}`);
+        } catch {
+          toast(`Couldn't open a conversation with ${profile.name}`, "error");
+          setBusy(false);
+        }
+      }}
+    >
+      Message
+    </Button>
+  );
+}
+
 function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; onEdit: () => void; onFollowChange: (f: boolean) => void }) {
   return (
     <section className="profile" aria-label={`${profile.name}'s profile`}>
@@ -117,7 +149,10 @@ function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; 
               Edit profile
             </Button>
           ) : (
-            <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} size="md" onChange={onFollowChange} />
+            <>
+              {messagesEnabled && <MessageButton profile={profile} />}
+              <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} size="md" onChange={onFollowChange} />
+            </>
           )}
         </div>
       </div>
