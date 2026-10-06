@@ -559,6 +559,34 @@ select pg_temp.must_fail('removing twice is an error', :D, $$select public.admin
 select pg_temp.check('verification changes are audit-logged',
   (select count(*) = 2 from public.admin_audit_log where target_id = :B and action in ('user.verify', 'user.unverify')));
 
+-- ----------------------------------------------------------- owner account
+
+select pg_temp.must_fail('owner list is not reachable by users', :A, 'select count(*) from admin_private.owner_accounts', '42501');
+select pg_temp.must_fail('owner list is not reachable by anon', null, 'select count(*) from admin_private.owner_accounts', '42501');
+select pg_temp.must_fail('users cannot register an owner email', :A,
+  $$insert into admin_private.owner_accounts (email) values ('ama@example.com')$$, '42501');
+select pg_temp.must_fail('owner grant function not callable by users', :A,
+  $$select admin_private.apply_owner_account('00000000-0000-0000-0000-00000000000a')$$, '42501');
+select pg_temp.act_as_admin();
+insert into admin_private.owner_accounts (email) values ('owner@amigo.test');
+-- Someone signs up with the owner address but never confirms it: nothing.
+insert into auth.users (id, email, raw_user_meta_data) values ('00000000-0000-0000-0000-0000000000f1', 'Owner@Amigo.test', '{"display_name":"Owner"}');
+select pg_temp.check('unconfirmed owner email gets nothing',
+  not exists (select 1 from public.app_admins where user_id = '00000000-0000-0000-0000-0000000000f1')
+  and not exists (select 1 from public.profile_verifications where user_id = '00000000-0000-0000-0000-0000000000f1'));
+update auth.users set email_confirmed_at = now() where id = '00000000-0000-0000-0000-0000000000f1';
+select pg_temp.check('confirmed owner account becomes admin + Official Amigo account',
+  exists (select 1 from public.app_admins where user_id = '00000000-0000-0000-0000-0000000000f1')
+  and (select verification_type = 'amigo_team' from public.profile_verifications where user_id = '00000000-0000-0000-0000-0000000000f1'));
+select pg_temp.check('owner is admin when signed in', pg_temp.q('00000000-0000-0000-0000-0000000000f1', 'select public.is_admin()')::boolean);
+-- Registering an owner email for an account that already exists applies immediately.
+update auth.users set email_confirmed_at = now() where id = :C;
+insert into admin_private.owner_accounts (email) values ('zoe@example.com');
+select pg_temp.check('registering an existing confirmed account applies at once',
+  exists (select 1 from public.app_admins where user_id = :C));
+select pg_temp.check('other accounts stay normal', not exists (select 1 from public.app_admins where user_id = :A)
+  and not exists (select 1 from public.profile_verifications where user_id = :A));
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');

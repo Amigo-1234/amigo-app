@@ -51,7 +51,7 @@ isn't built yet.
 
 ### Verification (Admin → Users)
 
-Admins can verify someone (type: notable person, creator, business, organization, Amigo team, plus a
+Admins can verify someone (type: notable person, creator, business, organization, Official Amigo account, plus a
 private note), change the type, or remove it. The badge shows beside the name on posts, replies,
 profiles, people lists/search, Support Hub, World leaderboards/winner and chat. Nobody can verify
 themselves, and there's no application flow yet.
@@ -78,8 +78,15 @@ policies include `is_admin()`. Admins are granted with SQL as the service role:
 insert into public.app_admins (user_id, note) values ('<profile id>', 'founder');
 ```
 
-In the demo, the signed-in viewer is an admin so the area can be reviewed; open the app with
-`?demo=member` to be a regular member.
+**Owner account.** For now the owner's account is the only admin and the only verified account
+(type `amigo_team`, "Official Amigo account"). In Supabase this is decided by the database from the
+authenticated account: migration `20261006190000_owner_account.sql` grants admin + verification to
+the account whose *confirmed* email is listed in `admin_private.owner_accounts` (a private schema
+clients can't read or write). The owner email is registered once by an operator (RUNBOOK step 6) and
+is not stored in git. Nothing in the app ever checks an email.
+
+In the demo, the signed-in account is the owner (admin + verified; its email comes from the
+`VITE_DEMO_OWNER_EMAIL` preview setting); open the app with `?demo=member` to be an ordinary account.
 
 ## Supabase — migration `20261006170000_support_hub.sql`
 

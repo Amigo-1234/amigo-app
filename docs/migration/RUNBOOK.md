@@ -39,12 +39,20 @@ The migration needs **HTTPS only**. It talks to Supabase through the Data API (s
    npx supabase functions deploy legacy-sign-in
    npx supabase secrets set LEGACY_SIGNIN_ENABLED=true FIREBASE_WEB_API_KEY=… ALLOWED_ORIGINS=https://…
    ```
-6. Regenerate types from the real project and commit any diff:
+6. **Register the owner account** (SQL editor, as the service role — keep the address out of git):
+   ```sql
+   insert into admin_private.owner_accounts (email) values ('<owner email>');
+   ```
+   The owner's account becomes the Amigo admin and the Official Amigo account as soon as it exists
+   with a confirmed email (now, or when it's created/imported/confirmed later). Check:
+   `select user_id from public.app_admins;` and `select user_id, verification_type from public.profile_verifications;`
+   — both must list only the owner.
+7. Regenerate types from the real project and commit any diff:
    `npx supabase gen types typescript --project-id <ref> > src/data/supabase/database.types.ts`
 
 ## 1. Review RLS
 
-- Run `supabase/tests/database.test.sql` (176 checks). It must end with `ALL DATABASE TESTS PASSED`.
+- Run `supabase/tests/database.test.sql` (185 checks). It must end with `ALL DATABASE TESTS PASSED`.
   It rolls back, so it's safe on any database: use `psql` where a connection is possible,
   otherwise the SQL editor or the MCP SQL tool.
 - Dashboard → Advisors → Security: no warnings expected.

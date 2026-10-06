@@ -347,7 +347,7 @@ export function createDemoSupport(ctx: SupportDemoContext) {
   };
 
   // ---------------------------------------------------------------- admin
-  const VERIFICATION_TYPES: VerificationType[] = ["notable", "creator", "business", "organization", "amigo"];
+  const VERIFICATION_TYPES: VerificationType[] = ["notable", "creator", "business", "organization", "amigo_team"];
   const toVerification = (id: string): Verification | null => {
     const v = ctx.verification.get(id);
     return v ? { type: v.type, note: v.note, verifiedAt: v.at, verifiedBy: v.by ? ctx.author(v.by) : null } : null;

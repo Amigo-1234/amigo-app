@@ -545,7 +545,7 @@ export interface SupportAdminApi {
 }
 
 /** Why someone is verified. Public: whether they're verified. Admin-only: the type and note. */
-export type VerificationType = "notable" | "creator" | "business" | "organization" | "amigo";
+export type VerificationType = "notable" | "creator" | "business" | "organization" | "amigo_team";
 
 export interface Verification {
   type: VerificationType;

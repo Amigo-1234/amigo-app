@@ -14,7 +14,7 @@ const TYPES: { id: VerificationType; label: string }[] = [
   { id: "creator", label: "Creator" },
   { id: "business", label: "Business" },
   { id: "organization", label: "Organization" },
-  { id: "amigo", label: "Amigo team" },
+  { id: "amigo_team", label: "Official Amigo account" },
 ];
 const typeLabel = (t: VerificationType) => TYPES.find((x) => x.id === t)?.label ?? t;
 

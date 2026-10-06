@@ -55,12 +55,19 @@ const peopleList: PersonRecord[] = [
 ];
 const people = new Map(peopleList.map((p) => [p.id, p]));
 
+/**
+ * The demo's signed-in account ("me") is the Amigo owner account: the only admin
+ * (demoSupport.ts) and the only verified account. Its email comes from
+ * VITE_DEMO_OWNER_EMAIL (a Vercel preview setting), so it's never in the repo.
+ * ?demo=member signs in as an ordinary account instead: no admin, no badge.
+ */
+const OWNER_EMAIL = (import.meta.env.VITE_DEMO_OWNER_EMAIL as string | undefined)?.trim().toLowerCase() || "owner@example.com";
+
 /** Admin-set verification (see AdminUsersApi). Members have no way to change this. */
 interface VerificationRecord { type: VerificationType; note: string; at: Date; by: string | null }
-const verifications = new Map<string, VerificationRecord>([
-  ["mira", { type: "creator", note: "Confirmed through her label's press contact.", at: days(20), by: null }],
-  ["ama", { type: "notable", note: "Photographer with published work; checked portfolio + press.", at: days(45), by: null }],
-]);
+const verifications = new Map<string, VerificationRecord>(
+  scenario === "member" ? [] : [["me", { type: "amigo_team", note: "Official Amigo account (owner).", at: days(400), by: null }]],
+);
 
 const follows = new Set<string>([
   "me->ama", "me->leo",
@@ -382,7 +389,7 @@ const demoSupport = createDemoSupport({
 
 // -------------------------------------------------------------------- auth
 
-const viewerFromPerson = (p: PersonRecord): Viewer => ({ id: p.id, name: p.name, handle: p.handle, email: "sam@example.com", avatarUrl: p.avatarUrl });
+const viewerFromPerson = (p: PersonRecord): Viewer => ({ id: p.id, name: p.name, handle: p.handle, email: scenario === "member" ? "member@example.com" : OWNER_EMAIL, avatarUrl: p.avatarUrl });
 let signedIn = scenario !== "signedout";
 const viewerListeners = new Set<(v: Viewer | null) => void>();
 const emitViewer = () => viewerListeners.forEach((l) => l(signedIn ? viewerFromPerson(people.get("me")!) : null));

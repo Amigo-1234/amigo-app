@@ -19,7 +19,7 @@ create table public.profile_verifications (
   note               text not null default '',
   verified_by        uuid references public.profiles (id) on delete set null,
   verified_at        timestamptz not null default now(),
-  constraint profile_verifications_type check (verification_type in ('notable', 'creator', 'business', 'organization', 'amigo')),
+  constraint profile_verifications_type check (verification_type in ('notable', 'creator', 'business', 'organization', 'amigo_team')),
   constraint profile_verifications_note check (char_length(note) <= 280)
 );
 
