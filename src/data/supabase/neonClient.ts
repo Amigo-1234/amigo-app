@@ -7,7 +7,7 @@ import type { Database } from "./database.types";
  * Supabase-style API the rest of src/data/supabase uses (.auth, .from, .rpc).
  *
  * Both services are reached through same-origin paths (/neon/auth,
- * /neon/rest/v1) that vercel.json rewrites to the project's public Neon
+ * /neon/rest/v1) that api/neon.ts proxies to the project's public Neon
  * endpoints. Same-origin keeps the auth session cookie first-party, so
  * sessions survive refreshes even where third-party cookies are blocked
  * (Safari). No database credentials are involved: the browser only ever
