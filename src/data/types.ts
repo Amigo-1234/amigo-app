@@ -106,6 +106,7 @@ export type AuthErrorCode =
   | "invalid-email"
   | "email-not-confirmed"
   | "rate-limited"
+  | "invalid-code"
   | "network"
   | "unknown";
 
@@ -926,6 +927,8 @@ export interface DataSource {
   photoUploads?: boolean;
   /** Email ownership check by emailed code, for backends that sign people in before verifying (Neon). */
   emailVerification?: { sendCode(): Promise<void>; verify(code: string): Promise<void> };
+  /** Password reset by emailed code instead of a link (Neon). Without it, sendPasswordReset emails a link. */
+  passwordResetByCode?: { send(email: string): Promise<void>; reset(email: string, code: string, password: string): Promise<void> };
 
   /** Optional capability — see ProfilesApi. */
   profiles?: ProfilesApi;

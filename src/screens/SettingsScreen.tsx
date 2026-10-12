@@ -1,18 +1,38 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, ChevronRight, KeyRound, LogOut, Monitor, MonitorSmartphone, Moon, RotateCcw, ShieldCheck, Sun } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  BellOff,
+  ChevronRight,
+  Eye,
+  Info,
+  KeyRound,
+  LogOut,
+  Mail,
+  Monitor,
+  MonitorSmartphone,
+  Moon,
+  RotateCcw,
+  ShieldCheck,
+  Sun,
+  UserRound,
+  Users,
+} from "lucide-react";
 import { useIsAdmin } from "../features/admin/useAdmin";
+import { CodeField, PasswordField, authMessage } from "../features/auth";
 import { profilesEnabled } from "../features/profile/links";
-import { dataSource } from "../data";
+import { AuthError, dataSource } from "../data";
 import { ScreenHeader } from "../shell/ScreenHeader";
+import { notificationsEnabled, useUnread } from "../state/notifications";
 import { securityApi, useSecurity } from "../state/security";
 import { useViewer } from "../state/session";
 import { useTheme, type ThemePreference } from "../state/theme";
 import { useToast } from "../state/toast";
 import { Avatar } from "../ui/Avatar";
 import { Button, IconButton } from "../ui/Button";
+import { LoadingScreen } from "../ui/Loader";
 import "./SettingsScreen.css";
-import "../features/messages/Security.css";
 
 const THEMES: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
   { id: "system", label: "System", icon: Monitor },
@@ -20,34 +40,37 @@ const THEMES: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
   { id: "dark", label: "Dark", icon: Moon },
 ];
 
+const MIN_PASSWORD = 8;
+const errorText = (err: unknown) => authMessage(err instanceof AuthError ? err.code : undefined);
+
+const BACKEND_LABEL: Record<string, string> = {
+  neon: "Preview · Neon",
+  supabase: "Supabase",
+  firebase: "Classic",
+  demo: "Demo data",
+};
+
 /**
- * Account settings: appearance and sign-out. Name editing lives in Edit profile
- * when the backend supports profiles; otherwise (legacy backend) it's here.
+ * Account settings, grouped: Account, Privacy, Security, Notifications,
+ * Appearance, About. Every row is backed by a real capability of the current
+ * backend; sections hide what the backend can't do.
  */
 export default function SettingsScreen() {
   const viewer = useViewer();
   const isAdmin = useIsAdmin();
-  const toast = useToast();
   const navigate = useNavigate();
-  const { preference, setPreference } = useTheme();
-  const { devices, newDevices } = useSecurity();
-  const [name, setName] = useState(viewer.name);
-  const [saving, setSaving] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const dirty = name.trim() && name.trim() !== viewer.name;
+  const toast = useToast();
 
-  async function saveName(e: FormEvent) {
-    e.preventDefault();
-    if (!dirty) return;
-    setSaving(true);
+  if (signingOut) return <LoadingScreen label="Signing out" message="Signing out…" />;
+
+  async function signOut() {
+    setSigningOut(true);
     try {
-      await dataSource.updateDisplayName(name);
-      toast("Name updated");
+      await dataSource.signOut();
     } catch {
-      toast("Couldn't update your name", "error");
-    } finally {
-      setSaving(false);
+      setSigningOut(false);
+      toast("Couldn't sign out", "error");
     }
   }
 
@@ -61,189 +84,438 @@ export default function SettingsScreen() {
           </IconButton>
         }
       />
-      <div className="profile-head">
-        <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="lg" />
-        <div>
-          <h2 className="profile-head__name">{viewer.name}</h2>
-          <p className="profile-head__handle">@{viewer.handle}</p>
+
+      <div className="settings">
+        <div className="settings-hero">
+          <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="lg" />
+          <div className="settings-hero__text">
+            <h2 className="settings-hero__name">{viewer.name}</h2>
+            <p className="settings-hero__handle">@{viewer.handle}</p>
+          </div>
+          {profilesEnabled && (
+            <Link to={`/u/${viewer.handle}`} className="btn btn--secondary btn--sm">
+              View profile
+            </Link>
+          )}
         </div>
+
+        <AccountSection isAdmin={!!isAdmin} />
+        <PrivacySection />
+        <SecuritySection onSignOut={signOut} />
+        {notificationsEnabled && <NotificationsSection />}
+        <AppearanceSection />
+        <AboutSection />
       </div>
-
-      {!profilesEnabled && (
-      <section className="settings-group" aria-labelledby="set-name">
-        <h3 id="set-name" className="settings-group__title">Display name</h3>
-        <form className="settings-row" onSubmit={saveName}>
-          <label className="visually-hidden" htmlFor="display-name">
-            Display name
-          </label>
-          <input id="display-name" className="field__input settings-input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
-          <Button type="submit" variant="secondary" disabled={!dirty} loading={saving}>
-            Save
-          </Button>
-        </form>
-      </section>
-      )}
-
-      {dataSource.emailVerification && viewer.emailVerified === false && <VerifyEmail email={viewer.email} />}
-
-      <section className="settings-group" aria-labelledby="set-theme">
-        <h3 id="set-theme" className="settings-group__title">Appearance</h3>
-        <div className="segmented" role="radiogroup" aria-labelledby="set-theme">
-          {THEMES.map(({ id, label, icon: Icon }) => (
-            <button key={id} role="radio" aria-checked={preference === id} className="segmented__opt" onClick={() => setPreference(id)}>
-              <Icon size={16} aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {securityApi && (
-        <section className="settings-group" aria-labelledby="set-security">
-          <h3 id="set-security" className="settings-group__title">Messages security</h3>
-          <ul className="sec-link-list">
-            <li>
-              <Link to="/settings/devices" className="sec-link">
-                <MonitorSmartphone size={20} aria-hidden="true" />
-                <span className="sec-link__text">
-                  <span>Your devices</span>
-                  <span>
-                    {devices ? `${devices.length} device${devices.length === 1 ? "" : "s"}` : "Devices that can read your messages"}
-                    {newDevices.length ? ` · ${newDevices.length} new` : ""}
-                  </span>
-                </span>
-                <ChevronRight size={18} aria-hidden="true" />
-              </Link>
-            </li>
-            <li>
-              <Link to="/settings/backup" className="sec-link">
-                <KeyRound size={20} aria-hidden="true" />
-                <span className="sec-link__text">
-                  <span>Message backup</span>
-                  <span>Restore your message history with a recovery key</span>
-                </span>
-                <ChevronRight size={18} aria-hidden="true" />
-              </Link>
-            </li>
-          </ul>
-        </section>
-      )}
-
-      {isAdmin && (
-        <section className="settings-group">
-          <Link to="/admin" className="btn btn--secondary btn--md">
-            <ShieldCheck size={18} aria-hidden="true" /> Amigo admin
-          </Link>
-        </section>
-      )}
-
-      {dataSource.resetDemo && (
-        <section className="settings-group" aria-labelledby="set-demo">
-          <h3 id="set-demo" className="settings-group__title">Demo data</h3>
-          <p className="settings-meta">
-            This preview keeps your changes (profile edits, posts, messages…) in this browser. Resetting brings back the original demo.
-          </p>
-          <Button
-            variant="secondary"
-            icon={<RotateCcw size={18} aria-hidden="true" />}
-            loading={resetting}
-            onClick={async () => {
-              if (!window.confirm("Reset all demo data in this browser?")) return;
-              setResetting(true);
-              await dataSource.resetDemo!().catch(() => undefined);
-              window.location.assign("/");
-            }}
-          >
-            Reset demo data
-          </Button>
-        </section>
-      )}
-
-      <section className="settings-group">
-        {viewer.email && <p className="settings-meta">Signed in as {viewer.email}</p>}
-        <Button
-          variant="danger"
-          icon={<LogOut size={18} aria-hidden="true" />}
-          loading={signingOut}
-          onClick={async () => {
-            setSigningOut(true);
-            await dataSource.signOut().catch(() => toast("Couldn't sign out", "error"));
-            setSigningOut(false);
-          }}
-        >
-          Sign out
-        </Button>
-      </section>
     </>
   );
 }
 
-/** Neon: accounts are usable straight away; verifying the email (by code) confirms ownership. */
-function VerifyEmail({ email }: { email: string | null }) {
+// ------------------------------------------------------------------ layout
+
+function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+  return (
+    <section className="settings-section" aria-labelledby={id}>
+      <h3 id={id} className="settings-section__title">{title}</h3>
+      <div className="settings-card">{children}</div>
+    </section>
+  );
+}
+
+function Row({ icon, title, detail, trailing }: { icon: ReactNode; title: ReactNode; detail?: ReactNode; trailing?: ReactNode }) {
+  return (
+    <>
+      <span className="settings-row__icon" aria-hidden="true">{icon}</span>
+      <span className="settings-row__text">
+        <span className="settings-row__title">{title}</span>
+        {detail && <span className="settings-row__detail">{detail}</span>}
+      </span>
+      {trailing}
+    </>
+  );
+}
+
+function LinkRow({ to, ...row }: { to: string } & Parameters<typeof Row>[0]) {
+  return (
+    <Link to={to} className="settings-row settings-row--action">
+      <Row {...row} trailing={row.trailing ?? <ChevronRight size={18} className="settings-row__chev" aria-hidden="true" />} />
+    </Link>
+  );
+}
+
+function ButtonRow({ onClick, expanded, danger, ...row }: { onClick: () => void; expanded?: boolean; danger?: boolean } & Parameters<typeof Row>[0]) {
+  return (
+    <button type="button" className={`settings-row settings-row--action${danger ? " settings-row--danger" : ""}`} onClick={onClick} aria-expanded={expanded}>
+      <Row {...row} trailing={row.trailing ?? (expanded === undefined ? null : <ChevronRight size={18} className={`settings-row__chev${expanded ? " is-open" : ""}`} aria-hidden="true" />)} />
+    </button>
+  );
+}
+
+function InfoRow(row: Parameters<typeof Row>[0]) {
+  return (
+    <div className="settings-row">
+      <Row {...row} />
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------- Account
+
+function AccountSection({ isAdmin }: { isAdmin: boolean }) {
+  const viewer = useViewer();
+  const [verifying, setVerifying] = useState(false);
+  const canVerify = !!dataSource.emailVerification && viewer.emailVerified === false;
+
+  return (
+    <Section id="set-account" title="Account">
+      {viewer.email && (
+        <>
+          {canVerify ? (
+            <ButtonRow
+              icon={<Mail size={20} />}
+              title={viewer.email}
+              detail={<span className="settings-badge settings-badge--warn">Not verified · Verify now</span>}
+              onClick={() => setVerifying((v) => !v)}
+              expanded={verifying}
+            />
+          ) : (
+            <InfoRow
+              icon={<Mail size={20} />}
+              title={viewer.email}
+              detail={viewer.emailVerified ? <span className="settings-badge settings-badge--ok">Verified</span> : "Your sign-in email"}
+            />
+          )}
+          {canVerify && verifying && <VerifyEmailPanel email={viewer.email} />}
+        </>
+      )}
+      {profilesEnabled ? (
+        <LinkRow to={`/u/${viewer.handle}`} icon={<UserRound size={20} />} title="Profile" detail="Name, username, bio and photo — edit from your profile" />
+      ) : (
+        <DisplayNameRow />
+      )}
+      {isAdmin && <LinkRow to="/admin" icon={<ShieldCheck size={20} />} title="Amigo admin" detail="Moderation, verification and support tools" />}
+    </Section>
+  );
+}
+
+/** Legacy backends without profiles: the display name is edited here. */
+function DisplayNameRow() {
+  const viewer = useViewer();
+  const toast = useToast();
+  const [name, setName] = useState(viewer.name);
+  const [saving, setSaving] = useState(false);
+  const dirty = name.trim() && name.trim() !== viewer.name;
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!dirty || saving) return;
+    setSaving(true);
+    try {
+      await dataSource.updateDisplayName(name);
+      toast("Name updated");
+    } catch {
+      toast("Couldn't update your name", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="settings-panel" onSubmit={save}>
+      <label className="auth-field__label" htmlFor="display-name">Display name</label>
+      <div className="settings-inline">
+        <input id="display-name" className="auth-field__input" value={name} maxLength={40} onChange={(e) => setName(e.target.value)} />
+        <Button type="submit" variant="secondary" disabled={!dirty} loading={saving}>
+          Save
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+/** Confirms email ownership with an emailed code (Neon). */
+function VerifyEmailPanel({ email }: { email: string }) {
   const toast = useToast();
   const [sent, setSent] = useState(false);
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
-  async function send() {
+  async function run(action: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
-      await dataSource.emailVerification!.sendCode();
-      setSent(true);
-    } catch (e) {
-      setError((e as Error).message || "Couldn't send the code. Try again in a minute.");
+      await action();
+    } catch (err) {
+      setError(errorText(err));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
 
-  async function verify(e: FormEvent) {
+  const send = () =>
+    run(async () => {
+      await dataSource.emailVerification!.sendCode();
+      setSent(true);
+    });
+
+  const verify = (e: FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) return;
+    void run(async () => {
+      await dataSource.emailVerification!.verify(code);
+      // The session updates in place: badge, admin access and verification follow without a reload.
+      toast("Email verified");
+    });
+  };
+
+  return (
+    <div className="settings-panel">
+      <p className="settings-panel__text">
+        {sent ? (
+          <>
+            Enter the code we sent to <strong>{email}</strong>. It expires in 15 minutes.
+          </>
+        ) : (
+          "We'll email you a short code to confirm this address is yours."
+        )}
+      </p>
+      {error && <p className="auth__error" role="alert">{error}</p>}
+      {sent ? (
+        <form className="settings-panel__form" onSubmit={verify}>
+          <CodeField label="Verification code" value={code} onChange={setCode} autoFocus />
+          <div className="settings-panel__actions">
+            <Button type="submit" loading={busy} disabled={busy || code.length < 4}>
+              Verify email
+            </Button>
+            <Button type="button" variant="ghost" onClick={send} disabled={busy}>
+              Send a new code
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <div className="settings-panel__actions">
+          <Button onClick={send} loading={busy} disabled={busy}>
+            Send code
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------- Privacy
+
+/** How visibility works today — explanations, not toggles (there are no account-wide privacy switches yet). */
+function PrivacySection() {
+  return (
+    <Section id="set-privacy" title="Privacy">
+      <InfoRow icon={<Eye size={20} />} title="Profile" detail="Your profile, followers and public posts are visible to people on Amigo." />
+      <InfoRow icon={<Users size={20} />} title="Post audience" detail="Choose Everyone or Followers each time you post." />
+      {dataSource.messages && <InfoRow icon={<KeyRound size={20} />} title="Messages" detail="End-to-end encrypted. Only your devices can read them." />}
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------- Security
+
+function SecuritySection({ onSignOut }: { onSignOut: () => void }) {
+  const { devices, newDevices } = useSecurity();
+  const [changing, setChanging] = useState(false);
+
+  return (
+    <Section id="set-security" title="Security">
+      <ButtonRow
+        icon={<KeyRound size={20} />}
+        title="Password"
+        detail={dataSource.passwordResetByCode ? "Change it with a code sent to your email" : "Get a link to set a new password"}
+        onClick={() => setChanging((c) => !c)}
+        expanded={changing}
+      />
+      {changing && <ChangePasswordPanel onDone={() => setChanging(false)} />}
+      {securityApi && (
+        <>
+          <LinkRow
+            to="/settings/devices"
+            icon={<MonitorSmartphone size={20} />}
+            title="Your devices"
+            detail={`${devices ? `${devices.length} device${devices.length === 1 ? "" : "s"}` : "Devices that can read your messages"}${newDevices.length ? ` · ${newDevices.length} new` : ""}`}
+          />
+          <LinkRow to="/settings/backup" icon={<KeyRound size={20} />} title="Message backup" detail="Restore your message history with a recovery key" />
+        </>
+      )}
+      <ButtonRow icon={<LogOut size={20} />} title="Sign out" detail="Sign out on this device" onClick={onSignOut} danger />
+    </Section>
+  );
+}
+
+function ChangePasswordPanel({ onDone }: { onDone: () => void }) {
+  const viewer = useViewer();
+  const toast = useToast();
+  const byCode = dataSource.passwordResetByCode;
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+  const email = viewer.email;
+
+  async function run(action: () => Promise<void>) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
-      await dataSource.emailVerification!.verify(code);
-      toast("Email verified");
-      // Reload so account permissions tied to a verified email are picked up.
-      window.location.reload();
+      await action();
     } catch (err) {
-      setError((err as Error).message || "That code didn't work. Check it, or send a new one.");
+      setError(errorText(err));
+    } finally {
+      inFlight.current = false;
       setBusy(false);
     }
+  }
+
+  if (!email) return <div className="settings-panel"><p className="settings-panel__text">This account has no email to send a code to.</p></div>;
+
+  const send = () =>
+    run(async () => {
+      if (byCode) await byCode.send(email);
+      else await dataSource.sendPasswordReset(email);
+      setSent(true);
+    });
+
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      await byCode!.reset(email, code, password);
+      toast("Password changed");
+      onDone();
+    });
+  };
+
+  if (!byCode) {
+    return (
+      <div className="settings-panel">
+        <p className="settings-panel__text">
+          {sent ? <>We sent a link to <strong>{email}</strong>. Open it to choose a new password.</> : <>We'll email a link to <strong>{email}</strong> to set a new password.</>}
+        </p>
+        {error && <p className="auth__error" role="alert">{error}</p>}
+        {!sent && (
+          <div className="settings-panel__actions">
+            <Button onClick={send} loading={busy} disabled={busy}>
+              Email me a link
+            </Button>
+          </div>
+        )}
+      </div>
+    );
   }
 
   return (
-    <section className="settings-group" aria-labelledby="set-email">
-      <h3 id="set-email" className="settings-group__title">Verify your email</h3>
-      <p className="settings-meta">
-        {sent ? `We sent a code to ${email ?? "your email"}. It expires in 15 minutes.` : `Confirm that ${email ?? "your email"} is yours.`}
+    <div className="settings-panel">
+      <p className="settings-panel__text">
+        {sent ? <>Enter the code we sent to <strong>{email}</strong> and your new password.</> : <>We'll email a code to <strong>{email}</strong> to confirm it's you.</>}
       </p>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <p className="auth__error" role="alert">{error}</p>}
       {sent ? (
-        <form className="settings-row" onSubmit={verify}>
-          <label className="visually-hidden" htmlFor="email-code">
-            Verification code
-          </label>
-          <input
-            id="email-code"
-            className="field__input settings-input"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={code}
-            maxLength={10}
-            onChange={(e) => setCode(e.target.value)}
-          />
-          <Button type="submit" variant="secondary" disabled={!code.trim()} loading={busy}>
-            Verify
-          </Button>
+        <form className="settings-panel__form" onSubmit={save}>
+          <CodeField label="Code from your email" value={code} onChange={setCode} autoFocus />
+          <PasswordField label="New password" autoComplete="new-password" hint={`At least ${MIN_PASSWORD} characters.`} value={password} onChange={(e) => setPassword(e.target.value)} />
+          <div className="settings-panel__actions">
+            <Button type="submit" loading={busy} disabled={busy || code.length < 4 || password.length < MIN_PASSWORD}>
+              Change password
+            </Button>
+            <Button type="button" variant="ghost" onClick={send} disabled={busy}>
+              Send a new code
+            </Button>
+          </div>
         </form>
-      ) : null}
-      <Button type="button" variant={sent ? "ghost" : "secondary"} loading={!sent && busy} disabled={busy} onClick={send}>
-        {sent ? "Send a new code" : "Send code"}
-      </Button>
-    </section>
+      ) : (
+        <div className="settings-panel__actions">
+          <Button onClick={send} loading={busy} disabled={busy}>
+            Send code
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------- Notifications
+
+function NotificationsSection() {
+  const { unread, markAllRead } = useUnread();
+  const toast = useToast();
+  const [marking, setMarking] = useState(false);
+
+  return (
+    <Section id="set-notifications" title="Notifications">
+      <LinkRow
+        to="/notifications"
+        icon={<Bell size={20} />}
+        title="Activity"
+        detail={unread ? `${unread} unread` : "Follows, likes, replies and mentions"}
+      />
+      <ButtonRow
+        icon={<BellOff size={20} />}
+        title="Mark all as read"
+        detail={unread ? "Clear your unread badge" : "You're all caught up"}
+        onClick={async () => {
+          if (!unread || marking) return;
+          setMarking(true);
+          await markAllRead().catch(() => toast("Couldn't update notifications", "error"));
+          setMarking(false);
+        }}
+        trailing={marking ? <span className="btn__spinner settings-row__spin" aria-hidden="true" /> : null}
+      />
+    </Section>
+  );
+}
+
+// -------------------------------------------------------------- Appearance
+
+function AppearanceSection() {
+  const { preference, setPreference } = useTheme();
+  return (
+    <Section id="set-appearance" title="Appearance">
+      <div className="settings-panel">
+        <div className="segmented" role="radiogroup" aria-labelledby="set-appearance">
+          {THEMES.map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" role="radio" aria-checked={preference === id} className="segmented__opt" onClick={() => setPreference(id)}>
+              <Icon size={16} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// ------------------------------------------------------------------- About
+
+function AboutSection() {
+  const [resetting, setResetting] = useState(false);
+  return (
+    <Section id="set-about" title="About">
+      <InfoRow icon={<Info size={20} />} title="Amigo World" detail={`Version ${__APP_VERSION__} · ${BACKEND_LABEL[dataSource.kind] ?? dataSource.kind}`} />
+      {dataSource.resetDemo && (
+        <ButtonRow
+          icon={<RotateCcw size={20} />}
+          title="Reset demo data"
+          detail="This preview keeps your changes in this browser. Reset brings back the original demo."
+          trailing={resetting ? <span className="btn__spinner settings-row__spin" aria-hidden="true" /> : null}
+          onClick={async () => {
+            if (resetting || !window.confirm("Reset all demo data in this browser?")) return;
+            setResetting(true);
+            await dataSource.resetDemo!().catch(() => undefined);
+            window.location.assign("/");
+          }}
+        />
+      )}
+    </Section>
   );
 }

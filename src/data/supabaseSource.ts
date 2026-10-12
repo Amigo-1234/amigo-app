@@ -102,6 +102,9 @@ const AUTH_CODES: Record<string, AuthErrorCode> = {
   PASSWORD_TOO_LONG: "weak-password",
   INVALID_EMAIL: "invalid-email",
   INVALID_EMAIL_OR_PASSWORD: "invalid-credentials",
+  INVALID_OTP: "invalid-code",
+  OTP_EXPIRED: "invalid-code",
+  TOO_MANY_ATTEMPTS: "rate-limited",
   EMAIL_NOT_VERIFIED: "email-not-confirmed",
 };
 
@@ -145,9 +148,23 @@ const viewerListeners = new Set<(v: Viewer | null) => void>();
 const recoveryListeners = new Set<() => void>();
 let currentUser: { id: string; email?: string | null; email_confirmed_at?: string | null } | null = null;
 
+let emitGeneration = 0;
 async function emitViewer() {
+  // Only the latest call may publish: a slow profile load must not overwrite a newer sign-in/out.
+  const generation = ++emitGeneration;
   const v = currentUser ? await loadViewer(currentUser) : null;
-  viewerListeners.forEach((cb) => cb(v));
+  if (generation === emitGeneration) viewerListeners.forEach((cb) => cb(v));
+}
+
+/**
+ * Re-read the session and publish it. Neon's SDK broadcasts auth changes to
+ * other tabs only (it ignores its own tab's messages), so after sign-in,
+ * sign-up, verification or sign-out in this tab we publish explicitly.
+ */
+async function syncSession() {
+  const { data } = await supabase.auth.getSession();
+  currentUser = data.session?.user ?? null;
+  await emitViewer();
 }
 
 supabase.auth.onAuthStateChange((event, session) => {
@@ -186,9 +203,24 @@ export const supabaseSource: DataSource = {
           await neonEmailCodes.verify(currentUser.email, code).catch((e: Error) => {
             throw authError(e);
           });
-          const { data } = await supabase.auth.getSession();
-          currentUser = data.session?.user ?? currentUser;
-          await emitViewer();
+          await syncSession();
+        },
+      }
+    : undefined,
+
+  passwordResetByCode: isNeon
+    ? {
+        async send(email) {
+          const { neonPasswordReset } = await import("./supabase/neonClient");
+          await neonPasswordReset.send(email).catch((e: Error) => {
+            throw authError(e);
+          });
+        },
+        async reset(email, code, password) {
+          const { neonPasswordReset } = await import("./supabase/neonClient");
+          await neonPasswordReset.reset(email, code, password).catch((e: Error) => {
+            throw authError(e);
+          });
         },
       }
     : undefined,
@@ -210,7 +242,10 @@ export const supabaseSource: DataSource = {
 
   async signIn(email, password) {
     const first = await supabase.auth.signInWithPassword({ email, password });
-    if (!first.error) return;
+    if (!first.error) {
+      if (isNeon) await syncSession();
+      return;
+    }
     if ((first.error as SupabaseAuthError).code === "invalid_credentials" && (await tryLegacySignIn(email, password))) {
       const second = await supabase.auth.signInWithPassword({ email, password });
       if (!second.error) return;
@@ -225,6 +260,7 @@ export const supabaseSource: DataSource = {
       await neonSignUp(email, password, name.trim()).catch((e: Error) => {
         throw authError(e);
       });
+      await syncSession();
       // Signed in straight away; the email is verified by code from Settings.
       return { needsEmailConfirmation: false };
     }
@@ -251,6 +287,10 @@ export const supabaseSource: DataSource = {
 
   async signOut() {
     await supabase.auth.signOut();
+    if (isNeon) {
+      currentUser = null;
+      await emitViewer();
+    }
   },
 
   async updateDisplayName(name) {

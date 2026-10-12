@@ -26,6 +26,7 @@ export function useIsAdmin(): boolean | null {
     return () => {
       cancelled = true;
     };
-  }, [viewer.id]);
+    // Re-check when the email becomes verified: that's when an owner account gains admin.
+  }, [viewer.id, viewer.emailVerified]);
   return admin;
 }

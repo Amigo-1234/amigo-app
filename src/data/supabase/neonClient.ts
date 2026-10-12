@@ -24,16 +24,18 @@ const client = createClient<Database>({
 // (.channel) and Storage are not available and are never called on Neon.
 export const neonClient = client as unknown as SupabaseClient<Database>;
 
+type OtpResult = Promise<{ error?: { message?: string; code?: string } | null }>;
 type EmailOtpClient = {
   emailOtp: {
-    sendVerificationOtp(args: { email: string; type: "email-verification" }): Promise<{ error?: { message?: string } | null }>;
-    verifyEmail(args: { email: string; otp: string }): Promise<{ error?: { message?: string } | null }>;
+    sendVerificationOtp(args: { email: string; type: "email-verification" | "forget-password" }): OtpResult;
+    verifyEmail(args: { email: string; otp: string }): OtpResult;
+    resetPassword(args: { email: string; otp: string; password: string }): OtpResult;
   };
 };
 const betterAuth = () => (client.auth as unknown as { getBetterAuthInstance(): EmailOtpClient }).getBetterAuthInstance();
 
-function check(result: { error?: { message?: string } | null } | undefined) {
-  if (result?.error) throw new Error(result.error.message || "Request failed");
+function check(result: { error?: { message?: string; code?: string } | null } | undefined) {
+  if (result?.error) throw Object.assign(new Error(result.error.message || "Request failed"), { code: result.error.code ?? "" });
 }
 
 /** Email ownership check by code (the shared Neon email provider sends codes, not links). */
@@ -48,6 +50,16 @@ export const neonEmailCodes = {
   },
 };
 
+/** Password reset by emailed code (the shared Neon email provider can't send links). */
+export const neonPasswordReset = {
+  async send(email: string) {
+    check(await betterAuth().emailOtp.sendVerificationOtp({ email, type: "forget-password" }));
+  },
+  async reset(email: string, code: string, password: string) {
+    check(await betterAuth().emailOtp.resetPassword({ email, otp: code.trim(), password }));
+  },
+};
+
 type SignUpClient = {
   signUp: { email(args: { email: string; password: string; name: string }): Promise<{ error?: { message?: string; code?: string; status?: number } | null }> };
 };
@@ -56,5 +68,4 @@ type SignUpClient = {
 export async function neonSignUp(email: string, password: string, name: string) {
   const result = await (betterAuth() as unknown as SignUpClient).signUp.email({ email, password, name });
   if (result?.error) throw Object.assign(new Error(result.error.message || "Sign-up failed"), { code: result.error.code ?? "" });
-  await client.auth.getSession({ forceFetch: true } as never);
 }

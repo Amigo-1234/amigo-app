@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { AuthError, dataSource } from "../data";
+import { AuthHeading, AuthLayout, PasswordField, authMessage } from "../features/auth";
 import { useFinishRecovery } from "../state/session";
-import { Wordmark } from "../ui/Brand";
 import { Button } from "../ui/Button";
-import "./AuthScreen.css";
+
+const MIN_PASSWORD = 8;
 
 /** Shown after someone follows a password-reset link. Also how migrated Firebase users can set a password. */
 export default function SetPasswordScreen() {
@@ -11,51 +12,47 @@ export default function SetPasswordScreen() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     try {
       await dataSource.updatePassword(password);
       finish();
     } catch (err) {
-      setError(err instanceof AuthError && err.code === "weak-password" ? "Use at least 6 characters for your password." : "We couldn't save your password. Try again.");
+      setError(err instanceof AuthError ? authMessage(err.code) : "We couldn't save your password. Try again.");
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
 
   return (
-    <div className="auth">
-      <div className="auth__panel">
-        <Wordmark />
-        <h1 className="auth__title">Choose a new password</h1>
-        <p className="auth__sub">You'll use it to sign in from now on.</p>
-        <form className="auth__form" onSubmit={submit} noValidate>
-          <label className="field">
-            <span className="field__label">New password</span>
-            <input
-              className="field__input"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              minLength={6}
-              required
-              autoFocus
-            />
-          </label>
-          {error && (
-            <p className="auth__error" role="alert">
-              {error}
-            </p>
-          )}
-          <Button type="submit" size="lg" block loading={busy} disabled={password.length < 6}>
-            Save password
-          </Button>
-        </form>
-      </div>
-    </div>
+    <AuthLayout stepKey="set-password">
+      <AuthHeading title="Choose a new password" sub="You'll use it to sign in from now on." />
+      <form className="auth__form" onSubmit={submit} noValidate>
+        <PasswordField
+          label="New password"
+          autoComplete="new-password"
+          hint={`At least ${MIN_PASSWORD} characters.`}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoFocus
+        />
+        {error && (
+          <p className="auth__error" role="alert">
+            {error}
+          </p>
+        )}
+        <Button type="submit" size="lg" block loading={busy} disabled={busy || password.length < MIN_PASSWORD}>
+          Save password
+        </Button>
+      </form>
+    </AuthLayout>
   );
 }

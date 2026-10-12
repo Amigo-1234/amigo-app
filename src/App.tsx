@@ -16,7 +16,7 @@ import { profilesEnabled } from "./features/profile/links";
 import { dataSource } from "./data";
 import { ThemeProvider } from "./state/theme";
 import { ToastProvider } from "./state/toast";
-import { AmigoMark } from "./ui/Brand";
+import { LoadingScreen } from "./ui/Loader";
 
 const PostScreen = lazy(() => import("./screens/PostScreen"));
 const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
@@ -38,11 +38,7 @@ const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
 
 function Splash() {
-  return (
-    <div className="splash" role="status" aria-label="Loading Amigo World">
-      <AmigoMark size={44} />
-    </div>
-  );
+  return <LoadingScreen />;
 }
 
 /** Signed-out visitors get the auth screen at any URL; the URL is kept for after sign-in. */

@@ -1,120 +1,183 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
+import { ArrowLeft, MailCheck } from "lucide-react";
 import { AuthError, dataSource } from "../data";
-import { Wordmark } from "../ui/Brand";
+import { AuthField, AuthHeading, AuthLayout, CodeField, PasswordField, authMessage } from "../features/auth";
 import { Button } from "../ui/Button";
-import "./AuthScreen.css";
+import { LoadingScreen } from "../ui/Loader";
 
-type Mode = "signIn" | "signUp" | "reset";
+type Step = "signIn" | "signUp" | "reset" | "resetCode" | "resetSent" | "resetDone";
 
-function authMessage(error: unknown): string {
-  const code = error instanceof AuthError ? error.code : "unknown";
-  switch (code) {
-    case "invalid-credentials":
-      return "That email and password don't match. Try again or reset your password.";
-    case "invalid-email":
-      return "That doesn't look like a valid email address.";
-    case "email-in-use":
-      return "There's already an account with this email. Sign in instead.";
-    case "weak-password":
-      return "Use at least 6 characters for your password.";
-    case "email-not-confirmed":
-      return "Confirm your email first — check your inbox for the link we sent.";
-    case "rate-limited":
-      return "Too many attempts. Wait a moment and try again.";
-    case "network":
-      return "Can't reach Amigo right now. Check your connection.";
-    default:
-      return "Something went wrong. Please try again.";
-  }
-}
+const MIN_PASSWORD = 8;
+const codeReset = dataSource.passwordResetByCode;
+
+const errorText = (err: unknown) => authMessage(err instanceof AuthError ? err.code : undefined);
 
 export default function AuthScreen() {
-  const [mode, setMode] = useState<Mode>("signIn");
+  const [step, setStep] = useState<Step>("signIn");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [entering, setEntering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Blocks a second submit before React re-renders the disabled button (double taps).
+  const inFlight = useRef(false);
 
-  const switchMode = (m: Mode) => {
-    setMode(m);
+  const go = (next: Step) => {
+    setStep(next);
     setError(null);
     setNotice(null);
+    if (next !== "resetCode") setCode("");
   };
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  async function run(action: () => Promise<void>, opts: { entering?: boolean } = {}) {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setBusy(true);
     setError(null);
     setNotice(null);
+    if (opts.entering) setEntering(true);
     try {
-      if (mode === "signIn") await dataSource.signIn(email.trim(), password);
-      else if (mode === "signUp") {
-        const { needsEmailConfirmation } = await dataSource.signUp(email.trim(), password, name);
-        if (needsEmailConfirmation) {
-          setMode("signIn");
-          setNotice("Check your inbox — confirm your email, then sign in.");
-        }
-      }
-      else {
-        await dataSource.sendPasswordReset(email.trim());
-        setNotice("If there's an account for that email, a reset link is on its way.");
-      }
+      await action();
     } catch (err) {
-      setError(authMessage(err));
+      setEntering(false);
+      setError(errorText(err));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   }
 
-  const heading = mode === "signIn" ? "Welcome back" : mode === "signUp" ? "Join Amigo" : "Reset your password";
-  const sub =
-    mode === "signIn"
-      ? "Sign in to catch up with your people."
-      : mode === "signUp"
-        ? "Posts, moments and conversations with the people you actually like."
-        : "Enter your email and we'll send you a link.";
+  const trimmedEmail = email.trim();
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    switch (step) {
+      case "signIn":
+        return run(() => dataSource.signIn(trimmedEmail, password), { entering: true });
+      case "signUp":
+        return run(
+          async () => {
+            const { needsEmailConfirmation } = await dataSource.signUp(trimmedEmail, password, name.trim());
+            if (needsEmailConfirmation) {
+              setEntering(false);
+              go("signIn");
+              setNotice("Check your inbox — confirm your email, then sign in.");
+            }
+          },
+          { entering: true },
+        );
+      case "reset":
+        return run(async () => {
+          if (codeReset) {
+            await codeReset.send(trimmedEmail);
+            go("resetCode");
+          } else {
+            await dataSource.sendPasswordReset(trimmedEmail);
+            go("resetSent");
+          }
+        });
+      case "resetCode":
+        return run(async () => {
+          await codeReset!.reset(trimmedEmail, code, password);
+          setPassword("");
+          go("resetDone");
+        });
+    }
+  }
+
+  async function resendResetCode() {
+    await run(async () => {
+      await codeReset!.send(trimmedEmail);
+      setNotice(`New code sent to ${trimmedEmail}.`);
+    });
+  }
+
+  if (entering) return <LoadingScreen label="Signing you in" message={step === "signUp" ? "Creating your account…" : "Signing you in…"} />;
+
+  const tabs = step === "signIn" || step === "signUp";
+  const passwordOk = password.length >= MIN_PASSWORD;
 
   return (
-    <div className="auth">
-      <div className="auth__panel">
-        <Wordmark />
-        <h1 className="auth__title">{heading}</h1>
-        <p className="auth__sub">{sub}</p>
+    <AuthLayout stepKey={step}>
+      {tabs && (
+        <div className="auth-tabs" role="group" aria-label="Account">
+          <button type="button" className="auth-tabs__tab" aria-pressed={step === "signIn"} onClick={() => go("signIn")}>
+            Sign in
+          </button>
+          <button type="button" className="auth-tabs__tab" aria-pressed={step === "signUp"} onClick={() => go("signUp")}>
+            Create account
+          </button>
+        </div>
+      )}
 
-        <form className="auth__form" onSubmit={submit} noValidate>
-          {mode === "signUp" && (
-            <label className="field">
-              <span className="field__label">Name</span>
-              <input className="field__input" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" required maxLength={40} />
-            </label>
+      {!tabs && step !== "resetDone" && (
+        <button type="button" className="auth__back" onClick={() => go("signIn")}>
+          <ArrowLeft size={18} aria-hidden="true" /> Back to sign in
+        </button>
+      )}
+
+      {step === "signIn" && <AuthHeading title="Welcome back" sub="Sign in to catch up with your people." />}
+      {step === "signUp" && <AuthHeading title="Join Amigo" sub="Posts, Worlds and conversations with the people you actually like." />}
+      {step === "reset" && (
+        <AuthHeading title="Reset your password" sub={codeReset ? "We'll email you a code to set a new password." : "We'll email you a link to set a new password."} />
+      )}
+      {step === "resetCode" && (
+        <AuthHeading
+          title="Check your email"
+          sub={
+            <>
+              Enter the code we sent to <strong>{trimmedEmail}</strong> and choose a new password.
+            </>
+          }
+        />
+      )}
+
+      {(step === "resetSent" || step === "resetDone") && (
+        <div className="auth-done">
+          <span className="auth-done__icon" aria-hidden="true">
+            <MailCheck size={26} />
+          </span>
+          <AuthHeading
+            title={step === "resetSent" ? "Check your email" : "Password updated"}
+            sub={step === "resetSent" ? `If there's an account for ${trimmedEmail}, a reset link is on its way.` : "Sign in with your new password."}
+          />
+          <Button size="lg" block onClick={() => go("signIn")}>
+            Back to sign in
+          </Button>
+        </div>
+      )}
+
+      {step !== "resetSent" && step !== "resetDone" && (
+        <form className="auth__form" onSubmit={submit} noValidate aria-busy={busy}>
+          {step === "signUp" && (
+            <AuthField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={40} required />
           )}
-          <label className="field">
-            <span className="field__label">Email</span>
-            <input
-              className="field__input"
+          {step !== "resetCode" && (
+            <AuthField
+              label="Email"
               type="email"
               inputMode="email"
-              autoComplete="email"
+              autoComplete={step === "signUp" ? "email" : "username"}
+              autoCapitalize="none"
+              spellCheck={false}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
             />
-          </label>
-          {mode !== "reset" && (
-            <label className="field">
-              <span className="field__label">Password</span>
-              <input
-                className="field__input"
-                type="password"
-                autoComplete={mode === "signUp" ? "new-password" : "current-password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-            </label>
+          )}
+          {step === "resetCode" && <CodeField label="Code from your email" value={code} onChange={setCode} autoFocus />}
+          {(step === "signIn" || step === "signUp" || step === "resetCode") && (
+            <PasswordField
+              label={step === "resetCode" ? "New password" : "Password"}
+              autoComplete={step === "signIn" ? "current-password" : "new-password"}
+              hint={step === "signIn" ? undefined : `At least ${MIN_PASSWORD} characters.`}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
           )}
 
           {error && (
@@ -133,36 +196,29 @@ export default function AuthScreen() {
             size="lg"
             block
             loading={busy}
-            disabled={!email.trim() || (mode !== "reset" && !password) || (mode === "signUp" && !name.trim())}
+            disabled={
+              busy ||
+              (step !== "resetCode" && !trimmedEmail) ||
+              (step === "signIn" && !password) ||
+              (step === "signUp" && (!name.trim() || !passwordOk)) ||
+              (step === "resetCode" && (code.length < 4 || !passwordOk))
+            }
           >
-            {mode === "signIn" ? "Sign in" : mode === "signUp" ? "Create account" : "Send reset link"}
+            {step === "signIn" ? "Sign in" : step === "signUp" ? "Create account" : step === "reset" ? (codeReset ? "Send code" : "Send reset link") : "Set new password"}
           </Button>
-        </form>
 
-        <div className="auth__switch">
-          {mode === "signIn" && (
-            <>
-              <button className="auth__link" onClick={() => switchMode("reset")}>
-                Forgot password?
-              </button>
-              <span>
-                New here?{" "}
-                <button className="auth__link auth__link--strong" onClick={() => switchMode("signUp")}>
-                  Create an account
-                </button>
-              </span>
-            </>
+          {step === "signIn" && (
+            <button type="button" className="auth__link" onClick={() => go("reset")}>
+              Forgot password?
+            </button>
           )}
-          {mode !== "signIn" && (
-            <span>
-              {mode === "signUp" ? "Already have an account? " : ""}
-              <button className="auth__link auth__link--strong" onClick={() => switchMode("signIn")}>
-                {mode === "signUp" ? "Sign in" : "Back to sign in"}
-              </button>
-            </span>
+          {step === "resetCode" && (
+            <button type="button" className="auth__link" onClick={resendResetCode} disabled={busy}>
+              Send a new code
+            </button>
           )}
-        </div>
-      </div>
-    </div>
+        </form>
+      )}
+    </AuthLayout>
   );
 }
