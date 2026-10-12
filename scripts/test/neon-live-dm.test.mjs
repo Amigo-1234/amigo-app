@@ -43,7 +43,8 @@ async function account(email, password, name, mode) {
   const { json: tok } = await auth("/token", null, cookie);
   const base = NEON_DATA_API_URL.replace(/\/rest\/v1\/?$/, "");
   const db = createClient(base, "neon", { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${tok.token}` } } });
-  return { id: json.user.id, db };
+  const claims = JSON.parse(Buffer.from(tok.token.split(".")[1], "base64url").toString());
+  return { id: json.user.id, db, claims: { sub: claims.sub, role: claims.role, id: claims.id } };
 }
 
 // --------------------------------------------------------------- the app
@@ -80,6 +81,14 @@ try {
   const SECRET1 = `hello from A ${tag} ${randomBytes(6).toString("hex")}`;
   await appA.send(A.id, conv, { text: SECRET1 });
   let viewB = await value((s) => appB.subscribeConversation(conv, B.id, s));
+  if (!viewB) {
+    for (const [n, X] of [["A", A], ["B", B]]) {
+      const parts = await X.db.from("dm_participants").select("user_id").eq("conversation_id", conv);
+      const isPart = await X.db.rpc("dm_is_participant", { p_conversation: conv });
+      const msgs = await X.db.from("dm_messages").select("id").eq("conversation_id", conv);
+      console.log(`debug ${n}: id=${X.id} claims=${JSON.stringify(X.claims)} participants=${JSON.stringify(parts.data ?? parts.error)} isParticipant=${JSON.stringify(isPart.data ?? isPart.error)} messages=${JSON.stringify(msgs.data?.length ?? msgs.error)}`);
+    }
+  }
   const m1 = viewB.messages.at(-1);
   ok("B decrypts A's message", m1?.text === SECRET1);
 

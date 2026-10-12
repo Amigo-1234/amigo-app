@@ -1,6 +1,6 @@
 # TEMPORARY (removed after use): runs the live Neon messaging test from a
 # runner that can reach Neon (the dev sandbox can't).
-# run 3
+# run 4
 name: neon-live-dm
 on:
   push:
