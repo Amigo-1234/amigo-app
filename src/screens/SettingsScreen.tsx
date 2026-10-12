@@ -84,6 +84,8 @@ export default function SettingsScreen() {
       </section>
       )}
 
+      {dataSource.emailVerification && viewer.emailVerified === false && <VerifyEmail email={viewer.email} />}
+
       <section className="settings-group" aria-labelledby="set-theme">
         <h3 id="set-theme" className="settings-group__title">Appearance</h3>
         <div className="segmented" role="radiogroup" aria-labelledby="set-theme">
@@ -173,5 +175,75 @@ export default function SettingsScreen() {
         </Button>
       </section>
     </>
+  );
+}
+
+/** Neon: accounts are usable straight away; verifying the email (by code) confirms ownership. */
+function VerifyEmail({ email }: { email: string | null }) {
+  const toast = useToast();
+  const [sent, setSent] = useState(false);
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function send() {
+    setBusy(true);
+    setError(null);
+    try {
+      await dataSource.emailVerification!.sendCode();
+      setSent(true);
+    } catch (e) {
+      setError((e as Error).message || "Couldn't send the code. Try again in a minute.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function verify(e: FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await dataSource.emailVerification!.verify(code);
+      toast("Email verified");
+      // Reload so account permissions tied to a verified email are picked up.
+      window.location.reload();
+    } catch (err) {
+      setError((err as Error).message || "That code didn't work. Check it, or send a new one.");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="settings-group" aria-labelledby="set-email">
+      <h3 id="set-email" className="settings-group__title">Verify your email</h3>
+      <p className="settings-meta">
+        {sent ? `We sent a code to ${email ?? "your email"}. It expires in 15 minutes.` : `Confirm that ${email ?? "your email"} is yours.`}
+      </p>
+      {error && <p className="form-error" role="alert">{error}</p>}
+      {sent ? (
+        <form className="settings-row" onSubmit={verify}>
+          <label className="visually-hidden" htmlFor="email-code">
+            Verification code
+          </label>
+          <input
+            id="email-code"
+            className="field__input settings-input"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            value={code}
+            maxLength={10}
+            onChange={(e) => setCode(e.target.value)}
+          />
+          <Button type="submit" variant="secondary" disabled={!code.trim()} loading={busy}>
+            Verify
+          </Button>
+        </form>
+      ) : null}
+      <Button type="button" variant={sent ? "ghost" : "secondary"} loading={!sent && busy} disabled={busy} onClick={send}>
+        {sent ? "Send a new code" : "Send code"}
+      </Button>
+    </section>
   );
 }

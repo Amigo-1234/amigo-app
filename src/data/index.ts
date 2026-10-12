@@ -5,6 +5,7 @@ import type { DataSource } from "./types";
  * bundles the SDK it uses.
  *
  *   VITE_DATA_SOURCE=supabase   the new backend
+ *   VITE_DATA_SOURCE=neon       same code, on Neon Auth + Data API (src/data/supabase/neonClient.ts)
  *   VITE_DATA_SOURCE=firebase   legacy — kept as the rollback path until cutover is final
  *   VITE_DATA_SOURCE=demo       in-memory demo data for UI work
  *
@@ -16,7 +17,7 @@ const source = import.meta.env.VITE_DATA_SOURCE ?? "firebase";
 export const dataSource: DataSource =
   source === "demo"
     ? (await import("./demoSource")).demoSource
-    : source === "supabase"
+    : source === "supabase" || source === "neon"
       ? (await import("./supabaseSource")).supabaseSource
       : (await import("./firebaseSource")).firebaseSource;
 

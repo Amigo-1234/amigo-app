@@ -12,13 +12,16 @@
  * anyone else's).
  */
 import type { AuthError as SupabaseAuthError, RealtimeChannel } from "@supabase/supabase-js";
-import { supabase } from "./supabase/client";
+import { isNeon, supabase } from "./supabase/client";
 import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
 const REFRESH_DEBOUNCE_MS = 250;
+// Neon has no Realtime: open views refetch on this interval while the tab is
+// visible (and immediately after our own writes). Gentle on Neon Free compute.
+const NEON_POLL_MS = 30_000;
 
 // -------------------------------------------------------- local invalidation
 // After our own writes, refresh open views immediately instead of waiting for
@@ -58,8 +61,20 @@ function liveQuery<T>(
   };
 
   void run();
-  const channel = listen(supabase.channel(`${name}:${crypto.randomUUID()}`), refresh).subscribe();
   invalidators.add(refresh);
+  if (isNeon) {
+    const poll = setInterval(() => document.visibilityState === "visible" && refresh(), NEON_POLL_MS);
+    const onVisible = () => document.visibilityState === "visible" && refresh();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
+      invalidators.delete(refresh);
+    };
+  }
+  const channel = listen(supabase.channel(`${name}:${crypto.randomUUID()}`), refresh).subscribe();
   return () => {
     active = false;
     clearTimeout(timer);
@@ -80,6 +95,14 @@ const AUTH_CODES: Record<string, AuthErrorCode> = {
   email_not_confirmed: "email-not-confirmed",
   over_request_rate_limit: "rate-limited",
   over_email_send_rate_limit: "rate-limited",
+  // Neon Auth (Better Auth) codes.
+  USER_ALREADY_EXISTS: "email-in-use",
+  USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL: "email-in-use",
+  PASSWORD_TOO_SHORT: "weak-password",
+  PASSWORD_TOO_LONG: "weak-password",
+  INVALID_EMAIL: "invalid-email",
+  INVALID_EMAIL_OR_PASSWORD: "invalid-credentials",
+  EMAIL_NOT_VERIFIED: "email-not-confirmed",
 };
 
 function authError(e: SupabaseAuthError | Error): AuthError {
@@ -105,7 +128,7 @@ async function tryLegacySignIn(email: string, password: string): Promise<boolean
   return false;
 }
 
-async function loadViewer(user: { id: string; email?: string | null }): Promise<Viewer> {
+async function loadViewer(user: { id: string; email?: string | null; email_confirmed_at?: string | null }): Promise<Viewer> {
   // The profile row is created by a trigger in the same transaction as the user.
   const data = await q.fetchProfile(supabase, user.id).catch(() => null);
   return {
@@ -114,12 +137,13 @@ async function loadViewer(user: { id: string; email?: string | null }): Promise<
     handle: data?.username ?? "amigo",
     email: user.email ?? null,
     avatarUrl: data?.avatar_url ?? null,
+    emailVerified: !!user.email_confirmed_at,
   };
 }
 
 const viewerListeners = new Set<(v: Viewer | null) => void>();
 const recoveryListeners = new Set<() => void>();
-let currentUser: { id: string; email?: string | null } | null = null;
+let currentUser: { id: string; email?: string | null; email_confirmed_at?: string | null } | null = null;
 
 async function emitViewer() {
   const v = currentUser ? await loadViewer(currentUser) : null;
@@ -137,12 +161,37 @@ supabase.auth.onAuthStateChange((event, session) => {
 
 // ------------------------------------------------------------------- source
 
-const moments = createSupabaseMoments(supabase, liveQuery, invalidate);
+// Messages (E2EE to-device delivery) and Moments (photo storage) need Realtime
+// and Storage; on Neon they're migrated in a later step, so they stay off.
+const moments = isNeon ? null : createSupabaseMoments(supabase, liveQuery, invalidate);
 
 export const supabaseSource: DataSource = {
-  kind: "supabase",
-  // post_media.position is 0–3 and create_post rejects more than 4.
-  maxMediaPerPost: 4,
+  kind: isNeon ? "neon" : "supabase",
+  // post_media.position is 0–3 and create_post rejects more than 4. Neon: no photo storage yet.
+  maxMediaPerPost: isNeon ? 0 : 4,
+  photoUploads: !isNeon,
+
+  emailVerification: isNeon
+    ? {
+        async sendCode() {
+          if (!currentUser?.email) throw new AuthError("unknown", "Not signed in");
+          const { neonEmailCodes } = await import("./supabase/neonClient");
+          await neonEmailCodes.send(currentUser.email).catch((e: Error) => {
+            throw authError(e);
+          });
+        },
+        async verify(code) {
+          if (!currentUser?.email) throw new AuthError("unknown", "Not signed in");
+          const { neonEmailCodes } = await import("./supabase/neonClient");
+          await neonEmailCodes.verify(currentUser.email, code).catch((e: Error) => {
+            throw authError(e);
+          });
+          const { data } = await supabase.auth.getSession();
+          currentUser = data.session?.user ?? currentUser;
+          await emitViewer();
+        },
+      }
+    : undefined,
 
   onViewerChanged(cb) {
     viewerListeners.add(cb);
@@ -171,6 +220,14 @@ export const supabaseSource: DataSource = {
   },
 
   async signUp(email, password, name) {
+    if (isNeon) {
+      const { neonSignUp } = await import("./supabase/neonClient");
+      await neonSignUp(email, password, name.trim()).catch((e: Error) => {
+        throw authError(e);
+      });
+      // Signed in straight away; the email is verified by code from Settings.
+      return { needsEmailConfirmation: false };
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -400,14 +457,16 @@ export const supabaseSource: DataSource = {
   // The admin UI is only a convenience: every call below is re-checked by is_admin() in the database.
   admin: {
     isAdmin: () => q.fetchIsAdmin(supabase),
-    moments: moments.admin,
-    messageReports: {
-      list: () => q.adminMessageReports(supabase),
-      async setStatus(_adminId, reportId, status) {
-        await q.adminSetMessageReportStatus(supabase, reportId, status);
-        invalidate();
-      },
-    },
+    moments: moments?.admin,
+    messageReports: isNeon
+      ? undefined
+      : {
+          list: () => q.adminMessageReports(supabase),
+          async setStatus(_adminId, reportId, status) {
+            await q.adminSetMessageReportStatus(supabase, reportId, status);
+            invalidate();
+          },
+        },
     support: {
       listRequests: (adminId, status) => q.adminListRequests(supabase, adminId, status),
       async moderate(_adminId, requestId, action, note) {
@@ -436,10 +495,10 @@ export const supabaseSource: DataSource = {
     },
   },
 
-  moments: moments.api,
+  moments: moments?.api,
 
   // End-to-end encrypted; the crypto library loads on first use.
-  messages: createSupabaseMessages(supabase, liveQuery, invalidate),
+  messages: isNeon ? undefined : createSupabaseMessages(supabase, liveQuery, invalidate),
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {

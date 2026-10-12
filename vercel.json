@@ -5,6 +5,14 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/neon/auth/:path*",
+      "destination": "https://ep-dry-mode-zano9y8g.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth/:path*"
+    },
+    {
+      "source": "/neon/rest/v1/:path*",
+      "destination": "https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest/v1/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

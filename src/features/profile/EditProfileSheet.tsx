@@ -130,6 +130,7 @@ function EditProfileForm({ profile, onClose, onSaved }: { profile: Profile; onCl
       </div>
 
       <div className="edit-profile__body">
+        {dataSource.photoUploads !== false && (
         <div className="edit-profile__avatar">
           <button type="button" className="edit-profile__avatar-btn" onClick={() => fileRef.current?.click()} aria-label="Change profile photo" disabled={avatarBusy}>
             <Avatar name={name || profile.name} src={avatarSrc} seed={profile.id} size="xl" />
@@ -149,6 +150,7 @@ function EditProfileForm({ profile, onClose, onSaved }: { profile: Profile; onCl
           </div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pickAvatar(e.target.files?.[0])} />
         </div>
+        )}
 
         <label className="field">
           <span className="field__label">Name</span>

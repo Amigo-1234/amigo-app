@@ -375,10 +375,14 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
         </div>
 
         <div className="composer__tools">
-          <IconButton type="button" label={full ? `Up to ${maxMedia} photos per post` : "Add photos"} onClick={() => fileRef.current?.click()} disabled={full}>
-            <ImagePlus size={20} />
-          </IconButton>
-          <input ref={fileRef} type="file" accept={ACCEPT} multiple={maxMedia > 1} hidden onChange={(e) => { void addFiles(e.target.files ?? []); e.target.value = ""; }} />
+          {maxMedia > 0 && (
+            <>
+              <IconButton type="button" label={full ? `Up to ${maxMedia} photos per post` : "Add photos"} onClick={() => fileRef.current?.click()} disabled={full}>
+                <ImagePlus size={20} />
+              </IconButton>
+              <input ref={fileRef} type="file" accept={ACCEPT} multiple={maxMedia > 1} hidden onChange={(e) => { void addFiles(e.target.files ?? []); e.target.value = ""; }} />
+            </>
+          )}
           {items.length > 0 && <span className="composer__count">{items.length}/{maxMedia}</span>}
           <div className="composer__spacer" />
           <CharRing length={text.length} />

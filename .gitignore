@@ -6,3 +6,4 @@ dist
 migration-data
 node_modules
 secrets
+neon/build/

@@ -10,6 +10,8 @@ export interface Viewer {
   handle: string;
   email: string | null;
   avatarUrl: string | null;
+  /** Backends that verify email ownership after sign-up (Neon) report it here. */
+  emailVerified?: boolean;
 }
 
 export interface Author {
@@ -913,13 +915,17 @@ export interface Subscription<T> {
 
 /** Everything the UI needs from a backend. Implemented by Supabase, demo and (legacy) Firebase sources. */
 export interface DataSource {
-  kind: "firebase" | "supabase" | "demo";
+  kind: "firebase" | "supabase" | "neon" | "demo";
 
   /**
    * How many media items one new post may carry on this backend.
    * Supabase: 4 (post_media.position 0–3, enforced by create_post). Legacy Firebase: 1.
    */
   maxMediaPerPost: number;
+  /** False where the backend can't store photos yet (Neon, for now): no avatar uploads. */
+  photoUploads?: boolean;
+  /** Email ownership check by emailed code, for backends that sign people in before verifying (Neon). */
+  emailVerification?: { sendCode(): Promise<void>; verify(code: string): Promise<void> };
 
   /** Optional capability — see ProfilesApi. */
   profiles?: ProfilesApi;
