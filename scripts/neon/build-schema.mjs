@@ -13,6 +13,9 @@
  *   auth.users  -> app_auth.users
  *   auth.uid()  -> app_auth.uid()
  *   `alter publication supabase_realtime ...` lines are dropped (no Realtime).
+ *   The Supabase `session_id` JWT claim (used to sign out a removed device's
+ *   auth session) is read as null: Neon Auth session ids aren't uuids and
+ *   live in neon_auth.session. Removing a device still revokes its keys.
  * Skipped: the Firebase legacy-import migrations (Supabase-only tooling).
  */
 import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -26,7 +29,8 @@ const transform = (sql) =>
   sql
     .replace(/\bauth\.users\b/g, "app_auth.users")
     .replace(/\bauth\.uid\(\)/g, "app_auth.uid()")
-    .replace(/^alter publication supabase_realtime .*$/gm, "-- (Realtime publication omitted on Neon)");
+    .replace(/^alter publication supabase_realtime .*$/gm, "-- (Realtime publication omitted on Neon)")
+    .replace("nullif(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'session_id', '')::uuid", "null::uuid");
 
 const wrap = (sql) => {
   if (sql.includes("$neon_step$")) throw new Error("migration uses the reserved $neon_step$ tag");

@@ -29,7 +29,13 @@ import { toAuthor, VERIFICATION_EMBED } from "./queries";
 import type { Json } from "./database.types";
 import { describeDevice } from "../../lib/device";
 
-type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel) => () => void;
+type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel, pollMs?: number) => () => void;
+
+// Without Realtime (Neon) views poll while visible: fast for the open
+// conversation, slower for the inbox, slowest for the badge shown everywhere.
+const POLL_CONVERSATION_MS = 3_000;
+const POLL_INBOX_MS = 10_000;
+const POLL_BADGE_MS = 20_000;
 
 const PERSON = `id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`;
 const PAGE = 200;
@@ -59,7 +65,15 @@ const CANCEL: Record<string, VerificationFlow["cancelReason"]> = {
 };
 
 /** opts.memoryStore: keep crypto keys in memory instead of IndexedDB (Node tests only). */
-export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate: () => void, opts: { memoryStore?: boolean } = {}): MessagesApi {
+export function createSupabaseMessages(
+  db: Db,
+  liveQuery: LiveQuery,
+  invalidate: () => void,
+  opts: { memoryStore?: boolean; realtime?: boolean } = {},
+): MessagesApi {
+  // Neon: no Realtime channels (polling instead, no typing indicator) and no Storage (text only for now).
+  const realtime = opts.realtime ?? true;
+
   // ------------------------------------------------------------ this device
 
   let current: { userId: string; device: Promise<E2EDevice> } | null = null;
@@ -77,10 +91,12 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
       return data;
     },
     async uploadAttachment(path, bytes) {
+      if (!realtime) throw new MessageError("unknown", "Photos in messages aren't available yet");
       const { error } = await db.storage.from("dm-attachments").upload(path, new Blob([bytes as BlobPart]), { contentType: "application/octet-stream" });
       if (error) throw new MessageError("unknown", error.message);
     },
     async downloadAttachment(path) {
+      if (!realtime) throw new MessageError("unknown", "Photos in messages aren't available yet");
       const { data, error } = await db.storage.from("dm-attachments").download(path);
       if (error || !data) throw new MessageError("unknown", error?.message ?? "download failed");
       return new Uint8Array(await data.arrayBuffer());
@@ -431,16 +447,19 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
         timer = setTimeout(tick, 50);
       };
       verificationListeners.add(poke);
-      const channel = db
-        .channel(`e2e:mail:${crypto.randomUUID()}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "e2e_to_device", filter: `recipient_id=eq.${viewerId}` }, poke)
-        .subscribe();
+      // Without Realtime the tick's own polling (10 s idle, 1.5 s during a verification) is the only signal.
+      const channel = realtime
+        ? db
+            .channel(`e2e:mail:${crypto.randomUUID()}`)
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "e2e_to_device", filter: `recipient_id=eq.${viewerId}` }, poke)
+            .subscribe()
+        : null;
       void tick();
       return () => {
         active = false;
         clearTimeout(timer);
         verificationListeners.delete(poke);
-        void db.removeChannel(channel);
+        if (channel) void db.removeChannel(channel);
       };
     },
 
@@ -479,9 +498,10 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
 
   return {
     encryption: "e2e",
+    photos: realtime,
     security,
 
-    subscribeConversations: (viewerId, sub) => liveQuery("dm:inbox", () => inbox(viewerId), sub, dmListen(viewerId)),
+    subscribeConversations: (viewerId, sub) => liveQuery("dm:inbox", () => inbox(viewerId), sub, dmListen(viewerId), POLL_INBOX_MS),
 
     subscribeUnreadCount: (viewerId, sub) =>
       liveQuery(
@@ -496,6 +516,7 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
         },
         sub,
         dmListen(viewerId),
+        POLL_BADGE_MS,
       ),
 
     async openConversation(_viewerId, peerId) {
@@ -505,7 +526,7 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
     },
 
     subscribeConversation: (conversationId, viewerId, sub) =>
-      liveQuery(`dm:${conversationId}`, () => conversation(conversationId, viewerId), sub, dmListen(viewerId)),
+      liveQuery(`dm:${conversationId}`, () => conversation(conversationId, viewerId), sub, dmListen(viewerId), POLL_CONVERSATION_MS),
 
     async send(viewerId, conversationId, input) {
       const text = input.text.trim();
@@ -542,11 +563,13 @@ export function createSupabaseMessages(db: Db, liveQuery: LiveQuery, invalidate:
     },
 
     setTyping(viewerId, conversationId, typing) {
+      if (!realtime) return;
       const { channel } = typingChannel(conversationId);
       void channel.send({ type: "broadcast", event: "typing", payload: { user: viewerId, typing } });
     },
 
     subscribeTyping(conversationId, viewerId, cb) {
+      if (!realtime) return () => {};
       const entry = typingChannel(conversationId);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const handler = ({ payload }: { payload: { user: string; typing: boolean } }) => {

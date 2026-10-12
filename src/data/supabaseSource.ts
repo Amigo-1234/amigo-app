@@ -30,12 +30,16 @@ const NEON_POLL_MS = 30_000;
 const invalidators = new Set<() => void>();
 const invalidate = () => invalidators.forEach((fn) => fn());
 
-/** Debounced live query: fetch now, refetch on realtime events / local writes. */
+/**
+ * Debounced live query: fetch now, refetch on realtime events / local writes.
+ * On Neon (no Realtime) it polls instead, every `pollMs` while the tab is visible.
+ */
 function liveQuery<T>(
   name: string,
   fetcher: () => Promise<T>,
   sub: Subscription<T>,
   listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel,
+  pollMs = NEON_POLL_MS,
 ): () => void {
   let active = true;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -63,7 +67,7 @@ function liveQuery<T>(
   void run();
   invalidators.add(refresh);
   if (isNeon) {
-    const poll = setInterval(() => document.visibilityState === "visible" && refresh(), NEON_POLL_MS);
+    const poll = setInterval(() => document.visibilityState === "visible" && refresh(), pollMs);
     const onVisible = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -538,7 +542,7 @@ export const supabaseSource: DataSource = {
   moments: moments?.api,
 
   // End-to-end encrypted; the crypto library loads on first use.
-  messages: isNeon ? undefined : createSupabaseMessages(supabase, liveQuery, invalidate),
+  messages: createSupabaseMessages(supabase, liveQuery, invalidate, { realtime: !isNeon }),
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {

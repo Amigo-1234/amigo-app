@@ -139,10 +139,14 @@ export function MessageComposer({
         </p>
       )}
       <div className="msg-composer__row">
-        <IconButton label="Add a photo" type="button" onClick={() => fileRef.current?.click()} disabled={processing || !!image}>
-          <ImagePlus size={22} />
-        </IconButton>
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files?.[0])} />
+        {dataSource.messages?.photos !== false && (
+          <>
+            <IconButton label="Add a photo" type="button" onClick={() => fileRef.current?.click()} disabled={processing || !!image}>
+              <ImagePlus size={22} />
+            </IconButton>
+            <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files?.[0])} />
+          </>
+        )}
         <label className="visually-hidden" htmlFor="msg-input">
           Message {peerName}
         </label>

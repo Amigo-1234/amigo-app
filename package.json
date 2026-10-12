@@ -21,7 +21,8 @@
     "migrate:run": "node scripts/migration/migrate.ts --target supabase",
     "migrate:validate": "node scripts/migration/migrate.ts --target supabase --validate-only",
     "migrate:diff": "node scripts/migration/diff.ts",
-    "firebase:rules": "node scripts/firebase/rules.ts"
+    "firebase:rules": "node scripts/firebase/rules.ts",
+    "test:neon-live": "node scripts/test/neon-live-dm.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

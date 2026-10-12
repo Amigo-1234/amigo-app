@@ -670,6 +670,8 @@ export const MESSAGE_MAX_LENGTH = 2000;
  */
 export interface MessagesApi {
   encryption: "none" | "e2e";
+  /** False where encrypted photo storage isn't available yet (Neon, for now): text only. */
+  photos?: boolean;
   subscribeConversations(viewerId: string, sub: Subscription<Conversation[]>): Unsubscribe;
   /** Conversations with unread messages (what the Messages badge shows). */
   subscribeUnreadCount(viewerId: string, sub: Subscription<number>): Unsubscribe;
