@@ -1,6 +1,6 @@
 # TEMPORARY (removed after use): live messaging benchmark against Neon from a
 # runner that can reach it (the dev sandbox can't).
-# label: baseline
+# label: after (pulse + one-call sync + incremental thread + idempotent send)
 name: neon-perf
 on:
   push:
@@ -14,6 +14,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
+      - name: CORS preflight from the preview origin (direct Data API from the browser?)
+        run: |
+          curl -sS -o /dev/null -D - -X OPTIONS "https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest/v1/rpc/dm_pulse" \
+            -H "Origin: https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app" \
+            -H "Access-Control-Request-Method: POST" -H "Access-Control-Request-Headers: authorization,content-type,apikey,x-client-info,content-profile,prefer" | grep -i "^HTTP\|access-control" || true
       - run: npm ci --ignore-scripts
       - run: npm run perf:neon
         env:

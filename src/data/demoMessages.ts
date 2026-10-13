@@ -210,8 +210,8 @@ export function createDemoMessages(ctx: MessagesContext) {
 
   // ---------------------------------------------------------------- writes
 
-  function addMessage(c: ConversationRecord, senderId: string, text: string, media: MediaItem[], replyToId: string | null) {
-    const m: MessageRecord = { id: nextId("m"), conversationId: c.id, senderId, text, media, replyToId, createdAt: new Date() };
+  function addMessage(c: ConversationRecord, senderId: string, text: string, media: MediaItem[], replyToId: string | null, id?: string) {
+    const m: MessageRecord = { id: id ?? nextId("m"), conversationId: c.id, senderId, text, media, replyToId, createdAt: new Date() };
     messages.push(m);
     // Sending means you've seen everything before it.
     c.readAt[senderId] = m.createdAt;
@@ -284,9 +284,12 @@ export function createDemoMessages(ctx: MessagesContext) {
         if (!text && !input.image) throw new MessageError("empty");
         if (text.length > MESSAGE_MAX_LENGTH) throw new MessageError("too-long");
         const replyToId = input.replyToId && messages.some((m) => m.id === input.replyToId && m.conversationId === c.id) ? input.replyToId : null;
-        addMessage(c, viewerId, text, input.image ? [ctx.upload(input.image)] : [], replyToId);
+        // Same id again (a retry): already stored, don't add a second copy.
+        if (input.clientId && messages.some((m) => m.id === input.clientId)) return { id: input.clientId };
+        const stored = addMessage(c, viewerId, text, input.image ? [ctx.upload(input.image)] : [], replyToId, input.clientId);
         ctx.emit();
         answer(c, viewerId, peer);
+        return { id: stored.id };
       }, input.image ? 700 : 350),
 
     markRead: (viewerId, conversationId) =>

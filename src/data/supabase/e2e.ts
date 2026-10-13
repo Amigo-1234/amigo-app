@@ -32,6 +32,12 @@ export interface E2EBackend {
   rpc<T>(fn: string, args: Record<string, unknown>): Promise<T>;
   /** This device's undelivered to-device mail, oldest first. */
   fetchToDevice(deviceId: string): Promise<{ id: number; sender_id: string; event_type: string; content: unknown }[]>;
+  /** Optional: mail, device-list changes and key counts in one round trip (e2e_sync_state). */
+  syncState?(deviceId: string, since: string): Promise<{
+    mail: { id: number; sender_id: string; event_type: string; content: unknown }[];
+    changes: { user_id: string; changed_at: string }[];
+    counts: { signed_curve25519: number; unused_fallback: boolean };
+  }>;
   uploadAttachment?(path: string, data: Uint8Array): Promise<void>;
   downloadAttachment?(path: string): Promise<Uint8Array>;
 }
@@ -255,9 +261,13 @@ export class E2EDevice {
 
   /** Reads this device's mail, device-list changes; advances verifications; backs up new keys. */
   private async sync() {
-    const mail = await this.backend.fetchToDevice(this.deviceId);
-    const changes = await this.rpc<{ user_id: string; changed_at: string }[]>("e2e_device_changes", { p_since: this.changesSince });
-    const counts = await this.rpc<{ signed_curve25519: number; unused_fallback: boolean }>("e2e_key_counts", { p_device: this.deviceId });
+    const { mail, changes, counts } = this.backend.syncState
+      ? await this.backend.syncState(this.deviceId, this.changesSince)
+      : {
+          mail: await this.backend.fetchToDevice(this.deviceId),
+          changes: await this.rpc<{ user_id: string; changed_at: string }[]>("e2e_device_changes", { p_since: this.changesSince }),
+          counts: await this.rpc<{ signed_curve25519: number; unused_fallback: boolean }>("e2e_key_counts", { p_device: this.deviceId }),
+        };
     const events = mail.map((m) => ({ type: m.event_type, sender: mxid(m.sender_id), content: m.content }));
     const newPeers = mail.filter((m) => m.event_type.startsWith("m.key.verification.") && !this.verificationPeers.has(m.sender_id));
     for (const m of newPeers) this.verificationPeers.add(m.sender_id);

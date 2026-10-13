@@ -408,7 +408,7 @@ function PendingBubble({ p, onRetry, onDiscard }: { p: PendingMessage; onRetry: 
             </button>
           </>
         ) : (
-          <span className="msg__status msg__status--sending">{STATUS_LABEL.sending}</span>
+          <span className={`msg__status msg__status--${p.stored ? "sent" : "sending"}`}>{STATUS_LABEL[p.stored ? "sent" : "sending"]}</span>
         )}
       </p>
     </li>

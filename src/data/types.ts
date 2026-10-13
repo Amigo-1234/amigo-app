@@ -634,6 +634,8 @@ export interface ConversationView {
 }
 
 export interface NewMessageInput {
+  /** Client-chosen id: sending again with the same id never stores a second copy. */
+  clientId?: string;
   text: string;
   image?: NewMediaInput | null;
   replyToId?: string | null;
@@ -679,7 +681,8 @@ export interface MessagesApi {
   openConversation(viewerId: string, peerId: string): Promise<string>;
   /** null: no such conversation, or you're not in it. */
   subscribeConversation(conversationId: string, viewerId: string, sub: Subscription<ConversationView | null>): Unsubscribe;
-  send(viewerId: string, conversationId: string, input: NewMessageInput): Promise<void>;
+  /** Resolves once stored, with the stored message's id (when the backend reports it). */
+  send(viewerId: string, conversationId: string, input: NewMessageInput): Promise<{ id: string } | void>;
   /** Marks everything in the conversation as read by you (the other person sees "Read"). */
   markRead(viewerId: string, conversationId: string): Promise<void>;
   /** Ephemeral: never stored. */

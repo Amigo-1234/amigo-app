@@ -35,6 +35,10 @@ export function useConversations() {
 /** A message of yours that is still on its way (or failed); shown until the backend has it. */
 export interface PendingMessage {
   localId: string;
+  /** Sent as the message id: a retry can never store a second copy. */
+  clientId: string;
+  /** Stored on the server; kept on screen until the conversation shows it. */
+  stored: boolean;
   input: NewMessageInput;
   /** Local preview of an attached image. */
   previewUrl: string | null;
@@ -83,12 +87,22 @@ export function useConversation(conversationId: string) {
     return () => document.removeEventListener("visibilitychange", mark);
   }, [api, conversationId, viewer.id, unread]);
 
+  // A stored message leaves the pending list only once the conversation itself shows it (no flicker, no gap).
+  const shownIds = view?.messages.map((m) => m.id).join(",") ?? "";
+  useEffect(() => {
+    const shown = new Set(shownIds.split(","));
+    setPending((list) => {
+      const keep = list.filter((p) => !(p.stored && shown.has(p.clientId)));
+      for (const p of list) if (!keep.includes(p) && p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+      return keep.length === list.length ? list : keep;
+    });
+  }, [shownIds]);
+
   const deliver = useCallback(
     async (p: PendingMessage) => {
       try {
-        await api.send(viewer.id, conversationId, p.input);
-        setPending((list) => list.filter((x) => x.localId !== p.localId));
-        if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        await api.send(viewer.id, conversationId, { ...p.input, clientId: p.clientId });
+        setPending((list) => list.map((x) => (x.localId === p.localId ? { ...x, stored: true } : x)));
         return null;
       } catch (e) {
         setPending((list) => list.map((x) => (x.localId === p.localId ? { ...x, failed: true } : x)));
@@ -102,6 +116,8 @@ export function useConversation(conversationId: string) {
     (input: NewMessageInput) => {
       const p: PendingMessage = {
         localId: `local-${seq.current++}`,
+        clientId: crypto.randomUUID(),
+        stored: false,
         input,
         previewUrl: input.image ? URL.createObjectURL(input.image.blob) : null,
         createdAt: new Date(),

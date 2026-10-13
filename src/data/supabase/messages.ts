@@ -31,14 +31,13 @@ import { describeDevice } from "../../lib/device";
 
 type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel, pollMs?: number) => () => void;
 
-// Without Realtime (Neon) views poll while visible: fast for the open
-// conversation, slower for the inbox, slowest for the badge shown everywhere.
-const POLL_CONVERSATION_MS = 3_000;
-const POLL_INBOX_MS = 10_000;
-const POLL_BADGE_MS = 20_000;
+// Without Realtime (Neon) one shared, cheap "pulse" read (dm_pulse) runs while
+// the tab is visible — every second with a conversation open, slower for the
+// inbox and the badge — and views refetch only when it reports a change.
+const PULSE_MS = { conversation: 1_000, inbox: 3_000, badge: 15_000 } as const;
+type LiveKind = keyof typeof PULSE_MS;
 
 const PERSON = `id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`;
-const PAGE = 200;
 const TYPING_TTL_MS = 6000;
 
 const ERRORS: Record<string, MessageError["code"]> = { DM002: "not-found", DM003: "not-found", DM004: "blocked", DM005: "unknown" };
@@ -84,6 +83,11 @@ export function createSupabaseMessages(
       // Keep the database's code (DM009 etc.): the crypto layer acts on it.
       if (error) throw Object.assign(new Error(error.message), { code: error.code });
       return data as T;
+    },
+    async syncState(deviceId, since) {
+      const { data, error } = await db.rpc("e2e_sync_state" as never, { p_device: deviceId, p_since: since } as never);
+      if (error) throw Object.assign(new Error(error.message), { code: error.code });
+      return data as never;
     },
     async fetchToDevice(deviceId) {
       const { data, error } = await db.from("e2e_to_device").select("id, sender_id, event_type, content").eq("recipient_device", deviceId).order("id").limit(500);
@@ -175,6 +179,9 @@ export function createSupabaseMessages(
   // ----------------------------------------------------------- decryption
 
   const decrypted = new Map<string, DecryptResult>();
+  /** conversation id → the other person, and people known to have a messaging device. */
+  const peers = new Map<string, string>();
+  const peersWithDevices = new Set<string>();
   const images = new Map<string, Promise<string | null>>();
 
   async function open(userId: string, m: StoredMessage): Promise<DecryptResult> {
@@ -261,23 +268,54 @@ export function createSupabaseMessages(
 
   // --------------------------------------------------------- conversation
 
-  async function conversation(conversationId: string, viewerId: string): Promise<ConversationView | null> {
-    const [{ data: members, error: e1 }, { data: rows, error: e2 }] = await Promise.all([
-      db.from("dm_participants").select("user_id, last_read_at, last_delivered_at").eq("conversation_id", conversationId),
-      db.from("dm_messages").select("id, conversation_id, sender_id, content, created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(PAGE),
-    ]);
-    if (e1) fail(e1);
-    if (e2) fail(e2);
-    const me = members?.find((m) => m.user_id === viewerId);
-    const peer = members?.find((m) => m.user_id !== viewerId);
-    if (!me || !peer) return null;
-    await authors([peer.user_id]);
-    const [{ data: blocks }, { data: blockedEither }] = await Promise.all([
-      db.from("user_blocks").select("blocked_id").eq("blocker_id", viewerId).eq("blocked_id", peer.user_id),
-      db.rpc("dm_blocked_between", { a: viewerId, b: peer.user_id }),
-    ]);
+  interface Member {
+    user_id: string;
+    last_read_at: string;
+    last_delivered_at: string;
+  }
+  interface Thread {
+    /** Oldest first, deduplicated by id. */
+    rows: StoredMessage[];
+    members: Member[];
+    blockedByMe: boolean;
+    blockedEither: boolean;
+  }
+  const threads = new Map<string, Thread>();
 
-    const list = [...(rows ?? [])].reverse();
+  /** One call: markers, block state and only the messages newer than what we already have. */
+  async function loadThread(conversationId: string): Promise<Thread | null> {
+    const known = threads.get(conversationId);
+    const newest = known?.rows.at(-1)?.created_at ?? null;
+    const { data, error } = await db.rpc("dm_thread" as never, { p_conversation: conversationId, p_after: newest, p_limit: known ? 100 : 50 } as never);
+    if (error) {
+      if (error.code === "DM003") return null;
+      fail(error);
+    }
+    const res = data as unknown as { members: Member[] | null; blocked_by_me: boolean; blocked_either: boolean; messages: StoredMessage[] };
+    const byId = new Map((known?.rows ?? []).map((r) => [r.id, r]));
+    for (const m of res.messages) byId.set(m.id, m);
+    const thread: Thread = {
+      rows: [...byId.values()].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1)),
+      members: res.members ?? [],
+      blockedByMe: res.blocked_by_me,
+      blockedEither: res.blocked_either,
+    };
+    threads.set(conversationId, thread);
+    return thread;
+  }
+
+  async function conversation(conversationId: string, viewerId: string): Promise<ConversationView | null> {
+    const thread = await loadThread(conversationId);
+    if (!thread) return null;
+    const me = thread.members.find((m) => m.user_id === viewerId);
+    const peer = thread.members.find((m) => m.user_id !== viewerId);
+    if (!me || !peer) return null;
+    peers.set(conversationId, peer.user_id);
+    await authors([peer.user_id]);
+    const blocks = thread.blockedByMe ? [peer.user_id] : [];
+    const blockedEither = thread.blockedEither;
+
+    const list = thread.rows;
     const results = await Promise.all(list.map((m) => open(viewerId, m as StoredMessage).catch((): DecryptResult => ({ ok: false, reason: "missing-key" }))));
     const byId = new Map(list.map((m, i) => [m.id, results[i]]));
 
@@ -329,10 +367,107 @@ export function createSupabaseMessages(
         peer: author(peer.user_id),
         lastMessage: null,
         unreadCount,
-        blockedByViewer: (blocks ?? []).length > 0,
+        blockedByViewer: blocks.length > 0,
         canSend: !blockedEither,
       },
       messages,
+    };
+  }
+
+  // ---------------------------------------------------------- live updates
+
+  interface Live {
+    kind: LiveKind;
+    run: () => void;
+  }
+  const lives = new Set<Live>();
+  let pulseViewer: string | null = null;
+  let pulseTimer: ReturnType<typeof setTimeout> | undefined;
+  let pulseBusy = false;
+  let pulseForced = false;
+  let lastPulse: string | null = null;
+  let lastMail: unknown = undefined;
+  const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
+
+  function schedulePulse() {
+    clearTimeout(pulseTimer);
+    let ms = Infinity;
+    for (const l of lives) ms = Math.min(ms, PULSE_MS[l.kind]);
+    if (ms !== Infinity) pulseTimer = setTimeout(() => void pulse(false), ms);
+  }
+
+  /** One small read; views refetch only if something changed (or after our own writes). */
+  async function pulse(force: boolean) {
+    if (pulseBusy) {
+      pulseForced ||= force;
+      return;
+    }
+    if (!pulseViewer || !lives.size || !visible()) return schedulePulse();
+    pulseBusy = true;
+    try {
+      const d = await device(pulseViewer);
+      const { data, error } = await db.rpc("dm_pulse" as never, { p_device: d.deviceId } as never);
+      if (error) throw error;
+      const { x, ...rest } = (data ?? {}) as { x?: unknown };
+      const key = JSON.stringify(rest);
+      const mail = x !== lastMail && lastMail !== undefined;
+      lastMail = x;
+      // New key/verification mail for this device: take it in before re-rendering (may unlock messages).
+      if (mail) await d.refresh().catch(() => undefined);
+      if (force || mail || (lastPulse !== null && key !== lastPulse)) for (const l of lives) l.run();
+      lastPulse = key;
+    } catch {
+      // Network hiccup: the next pulse tries again.
+    } finally {
+      pulseBusy = false;
+      if (pulseForced) {
+        pulseForced = false;
+        void pulse(true);
+      } else schedulePulse();
+    }
+  }
+
+  if (!realtime && typeof document !== "undefined") {
+    document.addEventListener("visibilitychange", () => visible() && void pulse(true));
+  }
+
+  /** After our own writes: refresh now instead of waiting for the next pulse. */
+  function changed() {
+    invalidate();
+    if (!realtime) void pulse(true);
+  }
+
+  /** Realtime backends: liveQuery + channels. Neon: driven by the shared pulse. */
+  function live<T>(kind: LiveKind, viewerId: string, name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel) {
+    if (realtime) return liveQuery(name, fetcher, sub, listen);
+    let active = true;
+    let running = false;
+    let again = false;
+    const run = async () => {
+      if (running) return void (again = true);
+      running = true;
+      try {
+        const value = await fetcher();
+        if (active) sub.onData(value);
+      } catch (e) {
+        if (active) sub.onError(e as Error);
+      } finally {
+        running = false;
+        if (again && active) {
+          again = false;
+          void run();
+        }
+      }
+    };
+    const entry: Live = { kind, run: () => void run() };
+    pulseViewer = viewerId;
+    lives.add(entry);
+    void run();
+    schedulePulse();
+    return () => {
+      active = false;
+      lives.delete(entry);
+      schedulePulse();
     };
   }
 
@@ -387,14 +522,14 @@ export function createSupabaseMessages(
 
     async removeDevice(viewerId, deviceId) {
       await withDevice(viewerId, (d) => d.removeDevice(deviceId));
-      invalidate();
+      changed();
     },
 
     peerTrust: (viewerId, peerId) => withDevice(viewerId, (d) => d.peerTrust(peerId)),
 
     async acceptIdentityChange(viewerId, peerId) {
       await withDevice(viewerId, (d) => d.acceptIdentityChange(peerId));
-      invalidate();
+      changed();
     },
 
     async startVerification(viewerId, peerId) {
@@ -470,7 +605,7 @@ export function createSupabaseMessages(
     async confirmVerification(viewerId, flowId) {
       await withDevice(viewerId, (d) => d.confirmVerification(flowId));
       pokeVerifications();
-      invalidate();
+      changed();
     },
     async rejectVerification(viewerId, flowId) {
       await withDevice(viewerId, (d) => d.rejectVerification(flowId));
@@ -487,12 +622,12 @@ export function createSupabaseMessages(
       const result = await withDevice(viewerId, (d) => d.restoreBackup(recoveryKey));
       // Messages that couldn't be decrypted before may be readable now.
       for (const [id, r] of decrypted) if (!r.ok) decrypted.delete(id);
-      invalidate();
+      changed();
       return result;
     },
     async resetIdentity(viewerId) {
       await withDevice(viewerId, (d) => d.resetIdentity());
-      invalidate();
+      changed();
     },
   };
 
@@ -501,10 +636,12 @@ export function createSupabaseMessages(
     photos: realtime,
     security,
 
-    subscribeConversations: (viewerId, sub) => liveQuery("dm:inbox", () => inbox(viewerId), sub, dmListen(viewerId), POLL_INBOX_MS),
+    subscribeConversations: (viewerId, sub) => live("inbox", viewerId, "dm:inbox", () => inbox(viewerId), sub, dmListen(viewerId)),
 
     subscribeUnreadCount: (viewerId, sub) =>
-      liveQuery(
+      live(
+        "badge",
+        viewerId,
         "dm:unread",
         async () => {
           // The badge is on every screen, so this registers this browser as a messaging
@@ -516,7 +653,6 @@ export function createSupabaseMessages(
         },
         sub,
         dmListen(viewerId),
-        POLL_BADGE_MS,
       ),
 
     async openConversation(_viewerId, peerId) {
@@ -526,18 +662,26 @@ export function createSupabaseMessages(
     },
 
     subscribeConversation: (conversationId, viewerId, sub) =>
-      liveQuery(`dm:${conversationId}`, () => conversation(conversationId, viewerId), sub, dmListen(viewerId), POLL_CONVERSATION_MS),
+      live("conversation", viewerId, `dm:${conversationId}`, () => conversation(conversationId, viewerId), sub, dmListen(viewerId)),
 
     async send(viewerId, conversationId, input) {
       const text = input.text.trim();
       if (!text && !input.image) throw new MessageError("empty");
-      const { data: members, error } = await db.from("dm_participants").select("user_id").eq("conversation_id", conversationId);
-      if (error) fail(error);
-      const peerId = members?.find((m) => m.user_id !== viewerId)?.user_id;
-      if (!peerId) throw new MessageError("not-found");
+      let peerId = peers.get(conversationId);
+      if (!peerId) {
+        const { data: members, error } = await db.from("dm_participants").select("user_id").eq("conversation_id", conversationId);
+        if (error) fail(error);
+        peerId = members?.find((m) => m.user_id !== viewerId)?.user_id;
+        if (!peerId) throw new MessageError("not-found");
+        peers.set(conversationId, peerId);
+      }
       // Encrypting for someone with no devices would make the message unreadable forever.
-      const { count } = await db.from("e2e_devices").select("device_id", { count: "exact", head: true }).eq("user_id", peerId);
-      if (!count) throw new MessageError("peer-unavailable");
+      // (Checked until they have one; devices don't disappear in a way this check would catch anyway.)
+      if (!peersWithDevices.has(peerId)) {
+        const { count } = await db.from("e2e_devices").select("device_id", { count: "exact", head: true }).eq("user_id", peerId);
+        if (!count) throw new MessageError("peer-unavailable");
+        peersWithDevices.add(peerId);
+      }
       const d = await device(viewerId).catch(translate);
       let image: MessagePayload["amigo.image"] = null;
       if (input.image) {
@@ -548,18 +692,21 @@ export function createSupabaseMessages(
       }
       const payload: MessagePayload = { msgtype: image ? "m.image" : "m.text", body: text, "amigo.reply_to": input.replyToId ?? null, "amigo.image": image };
       const content = await d.encrypt(conversationId, peerId, payload).catch(translate);
-      const { data: sent, error: sendError } = await db.rpc("dm_send", { p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json });
+      // The id is chosen here, so a retry after a lost response can't store the message twice.
+      const messageId = input.clientId ?? globalThis.crypto.randomUUID();
+      const { data: sent, error: sendError } = await db.rpc("dm_send_v2" as never, { p_id: messageId, p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json } as never);
       if (sendError) fail(sendError);
       // We already know what it says — no need to decrypt our own message again.
-      const id = sent?.[0]?.id;
-      if (id) decrypted.set(id, { ok: true, payload, senderMismatch: false, unverifiedDevice: false });
-      invalidate();
+      const id = (sent as unknown as { id: string }[] | null)?.[0]?.id ?? messageId;
+      decrypted.set(id, { ok: true, payload, senderMismatch: false, unverifiedDevice: false });
+      changed();
+      return { id };
     },
 
     async markRead(_viewerId, conversationId) {
       const { error } = await db.rpc("dm_mark_read", { p_conversation: conversationId });
       if (error) fail(error);
-      invalidate();
+      changed();
     },
 
     setTyping(viewerId, conversationId, typing) {
@@ -592,13 +739,13 @@ export function createSupabaseMessages(
     async block(_viewerId, peerId) {
       const { error } = await db.rpc("dm_block", { p_user: peerId });
       if (error) fail(error);
-      invalidate();
+      changed();
     },
 
     async unblock(_viewerId, peerId) {
       const { error } = await db.rpc("dm_unblock", { p_user: peerId });
       if (error) fail(error);
-      invalidate();
+      changed();
     },
 
     async report(_viewerId, conversationId, input) {
