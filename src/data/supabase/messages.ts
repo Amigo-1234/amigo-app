@@ -389,10 +389,13 @@ export function createSupabaseMessages(
   let lastMail: unknown = undefined;
   const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
 
+  let lastChangeAt = Date.now();
   function schedulePulse() {
     clearTimeout(pulseTimer);
     let ms = Infinity;
     for (const l of lives) ms = Math.min(ms, PULSE_MS[l.kind]);
+    // Quiet for a minute: ease off (up to 4×, at most 4 s) until something happens again.
+    if (ms !== Infinity && Date.now() - lastChangeAt > 60_000) ms = Math.max(ms, Math.min(ms * 4, 4_000));
     if (ms !== Infinity) pulseTimer = setTimeout(() => void pulse(false), ms);
   }
 
@@ -414,7 +417,10 @@ export function createSupabaseMessages(
       lastMail = x;
       // New key/verification mail for this device: take it in before re-rendering (may unlock messages).
       if (mail) await d.refresh().catch(() => undefined);
-      if (force || mail || (lastPulse !== null && key !== lastPulse)) for (const l of lives) l.run();
+      if (force || mail || (lastPulse !== null && key !== lastPulse)) {
+        lastChangeAt = Date.now();
+        for (const l of lives) l.run();
+      }
       lastPulse = key;
     } catch {
       // Network hiccup: the next pulse tries again.

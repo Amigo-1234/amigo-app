@@ -15,9 +15,17 @@ import type { Database } from "./database.types";
  */
 const base = `${location.origin}/neon`;
 
+// Data API calls carry only a Bearer JWT (no cookies), so they can go straight
+// to Neon when its CORS allows this origin (VITE_NEON_DATA_API_URL, set for the
+// preview): one hop fewer per request, and polling doesn't consume Vercel
+// function invocations. Elsewhere they use the same-origin proxy.
+const directDataApi = import.meta.env.VITE_NEON_DATA_API_URL as string | undefined;
+const directOrigins = ((import.meta.env.VITE_NEON_DATA_API_ORIGINS as string | undefined) ?? "").split(",").map((o) => o.trim());
+const dataApiUrl = directDataApi && directOrigins.includes(location.origin) ? directDataApi : `${base}/rest/v1`;
+
 const client = createClient<Database>({
   auth: { adapter: SupabaseAuthAdapter(), url: `${base}/auth` },
-  dataApi: { url: `${base}/rest/v1` },
+  dataApi: { url: dataApiUrl },
 });
 
 // The parts used here (.auth, .from, .rpc) are Supabase-compatible; Realtime
