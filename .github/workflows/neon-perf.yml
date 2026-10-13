@@ -1,6 +1,7 @@
 # TEMPORARY (removed after use): live messaging benchmark against Neon from a
 # runner that can reach it (the dev sandbox can't).
 # label: after (pulse + one-call sync + incremental thread + idempotent send)
+# attempt 2
 name: neon-perf
 on:
   push:
