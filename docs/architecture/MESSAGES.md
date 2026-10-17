@@ -80,6 +80,25 @@ Migrations `20261006200000_messages.sql` and `20261006210000_messaging_security.
   private Realtime broadcast channel (`dm:<id>`) that only participants can join and that is never
   stored.
 
+### Reactions, edits and unsend
+
+Migration `20261017110000_dm_reactions_edits_unsend.sql` (additive, Neon):
+
+- A reaction or an edit is an ordinary encrypted event in `dm_messages` (`msgtype` `amigo.reaction` /
+  `amigo.edit`, emoji or new text in `body`, target in `amigo.target`, all inside the ciphertext).
+- The row's `relates_to` column names the message it belongs to. **New metadata:** the server learns
+  that *some* annotation was added to a given message, and when. It does not learn whether it is a
+  reaction or an edit, nor the emoji or the text. The link keeps annotations out of unread counts and
+  inbox previews, and lets them be deleted with their message.
+- Clients only apply an annotation whose encrypted `amigo.target` matches `relates_to` (the server
+  can't re-point one), and only apply edits made by the message's own sender. One reaction per
+  person; the latest wins; an empty emoji removes it. Edits are allowed for 15 minutes (client rule).
+- `dm_unsend(id)` deletes your own message's ciphertext and everything relating to it, for both
+  people, and records a tombstone (`dm_tombstones`: ids and time only) so the other device drops it.
+  Anything the other person already read, copied or screenshotted can't be recalled.
+- Search runs on the device over messages it has decrypted; nothing is searched on the server.
+- `dm_thread(p_before)` pages back through older history 50 rows at a time.
+
 ## Devices and verification
 
 **Identity.** The first device of an account creates the account's cross-signing identity. Every
@@ -194,8 +213,8 @@ sees who blocked whom.
    Today a recovery key restores *history*; your *identity* comes back only by approving from
    another device, otherwise it's reset.
 4. Re-authentication (password) before removing devices or resetting identity.
-5. Deleting and editing messages, pagination beyond the latest 200, and group conversations (the
-   schema already has a participants table).
+5. Group conversations (the schema already has a participants table). Inbox previews show a
+   message's original text after an edit.
 6. Realtime and Storage are untested locally (no local Realtime/Storage servers). Typing,
    instant verification prompts and photo upload over Supabase need a check on a real project.
    Locally, verification relies on polling every 1.5 s while it's active.
@@ -205,6 +224,7 @@ sees who blocked whom.
 | Test | What it checks |
 | --- | --- |
 | `supabase/tests/database.test.sql` (messages + security, 78 checks) | ciphertext-only messages, participants-only access, admins can't read conversations or backups, key upload/claim/signature rules (only your own signatures, "who verified whom" private), removed devices can't return, backup keeps only encrypted keys, report review is admin-only and audit-logged |
+| `npm run test:dm-actions` (19 checks, local Neon schema) | reactions grouped and replaced, removal, kept out of unread and previews, edits shown as edited, no editing others' messages, nothing readable on the server, outsiders and bad targets refused, unsend removes ciphertext + annotations for both, history paging |
 | `npm run test:e2e` (70 checks) | Real crypto devices through PostgREST:<br>• new devices start unapproved and get no keys<br>• own-device emoji verification<br>• people verification and mismatch<br>• cross-signing trust carried to new devices<br>• backup with a recovery key that never leaves the device<br>• a **password-reset attacker** (no keys, can't send, can't restore, removed)<br>• restore on a new device<br>• identity reset (contacts warned; sending paused until OK)<br>• tampering / forged sender / replay rejected<br>• the app-level API<br>• a scan of every table and every request for plaintext or the recovery key |
 | Demo browser suites (scratch) | Messages (66 checks) and security (57 checks): the new-sign-in notice, devices list and removal, verification (match, mismatch, incoming), key-changed flow, backup setup / copy / download / restore errors, report evidence selection, admin review, new-device gate, phone layout |
 | Real-crypto browser run (local) | two people verify each other through the UI (same library-computed emoji on both screens); backup set up; a second browser for the same person is gated, approved by emoji from the first, and then reads history from before it existed |
