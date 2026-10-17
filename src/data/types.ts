@@ -1163,7 +1163,8 @@ export interface MomentsAdminApi {
 }
 
 export interface Subscription<T> {
-  onData: (value: T) => void;
+  /** `cached`: what this view showed last time (this tab's memory), shown at once; a fresh value follows. */
+  onData: (value: T, info?: { cached: true }) => void;
   onError: (error: Error) => void;
 }
 

@@ -58,7 +58,7 @@ const ok = (label, cond, extra = "") => {
 };
 const code = async (fn) => { try { await fn(); return null; } catch (e) { return e.code ?? e.message; } };
 const oneShot = (name, fetcher, sub) => { fetcher().then(sub.onData, sub.onError); return () => {}; };
-const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: resolve, onError: reject }));
+const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: (v, info) => !info?.cached && resolve(v), onError: reject }));
 
 const tag = randomUUID().slice(0, 8);
 const ids = { ama: randomUUID(), leo: randomUUID(), zoe: randomUUID(), boss: randomUUID() };

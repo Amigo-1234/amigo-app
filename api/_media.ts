@@ -41,6 +41,28 @@ export async function presign(s: R2, key: string, method: "GET" | "PUT", seconds
   return signed.url;
 }
 
+/** Read links are signed per window, so the same file gets the same URL for a while (browser cache hits). */
+export const READ_WINDOW_S = 30 * 60;
+const READ_VALID_S = 90 * 60;
+
+/**
+ * A read link for an object that never changes (keys are random and never
+ * reused). Signed at the start of the current 30-minute window and valid 90
+ * minutes from then, so it has 60–90 minutes left; R2 is asked to let the
+ * browser keep the bytes privately for that long. Returns the link and how many
+ * seconds of it remain.
+ */
+export async function presignRead(s: R2, key: string, now = Date.now()) {
+  const start = Math.floor(now / 1000 / READ_WINDOW_S) * READ_WINDOW_S;
+  const remaining = start + READ_VALID_S - Math.floor(now / 1000);
+  const url = new URL(objectUrl(s, key));
+  url.searchParams.set("X-Amz-Expires", String(READ_VALID_S));
+  url.searchParams.set("response-cache-control", `private, max-age=${remaining - 120}, immutable`);
+  const datetime = new Date(start * 1000).toISOString().replace(/[:-]|\.\d{3}/g, "");
+  const signed = await s.client.sign(url.toString(), { method: "GET", aws: { signQuery: true, datetime } });
+  return { url: signed.url, remaining };
+}
+
 export const remove = (s: R2, key: string) => s.client.fetch(objectUrl(s, key), { method: "DELETE" });
 
 /** Calls a Postgres function through the Data API as the person holding `token`. */

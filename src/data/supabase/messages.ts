@@ -8,6 +8,7 @@
  * Read/delivered markers, who-talks-to-whom and timestamps are the metadata
  * the server does see (see docs/architecture/MESSAGES.md).
  */
+import { cached, forgetAll, remember } from "./viewCache";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   MessageError,
@@ -44,6 +45,8 @@ type LiveKind = keyof typeof PULSE_MS;
 
 const PERSON = `id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`;
 const TYPING_TTL_MS = 6000;
+const DEVICES_POLL_MS = 5 * 60_000;
+const VERIFY_IDLE_MS = 60_000;
 
 const ERRORS: Record<string, MessageError["code"]> = { DM002: "not-found", DM003: "not-found", DM004: "blocked", DM005: "unknown", RL001: "rate-limited", AS001: "suspended" };
 function fail(error: { code?: string; message: string }): never {
@@ -119,6 +122,7 @@ export function createSupabaseMessages(
 
   /** This browser was removed from the account elsewhere: forget its keys so it starts over as a new device. */
   async function wipe(userId: string) {
+    forgetAll();
     const was = current;
     current = null;
     try {
@@ -134,9 +138,29 @@ export function createSupabaseMessages(
     }
   }
 
+  /**
+   * Background messaging work (badge, device list, verification checks, setup)
+   * waits until the first screen is up and the phone has a quiet moment, so the
+   * encryption library (~2 MB) never competes with the first screen. Opening
+   * Messages or sending starts it at once.
+   */
+  let settledPromise: Promise<void> | null = null;
+  function settled(): Promise<void> {
+    return (settledPromise ??= new Promise((resolve) => {
+      if (typeof window === "undefined") return resolve();
+      const idle = () =>
+        "requestIdleCallback" in window ? window.requestIdleCallback(() => resolve(), { timeout: 4000 }) : void setTimeout(resolve, 1000);
+      const go = () => setTimeout(idle, 1500);
+      if (document.readyState === "complete") go();
+      else window.addEventListener("load", go, { once: true });
+    }));
+  }
+  const started = (userId: string) => current?.userId === userId;
+
   /** Runs fn with this device; a "device removed" answer wipes the local keys first. */
-  async function withDevice<T>(userId: string, fn: (d: E2EDevice) => Promise<T>): Promise<T> {
+  async function withDevice<T>(userId: string, fn: (d: E2EDevice) => Promise<T>, background = false): Promise<T> {
     try {
+      if (background && !started(userId)) await settled();
       return await fn(await device(userId));
     } catch (e) {
       const code = (e as { code?: string })?.code;
@@ -509,6 +533,8 @@ export function createSupabaseMessages(
     if (!pulseViewer || !lives.size || !visible()) return schedulePulse();
     pulseBusy = true;
     try {
+      // Only the badge is open: no hurry to start the encryption library.
+      if (!started(pulseViewer) && [...lives].every((l) => l.kind === "badge")) await settled();
       const d = await device(pulseViewer);
       const { data, error } = await db.rpc("dm_pulse" as never, { p_device: d.deviceId } as never);
       if (error) throw error;
@@ -522,7 +548,10 @@ export function createSupabaseMessages(
       const mail = x !== lastMail && lastMail !== undefined;
       lastMail = x;
       // New key/verification mail for this device: take it in before re-rendering (may unlock messages).
-      if (mail) await d.refresh().catch(() => undefined);
+      if (mail) {
+        await d.refresh().catch(() => undefined);
+        pokeVerifications();
+      }
       if (force || mail || (lastPulse !== null && key !== lastPulse)) {
         lastChangeAt = Date.now();
         for (const l of lives) l.run();
@@ -560,6 +589,7 @@ export function createSupabaseMessages(
       running = true;
       try {
         const value = await fetcher();
+        remember(cacheKey, value);
         if (active) sub.onData(value);
       } catch (e) {
         if (active) sub.onError(e as Error);
@@ -574,6 +604,10 @@ export function createSupabaseMessages(
     const entry: Live = { kind, run: () => void run() };
     pulseViewer = viewerId;
     lives.add(entry);
+    // What this view showed last time (this tab's memory only), then refresh.
+    const cacheKey = `${viewerId}:${name}`;
+    const last = cached<T>(cacheKey);
+    if (last !== undefined) sub.onData(last, { cached: true });
     void run();
     schedulePulse();
     return () => {
@@ -612,14 +646,16 @@ export function createSupabaseMessages(
   const security: MessagingSecurityApi = {
     simulated: false,
 
-    setup: (viewerId) => withDevice(viewerId, (d) => d.ownSecurity()),
+    setup: (viewerId) => withDevice(viewerId, (d) => d.ownSecurity(), true),
 
     subscribeDevices: (viewerId, sub) =>
       liveQuery(
         "e2e:devices",
         () =>
-          withDevice(viewerId, async (d) =>
-            (await d.myDevices()).map((x) => ({
+          withDevice(
+            viewerId,
+            async (d) =>
+              (await d.myDevices()).map((x) => ({
               id: x.deviceId,
               name: x.name ?? "Unknown device",
               current: x.current,
@@ -627,9 +663,12 @@ export function createSupabaseMessages(
               createdAt: new Date(x.createdAt),
               lastActiveAt: x.lastSeenAt ? new Date(x.lastSeenAt) : null,
             })),
+            true,
           ),
         sub,
         (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "e2e_devices", filter: `user_id=eq.${viewerId}` }, refresh),
+        // Only for "new sign-in" notices: every 5 minutes is plenty (changes here refresh it at once).
+        DEVICES_POLL_MS,
       ),
 
     async removeDevice(viewerId, deviceId) {
@@ -658,12 +697,17 @@ export function createSupabaseMessages(
       const tick = async () => {
         if (!active || busy) return;
         busy = true;
-        let next = 10_000;
+        // New verification mail wakes this at once (the shared pulse sees it); otherwise a slow check.
+        let next = VERIFY_IDLE_MS;
         try {
-          const flows = await withDevice(viewerId, async (d) => {
-            await d.refresh();
-            return d.verifications();
-          });
+          const flows = await withDevice(
+            viewerId,
+            async (d) => {
+              await d.refresh();
+              return d.verifications();
+            },
+            true,
+          );
           const people = flows.filter((f) => !f.self).map((f) => f.otherUserId);
           await authors(people).catch(() => undefined);
           const mapped: VerificationFlow[] = flows.map((f) => ({
@@ -835,7 +879,9 @@ export function createSupabaseMessages(
         async () => {
           // The badge is on every screen, so this registers this browser as a messaging
           // device soon after sign-in — people can receive messages before ever opening Messages.
-          void device(viewerId).catch((e) => console.warn("Encrypted messaging unavailable on this device", e));
+          void settled()
+            .then(() => device(viewerId))
+            .catch((e) => console.warn("Encrypted messaging unavailable on this device", e));
           const { data, error } = await db.rpc("dm_inbox");
           if (error) fail(error);
           return (data ?? []).filter((r) => r.unread_count > 0).length;

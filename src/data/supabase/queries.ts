@@ -28,6 +28,7 @@ export type PostRow = {
   is_entry?: boolean;
   edited_at?: string | null;
   saved?: { user_id: string }[];
+  liked?: boolean;
   world?: { slug: string; title: string } | null;
   author: ProfileRow | null;
   media: MediaRow[];
@@ -39,6 +40,8 @@ const POST_SELECT_BASE =
   `author:profiles!posts_author_id_fkey(${PERSON}), ` +
   "media:post_media(kind, bucket, storage_path, width, height, alt, position)";
 export let POST_SELECT = POST_SELECT_BASE;
+/** Posts carry `liked` (migration 20261018090000), so no separate likes request. */
+let inlineLikes = false;
 let MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 
 /**
@@ -46,7 +49,8 @@ let MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!in
  * whether you bookmarked them (an embed RLS limits to your own row).
  */
 export function enablePostTools() {
-  POST_SELECT = `${POST_SELECT_BASE}, edited_at, saved:post_bookmarks(user_id)`;
+  POST_SELECT = `${POST_SELECT_BASE}, edited_at, saved:post_bookmarks(user_id), liked`;
+  inlineLikes = true;
   MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 }
 
@@ -85,7 +89,7 @@ export function toPost(db: Db, row: PostRow, liked: Set<string>): Post {
     media: toMedia(db, row.media ?? []),
     createdAt: new Date(row.created_at),
     likeCount: row.like_count,
-    likedByViewer: liked.has(row.id),
+    likedByViewer: row.liked ?? liked.has(row.id),
     replyCount: row.reply_count,
     world: row.world ? { slug: row.world.slug, title: row.world.title, entry: Boolean(row.is_entry) } : null,
     edited: !!row.edited_at,
@@ -107,7 +111,7 @@ export function dataError(e: PostgrestError | Error | null | undefined): Error {
 // -------------------------------------------------------------------- reads
 
 export async function likedSet(db: Db, viewerId: string | null, postIds: string[]): Promise<Set<string>> {
-  if (!viewerId || postIds.length === 0) return new Set();
+  if (!viewerId || postIds.length === 0 || inlineLikes) return new Set();
   const { data, error } = await db.from("post_likes").select("post_id").eq("user_id", viewerId).in("post_id", postIds);
   if (error) throw dataError(error);
   return new Set(data.map((r) => r.post_id));

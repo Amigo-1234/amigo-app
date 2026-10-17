@@ -278,7 +278,7 @@ try {
   // ---- the app layer (src/data/supabase/messages.ts), fresh accounts
   const carl = asUser(ids.carl), dana = asUser(ids.dana);
   const oneShot = (name, fetcher, sub) => { fetcher().then(sub.onData, sub.onError); return () => {}; };
-  const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: resolve, onError: reject }));
+  const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: (v, info) => !info?.cached && resolve(v), onError: reject }));
   const appCarl = createSupabaseMessages(carl, oneShot, () => {}, { memoryStore: true });
   const appDana = createSupabaseMessages(dana, oneShot, () => {}, { memoryStore: true });
   ok("app layer reports real encryption and real (not simulated) security", appCarl.encryption === "e2e" && appCarl.security.simulated === false);

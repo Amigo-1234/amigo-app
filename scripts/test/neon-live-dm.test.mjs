@@ -55,7 +55,7 @@ const oneShot = (_name, fetcher, sub) => {
   fetcher().then(sub.onData, sub.onError);
   return () => {};
 };
-const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: resolve, onError: reject }));
+const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: (v, info) => !info?.cached && resolve(v), onError: reject }));
 const app = (db) => createSupabaseMessages(db, oneShot, () => {}, { memoryStore: true, realtime: false });
 
 const tag = randomBytes(4).toString("hex");

@@ -48,7 +48,8 @@ const oneShot = (_n, fetcher, sub) => {
   fetcher().then(sub.onData, sub.onError);
   return () => {};
 };
-const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: resolve, onError: reject }));
+// The first fresh value (views may first show what they had last time, marked cached).
+const value = (subscribe) => new Promise((resolve, reject) => subscribe({ onData: (v, info) => !info?.cached && resolve(v), onError: reject }));
 const fails = async (p) => p.then(() => null, (e) => e);
 
 const tag = randomUUID().slice(0, 8);

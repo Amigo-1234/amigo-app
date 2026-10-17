@@ -16,6 +16,7 @@ import { Wordmark } from "../ui/Brand";
 import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 import { NAV } from "./nav";
+import { useScrollMemory } from "./useScrollMemory";
 import { RightRail } from "./RightRail";
 import { SuspensionBanner } from "../features/moderation/SuspensionBanner";
 import "./AppShell.css";
@@ -35,7 +36,7 @@ export function AppShell() {
   const inMessages = pathname === "/messages" || pathname.startsWith("/messages/");
   const inConversation = pathname.startsWith("/messages/");
 
-  useEffect(() => window.scrollTo(0, 0), [pathname]);
+  useScrollMemory();
 
   // "n" opens the composer, like most social apps on desktop.
   useEffect(() => {

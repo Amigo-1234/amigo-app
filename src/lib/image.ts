@@ -12,11 +12,16 @@
 export const IMAGE_LIMITS = {
   /** Largest file someone can pick. Phones produce 3–12 MB; 25 MB leaves room for big DSLR JPEGs. */
   maxInputBytes: 25 * 1024 * 1024,
-  /** Longest edge after resizing. Sharp on any phone/laptop screen, ~4× smaller than a 12 MP photo. */
-  maxEdge: 2048,
-  /** Target ceiling for the processed upload. */
+  /**
+   * Longest edge after resizing. Sharp full-screen on any phone (a 1080p phone
+   * shows ~1080 px across); far lighter to download on mobile data than 2048.
+   */
+  maxEdge: 1600,
+  /** Size we aim for: feeds stay fast on slow networks (quality drops a little before dimensions do). */
+  targetBytes: 350 * 1024,
+  /** Hard ceiling for the processed upload. */
   maxOutputBytes: 3 * 1024 * 1024,
-  quality: 0.85,
+  quality: 0.82,
   minQuality: 0.6,
   maxGifBytes: 8 * 1024 * 1024,
 } as const;
@@ -75,6 +80,7 @@ export async function processImage(file: File): Promise<ProcessedImage> {
   const bitmap = await decode(file);
   let scale = Math.min(1, IMAGE_LIMITS.maxEdge / Math.max(bitmap.width, bitmap.height));
   let quality: number = IMAGE_LIMITS.quality;
+  let best: ProcessedImage | null = null;
   try {
     for (let attempt = 0; attempt < 6; attempt++) {
       const width = Math.max(1, Math.round(bitmap.width * scale));
@@ -89,12 +95,19 @@ export async function processImage(file: File): Promise<ProcessedImage> {
       ctx.fillRect(0, 0, width, height);
       ctx.imageSmoothingQuality = "high";
       ctx.drawImage(bitmap, 0, 0, width, height);
-      const blob = await canvasToBlob(canvas, "image/jpeg", quality);
-      if (blob.size <= IMAGE_LIMITS.maxOutputBytes) return { blob, width, height, mimeType: "image/jpeg" };
+      // WebP where the browser can encode it (~25–35% smaller than JPEG at the same quality);
+      // browsers that can't (older Safari) hand back PNG, so JPEG is used there instead.
+      let blob = await canvasToBlob(canvas, "image/webp", quality);
+      if (blob.type !== "image/webp") blob = await canvasToBlob(canvas, "image/jpeg", quality);
+      const mimeType = blob.type === "image/webp" ? "image/webp" : "image/jpeg";
+      if (blob.size <= IMAGE_LIMITS.targetBytes) return { blob, width, height, mimeType };
+      if (blob.size <= IMAGE_LIMITS.maxOutputBytes) best = { blob, width, height, mimeType };
       // Too big: lower quality first (cheap, invisible), then dimensions.
-      if (quality > IMAGE_LIMITS.minQuality) quality = Math.max(IMAGE_LIMITS.minQuality, quality - 0.1);
+      if (quality > IMAGE_LIMITS.minQuality) quality = Math.max(IMAGE_LIMITS.minQuality, quality - 0.08);
       else scale *= 0.85;
     }
+    // Couldn't reach the target (very detailed photo): the smallest acceptable version.
+    if (best) return best;
     throw new ImageError(`${name} is too detailed to upload. Try a smaller image.`);
   } finally {
     bitmap.close();

@@ -18,6 +18,7 @@ import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPlatform } from "./supabase/platform";
+import { cached, remember, setCacheOwner } from "./supabase/viewCache";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
@@ -32,6 +33,20 @@ const NEON_POLL_MS = 30_000;
 
 const invalidators = new Set<() => void>();
 const invalidate = () => invalidators.forEach((fn) => fn());
+
+// Nobody has touched the app for a while (phone on the table, tab left open):
+// open views refresh 4× less often; the first touch afterwards refreshes them at once.
+const IDLE_AFTER_MS = 2 * 60_000;
+let lastInput = Date.now();
+if (typeof window !== "undefined") {
+  const touched = () => {
+    const wasIdle = Date.now() - lastInput > IDLE_AFTER_MS;
+    lastInput = Date.now();
+    if (wasIdle) invalidate();
+  };
+  for (const type of ["pointerdown", "keydown", "touchstart", "wheel"]) window.addEventListener(type, touched, { passive: true, capture: true });
+}
+const userIdle = () => Date.now() - lastInput > IDLE_AFTER_MS;
 
 /**
  * Debounced live query: fetch now, refetch on realtime events / local writes.
@@ -54,6 +69,7 @@ function liveQuery<T>(
     running = true;
     try {
       const value = await fetcher();
+      remember(name, value);
       if (active) sub.onData(value);
     } catch (e) {
       if (active) sub.onError(e as Error);
@@ -67,10 +83,18 @@ function liveQuery<T>(
     timer = setTimeout(run, REFRESH_DEBOUNCE_MS);
   };
 
+  // Show what this screen had last time at once (this tab's memory only), then refresh.
+  const last = cached<T>(name);
+  if (last !== undefined) sub.onData(last, { cached: true });
   void run();
   invalidators.add(refresh);
   if (isNeon) {
-    const poll = setInterval(() => document.visibilityState === "visible" && refresh(), pollMs);
+    let ticks = 0;
+    const poll = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (userIdle() && ++ticks % 4 !== 0) return;
+      refresh();
+    }, pollMs);
     const onVisible = () => document.visibilityState === "visible" && refresh();
     document.addEventListener("visibilitychange", onVisible);
     return () => {
@@ -171,11 +195,13 @@ async function emitViewer() {
 async function syncSession() {
   const { data } = await supabase.auth.getSession();
   currentUser = data.session?.user ?? null;
+  setCacheOwner(currentUser?.id ?? null);
   await emitViewer();
 }
 
 supabase.auth.onAuthStateChange((event, session) => {
   const next = session?.user ?? null;
+  setCacheOwner(next?.id ?? null);
   const changed = next?.id !== currentUser?.id || event === "USER_UPDATED" || event === "INITIAL_SESSION";
   currentUser = next;
   if (event === "PASSWORD_RECOVERY") recoveryListeners.forEach((cb) => cb());
@@ -222,6 +248,7 @@ export const supabaseSource: DataSource = {
     const { error: delError } = await supabase.rpc("delete_my_account" as never, { p_confirm: "DELETE" } as never);
     if (delError) throw new AuthError(delError.code === "AC001" ? "invalid-credentials" : "unknown", delError.message);
     // Forget this browser's keys, drafts and session for the deleted account.
+    setCacheOwner(null);
     try {
       for (const k of Object.keys(localStorage)) if (k.includes(userId)) localStorage.removeItem(k);
       if (typeof indexedDB !== "undefined" && indexedDB.databases) {
@@ -336,6 +363,7 @@ export const supabaseSource: DataSource = {
   },
 
   async signOut() {
+    setCacheOwner(null);
     await supabase.auth.signOut();
     if (isNeon) {
       currentUser = null;
