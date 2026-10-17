@@ -32,6 +32,9 @@ function put(url: string, blob: Blob, type: string, onProgress?: (f: number) => 
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", url);
     xhr.setRequestHeader("content-type", type);
+    // A stalled upload (lost signal) fails instead of spinning forever; the post stays saved with Retry.
+    xhr.timeout = 180_000;
+    xhr.ontimeout = () => reject(new MediaError("network", "upload timed out"));
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
     xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new MediaError("network", `upload failed (${xhr.status})`)));
     xhr.onerror = () => reject(new MediaError("network"));
