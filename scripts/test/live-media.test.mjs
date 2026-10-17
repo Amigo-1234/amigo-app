@@ -101,6 +101,18 @@ try {
     // Diagnose: the same database call made directly through the Data API proxy.
     const d = await rpc(A, "media_begin_upload", { p_purpose: "post", p_mime: "image/jpeg", p_size: jpeg.length, p_conversation: null });
     console.log(`diag: direct media_begin_upload → ${d.status} ${d.data?.code ?? ""} ${d.data?.message ?? (typeof d.data === "string" ? "key" : "")}`);
+    const REST = "https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest/v1";
+    for (const [label, extra] of [["no origin", {}], ["with origin", { origin: BASE }], ["accept json", { accept: "application/json" }]]) {
+      const x = await fetch(`${REST}/rpc/media_begin_upload`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${A.token}`, "content-type": "application/json", ...extra },
+        body: JSON.stringify({ p_purpose: "post", p_mime: "image/jpeg", p_size: 10, p_conversation: null }),
+      });
+      const t = await x.text();
+      console.log(`diag: Neon direct (${label}) → ${x.status} ${x.ok ? "key" : t.slice(0, 120)}`);
+    }
+    const again = await begin(A, "post", "image/jpeg", jpeg.length);
+    console.log(`diag: upload function again → ${again.status} ${again.body.error ?? ""}`);
     const me = await rpc(A, "my_account_status");
     console.log(`diag: my_account_status → ${me.status} ${JSON.stringify(me.data).slice(0, 120)}`);
   }

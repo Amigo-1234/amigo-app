@@ -70,7 +70,11 @@ try {
   const photo = await page.locator("div").screenshot();
 
   await page.goto(BASE, { waitUntil: "networkidle" });
-  ok("signed-in home loads on a phone", (await page.locator(".bottom-create").count()) === 1, page.url());
+  await page.locator(".bottom-create").waitFor({ timeout: 15000 }).catch(() => undefined);
+  const home = (await page.locator(".bottom-create").count()) === 1;
+  await page.screenshot({ path: `${SHOTS}/mobile-home.png` });
+  ok("signed-in home loads on a phone", home, `${page.url()} · ${(await page.locator("body").innerText()).replace(/\s+/g, " ").slice(0, 160)}`);
+  if (!home) throw new Error("not signed in on the page; skipping the UI flows");
   const imgLoaded = (loc) => loc.evaluate((img) => img.complete && img.naturalWidth > 0).catch(() => false);
   const noOverflow = async () => (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0;
 
