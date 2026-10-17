@@ -132,6 +132,9 @@ export function ConversationPane({ conversationId }: { conversationId: string })
   };
   const keyChanged = trust === "changed" || trust === "changed-verified";
 
+  // The message being replied to was unsent (by either person): drop the reply.
+  if (replyTo && c.status === "ready" && !c.messages.some((m) => m.id === replyTo.id)) setReplyTo(null);
+
   const quote = (m: DirectMessage): MessageQuote => ({ id: m.id, fromViewer: m.fromViewer, text: m.text, hasImage: m.media.length > 0 });
   const openActions = (m: DirectMessage) => {
     setTarget(m);
@@ -418,6 +421,7 @@ export function ConversationPane({ conversationId }: { conversationId: string })
             onConfirm={async () => {
               try {
                 await actions!.unsend(viewer.id, conversationId, target.id);
+                if (replyTo?.id === target.id) setReplyTo(null);
                 closeSheet();
                 toast("Message unsent");
               } catch {

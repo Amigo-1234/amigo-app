@@ -258,6 +258,14 @@ export function useBubbleGestures({ onMenu, onReply, onDoubleTap }: { onMenu: ()
             start.current = null;
             setDx(0);
             navigator.vibrate?.(10);
+            // Lifting the finger can produce a click on whatever is now under it
+            // (the sheet's backdrop) — swallow that one click so the menu stays open.
+            const swallow = (ev: Event) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+            };
+            window.addEventListener("click", swallow, { capture: true, once: true });
+            setTimeout(() => window.removeEventListener("click", swallow, { capture: true }), 800);
             onMenu();
           }, LONG_PRESS_MS);
         }

@@ -51,6 +51,9 @@ interface MessageRecord {
   media: MediaItem[];
   replyToId: string | null;
   createdAt: Date;
+  /** person → emoji (demo only, in memory). */
+  reactions?: Record<string, string>;
+  edited?: boolean;
 }
 
 interface ConversationRecord {
@@ -161,6 +164,15 @@ export function createDemoMessages(ctx: MessagesContext) {
       replyTo: quoted ? { id: quoted.id, fromViewer: quoted.senderId === viewerId, text: quoted.text, hasImage: quoted.media.length > 0 } : null,
       createdAt: m.createdAt,
       status: statusOf(m, c, viewerId),
+      edited: !!m.edited,
+      reactions: Object.entries(
+        Object.entries(m.reactions ?? {}).reduce<Record<string, { count: number; mine: boolean }>>((acc, [who, emoji]) => {
+          const g = (acc[emoji] ??= { count: 0, mine: false });
+          g.count++;
+          g.mine ||= who === viewerId;
+          return acc;
+        }, {}),
+      ).map(([emoji, g]) => ({ emoji, ...g })),
     };
   }
 
@@ -239,8 +251,38 @@ export function createDemoMessages(ctx: MessagesContext) {
     }, 4200);
   }
 
+  const own = (viewerId: string, conversationId: string, messageId: string) => {
+    const m = messages.find((x) => x.id === messageId && x.conversationId === conversationId);
+    if (!m || !find(conversationId, viewerId)) throw new MessageError("not-found");
+    return m;
+  };
+
   const api: MessagesApi = {
     encryption: "none",
+    actions: {
+      async react(viewerId, conversationId, messageId, emoji) {
+        const m = own(viewerId, conversationId, messageId);
+        m.reactions = { ...m.reactions };
+        if (emoji) m.reactions[viewerId] = emoji;
+        else delete m.reactions[viewerId];
+        ctx.emit();
+      },
+      async edit(viewerId, conversationId, messageId, text) {
+        const m = own(viewerId, conversationId, messageId);
+        if (m.senderId !== viewerId) throw new MessageError("not-found");
+        m.text = text.trim();
+        m.edited = true;
+        ctx.emit();
+      },
+      async unsend(viewerId, conversationId, messageId) {
+        const m = own(viewerId, conversationId, messageId);
+        if (m.senderId !== viewerId) throw new MessageError("not-found");
+        messages.splice(messages.indexOf(m), 1);
+        ctx.emit();
+      },
+      // The demo keeps everything loaded.
+      loadOlder: async () => false,
+    },
 
     subscribeConversations: (viewerId, sub) =>
       ctx.watch(sub, () => {
