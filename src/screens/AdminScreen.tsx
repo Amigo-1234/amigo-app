@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { NavLink, useParams } from "react-router";
 import { FileText, Flag, HandHeart, LayoutDashboard, Orbit, ShieldAlert, Sparkles, UsersRound } from "lucide-react";
 import { dataSource } from "../data";
 import { AdminLegal, AdminMonetization } from "../features/admin/AdminPlatform";
+import { AdminContentReports, AdminSuspensions } from "../features/admin/AdminModeration";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
@@ -28,6 +30,7 @@ const SECTIONS = [
 export default function AdminScreen() {
   const admin = useIsAdmin();
   const { section = "" } = useParams();
+  const [suspendKey, setSuspendKey] = useState(0);
 
   if (admin === null) {
     return (
@@ -72,11 +75,23 @@ export default function AdminScreen() {
           <>
             <AdminMomentReports />
             <AdminMessageReports />
-            <AdminPlaceholder
-              title="Other reports"
-              body="Reporting posts and people isn't built yet. Reports on Support Hub requests are reviewed in Support Hub → Reports."
-              link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
-            />
+            {dataSource.admin?.moderation ? (
+              <>
+                <AdminContentReports onSuspended={() => setSuspendKey((k) => k + 1)} />
+                <AdminSuspensions refreshKey={suspendKey} />
+                <AdminPlaceholder
+                  title="Support Hub reports"
+                  body="Reports on Support Hub requests are reviewed in Support Hub → Reports."
+                  link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
+                />
+              </>
+            ) : (
+              <AdminPlaceholder
+                title="Other reports"
+                body="Reporting posts and people isn't built yet. Reports on Support Hub requests are reviewed in Support Hub → Reports."
+                link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
+              />
+            )}
           </>
         )}
       </div>

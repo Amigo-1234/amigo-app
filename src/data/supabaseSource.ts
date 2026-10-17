@@ -15,6 +15,7 @@ import type { AuthError as SupabaseAuthError, RealtimeChannel } from "@supabase/
 import { isNeon, supabase } from "./supabase/client";
 import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
+import { createModeration } from "./supabase/moderation";
 import { createPlatform } from "./supabase/platform";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
@@ -188,6 +189,9 @@ supabase.auth.onAuthStateChange((event, session) => {
 // Neon: text Moments only until photo storage is set up (no Storage API there).
 const moments = createSupabaseMoments(supabase, liveQuery, invalidate, { photos: !isNeon });
 const platform = createPlatform(supabase);
+// Post tools + moderation need migration 20261017130000 (applied on Neon only).
+if (isNeon) q.enablePostTools();
+const moderation = isNeon ? createModeration(supabase, invalidate) : null;
 
 export const supabaseSource: DataSource = {
   kind: isNeon ? "neon" : "supabase",
@@ -197,6 +201,8 @@ export const supabaseSource: DataSource = {
 
   legal: platform.legal,
   monetization: platform.monetization,
+  postTools: moderation?.postTools,
+  accountStatus: moderation?.accountStatus,
 
   async deleteAccount(password) {
     if (!currentUser?.email) throw new AuthError("unknown", "Not signed in");
@@ -533,6 +539,7 @@ export const supabaseSource: DataSource = {
   admin: {
     isAdmin: () => q.fetchIsAdmin(supabase),
     legal: platform.legalAdmin,
+    moderation: moderation?.admin,
     monetization: platform.monetizationAdmin,
     moments: moments?.admin,
     messageReports: isNeon

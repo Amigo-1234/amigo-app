@@ -53,6 +53,32 @@ export interface Post {
   replyTo?: { postId: string; handle: string } | null;
   /** Set when the post was made inside a World (shown as a chip linking to it). */
   world?: { slug: string; title: string; entry: boolean } | null;
+  /** The author changed the text after posting. */
+  edited?: boolean;
+  /** Saved to your bookmarks (backends with post tools only). */
+  bookmarkedByViewer?: boolean;
+}
+
+export type ContentReportTarget = "post" | "profile" | "world";
+
+/** Bookmarks, editing, deleting and reporting posts — where the backend supports them. */
+export interface PostToolsApi {
+  setBookmarked(viewerId: string, postId: string, saved: boolean): Promise<void>;
+  /** Your bookmarks, newest saved first. */
+  bookmarks(viewerId: string, limit: number): Promise<Post[]>;
+  /** Your own post's text. */
+  edit(viewerId: string, postId: string, text: string): Promise<void>;
+  /** Your own post, for everyone. */
+  remove(viewerId: string, postId: string): Promise<void>;
+  /** Reports go to the Amigo team; reporting twice while open counts once. */
+  report(viewerId: string, target: ContentReportTarget, targetId: string, input: { reason: MessageReportReason; note: string }): Promise<void>;
+}
+
+/** Your account's standing (suspended accounts can read, report and delete, but not post or message). */
+export interface AccountStatus {
+  suspended: boolean;
+  reason: string | null;
+  until: Date | null;
 }
 
 export interface Reply {
@@ -687,7 +713,47 @@ export interface AdminApi {
   messageReports?: MessageReportsAdminApi;
   /** Reported Moments: review and remove. */
   moments?: MomentsAdminApi;
+  /** Reported posts, profiles and Worlds; post takedown; account suspension. */
+  moderation?: ModerationAdminApi;
   users: AdminUsersApi;
+}
+
+export interface ContentReport {
+  id: string;
+  reporterHandle: string;
+  targetType: ContentReportTarget;
+  targetId: string;
+  /** "Post", "Reply", "Profile" or "World". */
+  targetLabel: string;
+  targetText: string;
+  targetAuthor: { id: string; handle: string } | null;
+  targetRemoved: boolean;
+  /** Open reports about the same thing. */
+  reportCount: number;
+  reason: MessageReportReason;
+  note: string;
+  status: "open" | "reviewed";
+  createdAt: Date;
+}
+
+export interface Suspension {
+  userId: string;
+  handle: string;
+  name: string;
+  reason: string;
+  suspendedAt: Date;
+  until: Date | null;
+  suspendedBy: string | null;
+}
+
+export interface ModerationAdminApi {
+  listReports(status: "open" | "all"): Promise<ContentReport[]>;
+  setReportStatus(reportId: string, status: "open" | "reviewed"): Promise<void>;
+  removePost(postId: string, note: string): Promise<void>;
+  listSuspensions(): Promise<Suspension[]>;
+  /** until null: until restored. Admins can't be suspended. */
+  suspend(userId: string, reason: string, until: Date | null): Promise<void>;
+  unsuspend(userId: string, note: string): Promise<void>;
 }
 
 // ----------------------------------------------------------------- messages
@@ -1075,6 +1141,10 @@ export interface DataSource {
   photoUploads?: boolean;
   /** Email ownership check by emailed code, for backends that sign people in before verifying (Neon). */
   emailVerification?: { sendCode(): Promise<void>; verify(code: string): Promise<void> };
+  /** Bookmarks, edit, delete and report posts. */
+  postTools?: PostToolsApi;
+  /** Whether your account is suspended. */
+  accountStatus?(): Promise<AccountStatus>;
   /** Permanently deletes the signed-in account after re-checking the password (Neon/Supabase). */
   deleteAccount?(password: string): Promise<void>;
   /** Versioned legal documents and acceptance records. */

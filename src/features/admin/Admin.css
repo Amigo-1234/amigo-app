@@ -292,3 +292,12 @@
 .dm-report__who {
   font-weight: 650;
 }
+
+.admin-quote {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--border);
+  color: var(--text-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

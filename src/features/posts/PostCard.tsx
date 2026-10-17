@@ -1,6 +1,6 @@
 import { memo, useState, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { Heart, MessageCircle, Share, Orbit } from "lucide-react";
+import { Bookmark, Heart, MessageCircle, Share, Orbit } from "lucide-react";
 import type { Post } from "../../data";
 import { Avatar } from "../../ui/Avatar";
 import { formatCount } from "../../lib/format";
@@ -9,6 +9,7 @@ import { PostMedia } from "./PostMedia";
 import { RichText } from "./RichText";
 import { useMediaViewer } from "./MediaViewer";
 import { useLike, useSharePost } from "./usePostActions";
+import { PostOptions, useBookmark } from "./PostOptions";
 import { profileHref } from "../profile/links";
 import "./PostCard.css";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
@@ -44,6 +45,7 @@ export const PostCard = memo(function PostCard({
   const openMedia = useMediaViewer();
   const share = useSharePost();
   const { liked, count, toggle } = useLike(post);
+  const bookmark = useBookmark(post);
   const [expanded, setExpanded] = useState(false);
 
   const focus = variant === "focus";
@@ -100,8 +102,10 @@ export const PostCard = memo(function PostCard({
                 </Link>
               </>
             )}
+            {post.edited && <span className="post__edited"> · Edited</span>}
           </span>
         </div>
+        {!pending && <PostOptions post={post} focus={focus} />}
       </header>
 
       {post.replyTo && (
@@ -190,6 +194,17 @@ export const PostCard = memo(function PostCard({
         <button className="action action--share" onClick={() => share(post)} aria-label="Share">
           <Share size={19} strokeWidth={1.9} aria-hidden="true" />
         </button>
+
+        {bookmark.available && (
+          <button
+            className={`action action--save${bookmark.saved ? " is-active" : ""}`}
+            onClick={bookmark.toggle}
+            aria-pressed={bookmark.saved}
+            aria-label={bookmark.saved ? "Remove from bookmarks" : "Save to bookmarks"}
+          >
+            <Bookmark size={19} strokeWidth={1.9} fill={bookmark.saved ? "currentColor" : "none"} aria-hidden="true" />
+          </button>
+        )}
       </footer>
       )}
     </article>

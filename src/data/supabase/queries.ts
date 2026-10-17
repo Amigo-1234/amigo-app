@@ -26,16 +26,29 @@ export type PostRow = {
   reply_count: number;
   parent_id: string | null;
   is_entry?: boolean;
+  edited_at?: string | null;
+  saved?: { user_id: string }[];
   world?: { slug: string; title: string } | null;
   author: ProfileRow | null;
   media: MediaRow[];
   parent?: { id: string; author: { username: string } | null } | null;
 };
 
-export const POST_SELECT =
+const POST_SELECT_BASE =
   "id, body, created_at, like_count, reply_count, parent_id, is_entry, world:worlds!posts_world_id_fkey(slug, title), " +
   `author:profiles!posts_author_id_fkey(${PERSON}), ` +
   "media:post_media(kind, bucket, storage_path, width, height, alt, position)";
+export let POST_SELECT = POST_SELECT_BASE;
+let MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
+
+/**
+ * Backends with migration 20261017130000 (Neon): posts also carry edited_at and
+ * whether you bookmarked them (an embed RLS limits to your own row).
+ */
+export function enablePostTools() {
+  POST_SELECT = `${POST_SELECT_BASE}, edited_at, saved:post_bookmarks(user_id)`;
+  MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
+}
 
 // ------------------------------------------------------------------ mapping
 
@@ -69,6 +82,8 @@ export function toPost(db: Db, row: PostRow, liked: Set<string>): Post {
     likedByViewer: liked.has(row.id),
     replyCount: row.reply_count,
     world: row.world ? { slug: row.world.slug, title: row.world.title, entry: Boolean(row.is_entry) } : null,
+    edited: !!row.edited_at,
+    bookmarkedByViewer: row.saved ? row.saved.length > 0 : undefined,
   };
 }
 
@@ -106,6 +121,23 @@ export async function fetchPost(db: Db, postId: string, viewerId: string | null)
   if (!data) return null;
   await attachParents(db, [data]);
   return toPost(db, data, await likedSet(db, viewerId, [data.id]));
+}
+
+export async function fetchBookmarks(db: Db, viewerId: string, limit: number): Promise<Post[]> {
+  // Not in the generated types (Neon-only table).
+  const { data, error } = await (db as unknown as SupabaseClient)
+    .from("post_bookmarks")
+    .select(`created_at, post:posts(${POST_SELECT})`)
+    .eq("user_id", viewerId)
+    .order("created_at", { ascending: false })
+    .limit(limit)
+    .returns<{ post: PostRow | null }[]>();
+  if (error) throw dataError(error);
+  // Posts you can no longer see (deleted, blocked) drop out.
+  const rows = data.flatMap((r) => (r.post ? [r.post] : []));
+  await attachParents(db, rows);
+  const liked = await likedSet(db, viewerId, rows.map((r) => r.id));
+  return rows.map((r) => toPost(db, r, liked));
 }
 
 export async function fetchReplies(db: Db, postId: string): Promise<Reply[]> {
@@ -179,7 +211,6 @@ export async function updateDisplayName(db: Db, userId: string, name: string) {
 
 const PROFILE_COLUMNS = `id, username, display_name, bio, avatar_url, follower_count, following_count, post_count, created_at, ${VERIFICATION_EMBED}`;
 // Media tab: only posts that have at least one media row.
-const MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 
 async function viewerFollowsSet(db: Db, viewerId: string, ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();

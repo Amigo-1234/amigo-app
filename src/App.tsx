@@ -39,6 +39,7 @@ const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
 const LegalScreen = lazy(() => import("./screens/LegalScreen"));
 const MonetizationScreen = lazy(() => import("./screens/MonetizationScreen"));
+const BookmarksScreen = lazy(() => import("./screens/BookmarksScreen"));
 
 function Splash() {
   return <LoadingScreen />;
@@ -107,6 +108,7 @@ const router = createBrowserRouter([
       { path: "profile", element: <MeRedirect /> },
       { path: "settings", element: <SettingsScreen /> },
       ...(dataSource.monetization ? [{ path: "settings/monetization", element: <MonetizationScreen /> }] : []),
+      ...(dataSource.postTools ? [{ path: "bookmarks", element: <BookmarksScreen /> }] : []),
       ...(dataSource.messages?.security
         ? [
             { path: "settings/devices", element: <DevicesScreen /> },

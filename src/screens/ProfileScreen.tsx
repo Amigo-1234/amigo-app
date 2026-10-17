@@ -7,6 +7,7 @@ import { FeedFooter } from "../features/feed/FeedFooter";
 import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { EditProfileSheet } from "../features/profile/EditProfileSheet";
+import { ProfileOptions } from "../features/posts/PostOptions";
 import { FollowButton } from "../features/profile/FollowButton";
 import { MediaGrid } from "../features/profile/MediaGrid";
 import { useProfile, useProfilePosts } from "../features/profile/useProfile";
@@ -167,6 +168,7 @@ function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; 
             <>
               {messagesEnabled && <MessageButton profile={profile} />}
               <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} size="md" onChange={onFollowChange} />
+              <ProfileOptions id={profile.id} handle={profile.handle} />
             </>
           )}
         </div>

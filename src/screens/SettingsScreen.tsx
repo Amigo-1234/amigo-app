@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import {
+  Bookmark,
   ArrowLeft,
   Bell,
   BellOff,
@@ -195,6 +196,7 @@ function AccountSection({ isAdmin }: { isAdmin: boolean }) {
       ) : (
         <DisplayNameRow />
       )}
+      {dataSource.postTools && <LinkRow to="/bookmarks" icon={<Bookmark size={20} />} title="Bookmarks" detail="Posts you saved. Only you can see them" />}
       {dataSource.monetization && (
         <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator monetization" detail="Coming soon — see your standing and engagement" />
       )}

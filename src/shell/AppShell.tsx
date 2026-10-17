@@ -17,6 +17,7 @@ import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 import { NAV } from "./nav";
 import { RightRail } from "./RightRail";
+import { SuspensionBanner } from "../features/moderation/SuspensionBanner";
 import "./AppShell.css";
 
 export function AppShell() {
@@ -120,6 +121,7 @@ export function AppShell() {
       </aside>
 
       <main id="main" className="main" tabIndex={-1}>
+        <SuspensionBanner />
         {securityApi && !inMessages && <SignInNotice />}
         <Suspense fallback={null}>
           <Outlet />
