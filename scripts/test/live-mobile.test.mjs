@@ -249,7 +249,8 @@ try {
     // Watch (not intercept) what B downloads from R2: it must be ciphertext.
     const downloads = [];
     pageB.on("response", async (r) => {
-      if (/r2\.cloudflarestorage\.com/.test(r.url()) && r.request().method() === "GET" && r.ok()) {
+      // Only message attachments ("<owner>/dm/<conversation>/…"); avatars in the chat header are ordinary images.
+      if (/r2\.cloudflarestorage\.com/.test(r.url()) && /\/dm\//.test(new URL(r.url()).pathname) && r.request().method() === "GET" && r.ok()) {
         signedLinks.push(r.url());
         downloads.push(await r.body().catch(() => null));
       }
@@ -278,7 +279,7 @@ try {
     const isImage = (b) => !!b && b.length > 4 && (b.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) || b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) || b.subarray(0, 4).toString() === "GIF8" || b.subarray(8, 12).toString() === "WEBP");
     const files = downloads.filter(Boolean);
     await check("what R2 stores and serves is ciphertext, not an image", files.length > 0 && files.every((b) => !isImage(b)));
-    if (files.length) console.log(`info encrypted file(s) downloaded by the recipient: ${files.length}, ${files.map((b) => b.length).join(", ")} bytes`);
+    if (files.length) console.log(`info message attachment(s) downloaded by the recipient: ${files.length}, ${files.map((b) => b.length).join(", ")} bytes`);
     await check("no horizontal scroll in the chat", (await pageB.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
     await pageB.context().close();
   });
