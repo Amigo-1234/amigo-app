@@ -9,6 +9,10 @@
       "destination": "/api/neon?path=:path*"
     },
     {
+      "source": "/api/media/:path*",
+      "destination": "/api/media?path=:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

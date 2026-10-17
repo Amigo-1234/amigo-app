@@ -32,6 +32,7 @@
     "@matrix-org/matrix-sdk-crypto-wasm": "18.9.0",
     "@neondatabase/neon-js": "0.7.0-beta",
     "@supabase/supabase-js": "^2.117.2",
+    "aws4fetch": "1.0.20",
     "firebase": "^12.19.0",
     "lucide-react": "^1.52.0",
     "react": "^19.3.0",
