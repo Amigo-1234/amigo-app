@@ -47,6 +47,13 @@ const tag = randomBytes(4).toString("hex");
 const people = [];
 const signedLinks = [];
 const browser = await chromium.launch();
+// Never let the UI flows outlive the job: closing the browser makes them fail
+// fast, and the cleanup below still runs.
+const deadline = setTimeout(() => {
+  console.log("FAIL UI flows took over 8 minutes; stopping them");
+  failures++;
+  void browser.close();
+}, 8 * 60_000);
 try {
   const A = await account(tag, "a");
   people.push(A);
@@ -109,7 +116,8 @@ try {
   const home = (await page.locator(".bottom-create").count()) === 1;
   await check("signed-in home loads on a phone", home);
   if (!home) throw new Error("not signed in on the page; skipping the UI flows");
-  const imgLoaded = (loc) => loc.evaluate((img) => img.complete && img.naturalWidth > 0).catch(() => false);
+  const imgLoaded = async (loc) =>
+    (await loc.count()) > 0 && loc.evaluate((img) => img.complete && img.naturalWidth > 0, null, { timeout: 2000 }).catch(() => false);
   const waitImg = async (loc, ms = 20000) => {
     await loc.waitFor({ timeout: ms }).catch(() => undefined);
     for (let t = 0; t < ms && !(await imgLoaded(loc)); t += 500) await page.waitForTimeout(500);
@@ -199,7 +207,8 @@ try {
   console.error("error:", e.message);
   failures++;
 } finally {
-  await browser.close();
+  clearTimeout(deadline);
+  await browser.close().catch(() => undefined);
   const del = async (p) => {
     const d = await rpc(p, "delete_my_account", { p_confirm: "DELETE" }).catch(() => ({ status: 0 }));
     const done = d.status === 200 || d.status === 204;
