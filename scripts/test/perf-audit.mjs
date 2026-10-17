@@ -167,13 +167,23 @@ async function acceptLegal(page) {
 }
 /** In-app navigation, as when tapping a link (no page reload). */
 async function navigate(page, path) {
+  const before = await page.evaluate(() => (document.querySelector("main")?.innerText ?? "").slice(0, 400));
   const t0 = Date.now();
   await page.evaluate((p) => {
     history.pushState({}, "", p);
     dispatchEvent(new PopStateEvent("popstate"));
   }, path);
-  await page.waitForTimeout(30);
-  await contentReady(page);
+  // The new screen's own content: different from the previous screen, no skeletons/loaders.
+  await page.waitForFunction(
+    (prev) => {
+      const main = document.querySelector("main");
+      if (!main || main.querySelector(".skeleton, .loader, [aria-busy='true']")) return false;
+      const text = (main.innerText ?? "").trim();
+      return text.length > 30 && text.slice(0, 400) !== prev;
+    },
+    before,
+    { timeout: 60000, polling: 20 },
+  );
   return Date.now() - t0;
 }
 
@@ -239,6 +249,13 @@ try {
       const shellW = Date.now() - t1;
       await p.page.locator("main article").first().waitFor();
       out.signedInWarm = { shellMs: shellW, feedMs: Date.now() - t1, kb: Math.round(p.net.bytes / 1024), requests: p.net.requests.length };
+      // Startup API calls in order: start offset and duration (ms) — sequential chains show up here.
+      const page0 = p.net.requests.find((r) => kind(r.url) === "page")?.t ?? p.net.requests[0]?.t ?? 0;
+      out.signedInWarm.apiTimeline = p.net.requests
+        .filter((r) => /^(rpc|table|auth|media|R2|\/api)/.test(kind(r.url)))
+        .sort((a, b) => a.t - b.t)
+        .slice(0, 30)
+        .map((r) => `${kind(r.url)} @${ms((r.t - page0) * 1000)}+${ms((r.end - r.t) * 1000)}`);
 
       // In-app navigation between the main sections (first visit, then a revisit).
       const routes = ["/explore", "/notifications", `/u/${handle}`, "/messages", "/worlds", "/support", "/bookmarks", "/settings", "/"];
@@ -288,51 +305,63 @@ try {
     }
     await p.ctx.close();
 
-    // ---------------- messaging latency: B watches the conversation, A sends
+    // ---------------- messaging latency: D watches the conversation, C sends.
+    // One browser per person for the whole section (a fresh browser is a new,
+    // unverified device that must be approved before it can send).
+    const C = await account(tag, "c");
+    people.push(C);
+    const D = await account(tag, "d");
+    people.push(D);
+    const pc = await phone(C, null);
+    const pd = await phone(D, null);
+    for (const x of [pc, pd]) {
+      await x.page.goto(BASE, { waitUntil: "load" });
+      await acceptLegal(x.page);
+      await x.page.locator(".bottom-create").waitFor();
+      await x.page.goto(`${BASE}/messages`, { waitUntil: "load" });
+      await x.page.waitForTimeout(4000);
+    }
+    const conv2 = await (await rpc(C, "dm_open", { p_peer: D.id })).json();
     for (const name of Object.keys(PROFILES).filter((n) => n !== "ng-3g")) {
-      const pa = await phone(A, PROFILES[name]);
-      const pb = await phone(B, PROFILES[name]);
+      const prof = PROFILES[name];
+      for (const x of [pc, pd]) {
+        await x.cdp.send("Network.emulateNetworkConditions", { offline: false, latency: prof.latency, downloadThroughput: prof.down, uploadThroughput: prof.up });
+        await x.cdp.send("Emulation.setCPUThrottlingRate", { rate: prof.cpu });
+      }
       let t0 = Date.now();
-      await pa.page.goto(`${BASE}/messages/${conv}`, { waitUntil: "commit" });
-      await pa.page.locator("#msg-input").waitFor();
+      await pc.page.goto(`${BASE}/messages/${conv2}`, { waitUntil: "commit" });
+      await pc.page.locator("#msg-input:not([disabled])").waitFor();
       const openMs = Date.now() - t0;
-      await pb.page.goto(`${BASE}/messages/${conv}`, { waitUntil: "commit" });
-      await pb.page.locator("#msg-input").waitFor();
-      await pb.page.waitForTimeout(3000);
+      await pd.page.goto(`${BASE}/messages/${conv2}`, { waitUntil: "commit" });
+      await pd.page.locator("#msg-input").waitFor();
+      await pd.page.waitForTimeout(3000);
       const delivery = [];
       const sendAck = [];
       for (let i = 0; i < 5; i++) {
         const text = `perf ${name} ${i} ${tag}`;
-        await pa.page.locator("#msg-input").fill(text);
+        await pc.page.locator("#msg-input").fill(text);
         t0 = Date.now();
-        await pa.page.getByRole("button", { name: "Send", exact: true }).click();
-        const mine = pa.page.locator(".msg--mine", { hasText: text });
-        const theirs = pb.page.locator(".msg--theirs", { hasText: text });
+        await pc.page.getByRole("button", { name: "Send", exact: true }).click();
         await Promise.all([
-          mine.locator(".msg__meta").first().waitFor().then(() => sendAck.push(Date.now() - t0)).catch(() => undefined),
-          theirs.first().waitFor({ timeout: 60000 }).then(() => delivery.push(Date.now() - t0)).catch(() => failures.push(`message ${i} not delivered on ${name}`)),
+          pc.page.locator(".msg--mine", { hasText: text }).first().waitFor().then(() => sendAck.push(Date.now() - t0)).catch(() => undefined),
+          pd.page.locator(".msg--theirs", { hasText: text }).first().waitFor({ timeout: 60000 }).then(() => delivery.push(Date.now() - t0)).catch(() => failures.push(`message ${i} not delivered on ${name}`)),
         ]);
-        await pa.page.waitForTimeout(800);
+        await pc.page.waitForTimeout(800);
       }
-      // Typing indicator: A types, B sees "is typing".
       t0 = Date.now();
-      await pa.page.locator("#msg-input").pressSequentially("typing…", { delay: 40 });
-      const typingMs = await pb.page
-        .locator(".msg--typing")
-        .first()
-        .waitFor({ timeout: 20000 })
-        .then(() => Date.now() - t0)
-        .catch(() => null);
+      await pc.page.locator("#msg-input").pressSequentially("typing…", { delay: 40 });
+      const typingMs = await pd.page.locator(".msg--typing").first().waitFor({ timeout: 20000 }).then(() => Date.now() - t0).catch(() => null);
+      await pc.page.locator("#msg-input").fill("");
       results.messaging[name] = {
         openConversationMs: openMs,
-        sentShownMs: { p50: pct(sendAck, 50), max: Math.max(...sendAck) },
+        shownToSenderMs: { p50: pct(sendAck, 50), max: sendAck.length ? Math.max(...sendAck) : null },
         deliveredToPeerMs: { p50: pct(delivery, 50), p95: pct(delivery, 95), samples: delivery },
         typingSeenMs: typingMs,
       };
       console.log(`messaging ${name}:`, JSON.stringify(results.messaging[name]));
-      await pa.ctx.close();
-      await pb.ctx.close();
     }
+    await pc.ctx.close();
+    await pd.ctx.close();
   }
 
   // ---------------- API latency from this runner (where is it served from?)
@@ -376,4 +405,5 @@ try {
 }
 results.failures = failures;
 writeFileSync(OUT, JSON.stringify(results, null, 2));
+console.log(`SUMMARY ${JSON.stringify(results)}`);
 console.log(failures.length ? `DONE with ${failures.length} problem(s): ${failures.join("; ")}` : "DONE");
