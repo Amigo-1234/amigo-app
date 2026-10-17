@@ -16,7 +16,29 @@ export function SuspensionBanner() {
       cancelled = true;
     };
   }, []);
-  if (!status?.suspended) return null;
+  if (!status) return null;
+  const warning = status.warnings[0];
+  if (!status.suspended && warning) {
+    return (
+      <div className="suspension-banner suspension-banner--warning" role="status">
+        <ShieldAlert size={18} aria-hidden="true" />
+        <p>
+          <strong>A note from the Amigo team:</strong> {warning.message} Please review the <Link to="/legal/guidelines">Community Guidelines</Link>.{" "}
+          <button
+            type="button"
+            className="link-btn"
+            onClick={() => {
+              setStatus({ ...status, warnings: status.warnings.slice(1) });
+              void dataSource.acknowledgeWarning?.(warning.id).catch(() => undefined);
+            }}
+          >
+            Got it
+          </button>
+        </p>
+      </div>
+    );
+  }
+  if (!status.suspended) return null;
   return (
     <div className="suspension-banner" role="status">
       <ShieldAlert size={18} aria-hidden="true" />

@@ -2,7 +2,7 @@
  * Post tools (bookmarks, edit, delete, report), account standing and the
  * admin moderation queue (migration 20261017130000_moderation_and_post_tools.sql).
  */
-import { SupportError, type AccountStatus, type ContentReport, type ModerationAdminApi, type PostToolsApi, type Suspension } from "../types";
+import { SupportError, type AccountStatus, type BlockingApi, type ContentReport, type ModerationAdminApi, type PlatformStats, type PostToolsApi, type Suspension } from "../types";
 import { dataError, fetchBookmarks, type Db } from "./queries";
 
 async function call<T>(db: Db, fn: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -62,9 +62,34 @@ export function createModeration(db: Db, invalidate: () => void) {
   };
 
   async function accountStatus(): Promise<AccountStatus> {
-    const s = await call<{ suspended: boolean; reason: string | null; until: string | null } | null>(db, "my_account_status");
-    return { suspended: !!s?.suspended, reason: s?.reason ?? null, until: s?.until ? new Date(s.until) : null };
+    const [s, w] = await Promise.all([
+      call<{ suspended: boolean; reason: string | null; until: string | null } | null>(db, "my_account_status"),
+      call<{ id: string; message: string; issued_at: string }[]>(db, "my_warnings").catch(() => []),
+    ]);
+    return {
+      suspended: !!s?.suspended,
+      reason: s?.reason ?? null,
+      until: s?.until ? new Date(s.until) : null,
+      warnings: (w ?? []).map((x) => ({ id: x.id, message: x.message, issuedAt: new Date(x.issued_at) })),
+    };
   }
+
+  const acknowledgeWarning = (id: string) => call<void>(db, "acknowledge_warning", { p_warning: id });
+
+  const blocking: BlockingApi = {
+    async list() {
+      const rows = await call<{ user_id: string; username: string; display_name: string; avatar_url: string | null; blocked_at: string }[]>(db, "my_blocked_accounts");
+      return rows.map((r) => ({ id: r.user_id, handle: r.username, name: r.display_name, avatarUrl: r.avatar_url, blockedAt: new Date(r.blocked_at) }));
+    },
+    async block(userId) {
+      await call(db, "dm_block", { p_user: userId });
+      invalidate();
+    },
+    async unblock(userId) {
+      await call(db, "dm_unblock", { p_user: userId });
+      invalidate();
+    },
+  };
 
   const admin: ModerationAdminApi = {
     async listReports(status) {
@@ -112,7 +137,29 @@ export function createModeration(db: Db, invalidate: () => void) {
     async unsuspend(userId, note) {
       await call(db, "admin_unsuspend_user", { p_user: userId, p_note: note });
     },
+    async warn(userId, message) {
+      await call(db, "admin_warn_user", { p_user: userId, p_message: message });
+    },
+    async stats() {
+      const s = await call<Record<string, number>>(db, "admin_platform_stats");
+      const n = (k: string) => Number(s?.[k] ?? 0);
+      const out: PlatformStats = {
+        users: n("users"),
+        usersVerifiedEmail: n("users_verified_email"),
+        newUsers24h: n("new_users_24h"),
+        newUsers7d: n("new_users_7d"),
+        active24h: n("active_24h"),
+        posts24h: n("posts_24h"),
+        replies24h: n("replies_24h"),
+        messages24h: n("messages_24h"),
+        worldJoins7d: n("world_joins_7d"),
+        supportSubmissions7d: n("support_submissions_7d"),
+        openReports: n("open_reports"),
+        suspended: n("suspended"),
+      };
+      return out;
+    },
   };
 
-  return { postTools, accountStatus, admin };
+  return { postTools, accountStatus, acknowledgeWarning, blocking, admin };
 }

@@ -225,3 +225,36 @@
     animation: none;
   }
 }
+
+.blocked-list {
+  margin: 0;
+  padding: 0 var(--space-4);
+  list-style: none;
+}
+
+.blocked-list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  border-bottom: 1px solid var(--border);
+}
+
+.blocked-list__who {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.blocked-list__who span {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-muted {
+  padding: var(--space-4);
+  color: var(--text-3);
+}

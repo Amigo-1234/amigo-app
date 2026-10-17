@@ -79,6 +79,40 @@ export interface AccountStatus {
   suspended: boolean;
   reason: string | null;
   until: Date | null;
+  /** Warnings from the Amigo team you haven't acknowledged yet. */
+  warnings: { id: string; message: string; issuedAt: Date }[];
+}
+
+export interface BlockedAccount {
+  id: string;
+  handle: string;
+  name: string;
+  avatarUrl: string | null;
+  blockedAt: Date;
+}
+
+/** Blocking people (stops messages both ways, removes follows, prevents following). */
+export interface BlockingApi {
+  list(): Promise<BlockedAccount[]>;
+  block(userId: string): Promise<void>;
+  unblock(userId: string): Promise<void>;
+}
+
+export interface PlatformStats {
+  users: number;
+  usersVerifiedEmail: number;
+  newUsers24h: number;
+  newUsers7d: number;
+  /** People who posted, liked, followed or messaged in the last 24 hours (a lower bound). */
+  active24h: number;
+  posts24h: number;
+  replies24h: number;
+  /** Count only — message content is end-to-end encrypted. */
+  messages24h: number;
+  worldJoins7d: number;
+  supportSubmissions7d: number;
+  openReports: number;
+  suspended: number;
 }
 
 export interface Reply {
@@ -754,6 +788,9 @@ export interface ModerationAdminApi {
   /** until null: until restored. Admins can't be suspended. */
   suspend(userId: string, reason: string, until: Date | null): Promise<void>;
   unsuspend(userId: string, note: string): Promise<void>;
+  /** A warning the person sees until they acknowledge it. */
+  warn(userId: string, message: string): Promise<void>;
+  stats(): Promise<PlatformStats>;
 }
 
 // ----------------------------------------------------------------- messages
@@ -836,7 +873,7 @@ export type MessageReportReason = "spam" | "harassment" | "inappropriate" | "oth
  * identity-changed: their security key changed since you verified them — OK it (or verify again) to keep sending.
  * device-unverified: this device must be approved from another of your devices (or your identity reset) first.
  */
-export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "peer-unavailable" | "identity-changed" | "device-unverified" | "unknown";
+export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "peer-unavailable" | "identity-changed" | "device-unverified" | "rate-limited" | "suspended" | "unknown";
 
 export class MessageError extends Error {
   code: MessageErrorCode;
@@ -1143,8 +1180,10 @@ export interface DataSource {
   emailVerification?: { sendCode(): Promise<void>; verify(code: string): Promise<void> };
   /** Bookmarks, edit, delete and report posts. */
   postTools?: PostToolsApi;
-  /** Whether your account is suspended. */
+  /** Whether your account is suspended, plus unacknowledged warnings. */
   accountStatus?(): Promise<AccountStatus>;
+  acknowledgeWarning?(warningId: string): Promise<void>;
+  blocking?: BlockingApi;
   /** Permanently deletes the signed-in account after re-checking the password (Neon/Supabase). */
   deleteAccount?(password: string): Promise<void>;
   /** Versioned legal documents and acceptance records. */

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Bookmark, Flag, Link2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Ban, Bookmark, Flag, Link2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { dataSource, POST_MAX_LENGTH, type ContentReportTarget, type MessageReportReason, type Post } from "../../data";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
@@ -33,7 +33,7 @@ export function useBookmark(post: Post) {
   return { available: !!tools && post.bookmarkedByViewer !== undefined, saved, toggle };
 }
 
-type Sheet_ = null | "menu" | "edit" | "delete" | "report";
+type Sheet_ = null | "menu" | "edit" | "delete" | "report" | "block";
 
 export function PostOptions({ post, focus }: { post: Post; focus: boolean }) {
   const viewer = useViewer();
@@ -92,6 +92,11 @@ export function PostOptions({ post, focus }: { post: Post; focus: boolean }) {
               <Flag size={20} aria-hidden="true" /> Report {post.replyTo ? "reply" : "post"}
             </button>
           )}
+          {dataSource.blocking && !mine && (
+            <button className="sheet-menu__item sheet-menu__item--danger" onClick={() => setSheet("block")}>
+              <Ban size={20} aria-hidden="true" /> Block @{post.author.handle}
+            </button>
+          )}
           <Button variant="ghost" block onClick={close}>
             Cancel
           </Button>
@@ -134,6 +139,10 @@ export function PostOptions({ post, focus }: { post: Post; focus: boolean }) {
 
       <Sheet open={sheet === "report"} onClose={close} label="Report">
         {sheet === "report" && <ReportForm target="post" targetId={post.id} what={post.replyTo ? "reply" : "post"} onDone={close} />}
+      </Sheet>
+
+      <Sheet open={sheet === "block"} onClose={close} label="Block">
+        {sheet === "block" && <BlockConfirm userId={post.author.id} handle={post.author.handle} onDone={close} />}
       </Sheet>
     </>
   );
@@ -260,7 +269,7 @@ export function ReportForm({ target, targetId, what, onDone }: { target: Content
 /** ⋯ on someone else's profile: copy link, report. */
 export function ProfileOptions({ id, handle }: { id: string; handle: string }) {
   const toast = useToast();
-  const [sheet, setSheet] = useState<null | "menu" | "report">(null);
+  const [sheet, setSheet] = useState<null | "menu" | "report" | "block">(null);
   const close = () => setSheet(null);
   return (
     <>
@@ -288,6 +297,11 @@ export function ProfileOptions({ id, handle }: { id: string; handle: string }) {
               <Flag size={20} aria-hidden="true" /> Report @{handle}
             </button>
           )}
+          {dataSource.blocking && (
+            <button className="sheet-menu__item sheet-menu__item--danger" onClick={() => setSheet("block")}>
+              <Ban size={20} aria-hidden="true" /> Block @{handle}
+            </button>
+          )}
           <Button variant="ghost" block onClick={close}>
             Cancel
           </Button>
@@ -296,6 +310,46 @@ export function ProfileOptions({ id, handle }: { id: string; handle: string }) {
       <Sheet open={sheet === "report"} onClose={close} label="Report">
         {sheet === "report" && <ReportForm target="profile" targetId={id} what={`@${handle}`} onDone={close} />}
       </Sheet>
+      <Sheet open={sheet === "block"} onClose={close} label="Block">
+        {sheet === "block" && <BlockConfirm userId={id} handle={handle} onDone={close} />}
+      </Sheet>
     </>
+  );
+}
+
+/** Block confirmation (same effect everywhere: no messages either way, follows removed). */
+export function BlockConfirm({ userId, handle, onDone }: { userId: string; handle: string; onDone: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="sheet-form">
+      <h2 className="sheet-form__title">Block @{handle}?</h2>
+      <p className="sheet-form__body">
+        {"Neither of you will be able to message the other, you'll stop following each other, and they can't follow you again. They aren't told. You can unblock any time in Settings → Blocked accounts."}
+      </p>
+      <div className="sheet-form__actions">
+        <Button variant="ghost" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button
+          variant="danger"
+          loading={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              await dataSource.blocking!.block(userId);
+              toast(`Blocked @${handle}`);
+              onDone();
+            } catch {
+              toast("Couldn't block. Try again.", "error");
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Block
+        </Button>
+      </div>
+    </div>
   );
 }

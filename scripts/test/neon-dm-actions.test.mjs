@@ -129,14 +129,14 @@ try {
   ok("conversation still listed with remaining message", inboxB[0]?.lastMessage?.text === "hi ana");
 
   // older history
-  for (let i = 0; i < 60; i++) await B.send(ids.ben, conv, { text: `n${i}` });
+  for (let i = 0; i < 55; i++) await B.send(ids.ben, conv, { text: `n${i}` });
   // A second device for Ben starts from the newest 50 and pages back (old ones it has no keys for still list).
   const B2 = createSupabaseMessages(asUser(ids.ben), oneShot, () => {}, { memoryStore: true, realtime: false });
   await B2.security.setup(ids.ben).catch(() => undefined);
   const page1 = await value((s) => B2.subscribeConversation(conv, ids.ben, s));
   const more = await B2.actions.loadOlder(ids.ben, conv);
   const page2 = await value((s) => B2.subscribeConversation(conv, ids.ben, s));
-  ok("history pages back on demand", page1.messages.length === 50 && page2.messages.length === 61 && more === false, `${page1.messages.length} → ${page2.messages.length}, more=${more}`);
+  ok("history pages back on demand", page1.messages.length === 50 && page2.messages.length === 56 && more === false, `${page1.messages.length} → ${page2.messages.length}, more=${more}`);
 } catch (e) {
   console.error(e);
   failures++;

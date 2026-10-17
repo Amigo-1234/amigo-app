@@ -44,7 +44,7 @@ type LiveKind = keyof typeof PULSE_MS;
 const PERSON = `id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`;
 const TYPING_TTL_MS = 6000;
 
-const ERRORS: Record<string, MessageError["code"]> = { DM002: "not-found", DM003: "not-found", DM004: "blocked", DM005: "unknown" };
+const ERRORS: Record<string, MessageError["code"]> = { DM002: "not-found", DM003: "not-found", DM004: "blocked", DM005: "unknown", RL001: "rate-limited", AS001: "suspended" };
 function fail(error: { code?: string; message: string }): never {
   throw new MessageError(ERRORS[error.code ?? ""] ?? "unknown", error.message);
 }

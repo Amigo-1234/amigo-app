@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { dataSource, type Post } from "../../data";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
+import { limitText } from "../feed/errors";
 
 /** Optimistic like toggle that reconciles with the live post snapshot. */
 export function useLike(post: Post) {
@@ -28,7 +29,7 @@ export function useLike(post: Post) {
     } catch (e) {
       console.error(e);
       setOptimistic(null);
-      toast(next ? "Couldn't like that post. Try again." : "Couldn't remove your like. Try again.", "error");
+      toast(limitText(e) ?? (next ? "Couldn't like that post. Try again." : "Couldn't remove your like. Try again."), "error");
     }
   }, [liked, post.id, viewer.id, toast]);
 

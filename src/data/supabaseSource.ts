@@ -203,6 +203,8 @@ export const supabaseSource: DataSource = {
   monetization: platform.monetization,
   postTools: moderation?.postTools,
   accountStatus: moderation?.accountStatus,
+  acknowledgeWarning: moderation?.acknowledgeWarning,
+  blocking: moderation?.blocking,
 
   async deleteAccount(password) {
     if (!currentUser?.email) throw new AuthError("unknown", "Not signed in");

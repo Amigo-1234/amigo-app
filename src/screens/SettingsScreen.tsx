@@ -1,6 +1,7 @@
 import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import {
+  Ban,
   Bookmark,
   ArrowLeft,
   Bell,
@@ -324,6 +325,7 @@ function PrivacySection() {
       <InfoRow icon={<Eye size={20} />} title="Profile" detail="Your profile, followers and public posts are visible to people on Amigo." />
       <InfoRow icon={<Users size={20} />} title="Post audience" detail="Choose Everyone or Followers each time you post." />
       {dataSource.messages && <InfoRow icon={<KeyRound size={20} />} title="Messages" detail="End-to-end encrypted. Only your devices can read them." />}
+      {dataSource.blocking && <LinkRow to="/settings/blocked" icon={<Ban size={20} />} title="Blocked accounts" detail="People you blocked. They aren't told" />}
     </Section>
   );
 }

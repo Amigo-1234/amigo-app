@@ -19,3 +19,11 @@
 .suspension-banner p {
   margin: 0;
 }
+
+.suspension-banner--warning {
+  background: var(--accent-soft);
+}
+
+.suspension-banner--warning svg {
+  color: var(--accent);
+}

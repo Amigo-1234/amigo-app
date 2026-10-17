@@ -1,3 +1,4 @@
+import { limitText } from "../feed/errors";
 import { useEffect, useState } from "react";
 import { dataSource } from "../../data";
 import { useViewer } from "../../state/session";
@@ -39,9 +40,9 @@ export function FollowButton({
       if (next) await dataSource.follow(viewer.id, personId);
       else await dataSource.unfollow(viewer.id, personId);
       onChange?.(next);
-    } catch {
+    } catch (e) {
       setFollowing(!next);
-      toast(next ? `Couldn't follow ${personName}. Try again.` : `Couldn't unfollow ${personName}. Try again.`, "error");
+      toast(limitText(e) ?? (next ? `Couldn't follow ${personName}. Try again.` : `Couldn't unfollow ${personName}. Try again.`), "error");
     } finally {
       setBusy(false);
     }

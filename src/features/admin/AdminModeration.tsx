@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { dataSource, type ContentReport, type Suspension } from "../../data";
+import { dataSource, type ContentReport, type PlatformStats, type Suspension } from "../../data";
 import { timeAgo } from "../../lib/time";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
@@ -99,6 +99,20 @@ export function AdminContentReports({ onSuspended }: { onSuspended?: () => void 
                       Suspend author
                     </Button>
                   )}
+                  {r.targetAuthor && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={busy === r.id + "wa"}
+                      onClick={() => {
+                        const msg = window.prompt(`Warn @${r.targetAuthor!.handle}? Message (shown to them until they acknowledge it):`, `Please follow the Community Guidelines (${reasonLabel(r.reason).toLowerCase()}).`);
+                        if (!msg) return;
+                        void act(r.id + "wa", () => api.warn(r.targetAuthor!.id, msg), `Warned @${r.targetAuthor!.handle}`);
+                      }}
+                    >
+                      Warn
+                    </Button>
+                  )}
                   {r.status === "open" ? (
                     <Button size="sm" variant="ghost" loading={busy === r.id} onClick={() => act(r.id, () => api.setReportStatus(r.id, "reviewed"), "Marked reviewed")}>
                       Dismiss
@@ -114,6 +128,42 @@ export function AdminContentReports({ onSuspended }: { onSuspended?: () => void 
           })}
         </ul>
       )}
+    </section>
+  );
+}
+
+/** Admin → Overview: aggregate platform counts (never message content or per-person activity). */
+export function AdminStats() {
+  const api = dataSource.admin!.moderation!;
+  const [s, setS] = useState<PlatformStats | null>(null);
+  useEffect(() => void api.stats().then(setS, () => setS(null)), [api]);
+  if (!s) return null;
+  const items: [string, number][] = [
+    ["People", s.users],
+    ["Verified emails", s.usersVerifiedEmail],
+    ["New today", s.newUsers24h],
+    ["New this week", s.newUsers7d],
+    ["Active today", s.active24h],
+    ["Posts today", s.posts24h],
+    ["Replies today", s.replies24h],
+    ["Messages today", s.messages24h],
+    ["World joins (7 days)", s.worldJoins7d],
+    ["Support submissions (7 days)", s.supportSubmissions7d],
+    ["Open reports", s.openReports],
+    ["Suspended", s.suspended],
+  ];
+  return (
+    <section className="admin-card" aria-labelledby="platform-stats">
+      <h2 id="platform-stats" className="admin-card__title">Platform</h2>
+      <dl className="admin-stats">
+        {items.map(([label, n]) => (
+          <div key={label} className="admin-stats__item">
+            <dt>{label}</dt>
+            <dd>{n.toLocaleString()}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="admin-muted">"Active" counts people who posted, liked, followed or messaged. Message counts never include content.</p>
     </section>
   );
 }

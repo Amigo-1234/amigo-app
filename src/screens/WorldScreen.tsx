@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, ChevronDown, CircleAlert, Gift, Orbit, PenLine, Timer, Trophy } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, Flag, Gift, Orbit, PenLine, Timer, Trophy } from "lucide-react";
 import { Composer } from "../features/composer/Composer";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
@@ -15,7 +15,9 @@ import { useViewer } from "../state/session";
 import { Button, IconButton } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
-import type { World } from "../data";
+import { dataSource, type World } from "../data";
+import { ReportForm } from "../features/posts/PostOptions";
+import { Sheet } from "../ui/Sheet";
 import "../features/worlds/Worlds.css";
 
 type Tab = "live" | "entries" | "leaderboard" | "chat";
@@ -36,6 +38,7 @@ export default function WorldScreen() {
             <ArrowLeft size={22} />
           </IconButton>
         }
+        actions={world && dataSource.postTools ? <WorldReportButton worldId={world.id} title={world.title} /> : undefined}
       />
       {state.status === "loading" && (
         <div className="world-hero" aria-busy="true" aria-label="Loading World">
@@ -312,5 +315,19 @@ function ChatTab({ world, live }: { world: World; live: boolean }) {
       state={chat.state.status}
       onRetry={chat.retry}
     />
+  );
+}
+
+function WorldReportButton({ worldId, title }: { worldId: string; title: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <IconButton label={`Report ${title}`} onClick={() => setOpen(true)}>
+        <Flag size={20} />
+      </IconButton>
+      <Sheet open={open} onClose={() => setOpen(false)} label="Report World">
+        {open && <ReportForm target="world" targetId={worldId} what="this World" onDone={() => setOpen(false)} />}
+      </Sheet>
+    </>
   );
 }
