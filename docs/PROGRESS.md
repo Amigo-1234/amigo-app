@@ -24,7 +24,7 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - **Vercel access**: the Vercel connection now gets 403 on the team scope, so deployments can't be confirmed from here. The preview is behind Vercel Authentication. The owner should reconnect Vercel, or confirm deployments in the dashboard.
 - **Media storage** (photos, video, voice, photo Moments, avatars): Vercel Blob was evaluated (`docs/architecture/MEDIA.md`). Hobby limits are unverified and no store exists yet. Needs owner approval and store creation.
 - **Legal drafts**: `[OWNER: …]` placeholders cover entity, address, contact, governing law and minimum age (drafted as 13). Needs legal review.
-- **Test-account cleanup**: prepared in `neon/ops/cleanup-test-accounts.sql` (14 explicit ids, guarded). **Not executed; awaiting confirmation.**
+- ~~Test-account cleanup~~ **Done 2026-10-17** (owner-approved): 14 test accounts removed after re-verification; 3 real accounts and their data untouched.
 - **No admin account yet**: admin is granted to the owner's account only after identity is confirmed.
 
 ## Next

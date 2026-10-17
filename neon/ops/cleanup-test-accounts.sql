@@ -1,5 +1,5 @@
 -- =============================================================================
--- PREPARED, NOT EXECUTED. Run only after the project owner explicitly confirms.
+-- Approved by the project owner 2026-10-17; run once that day after re-verification.
 --
 -- Removes the 14 accounts created by the automated test runs on 2026-10-12
 -- (live E2E messaging test, 4 runs x 2 accounts) and 2026-10-13 (latency
@@ -12,7 +12,7 @@
 --
 -- Safety checks (any failure aborts with nothing deleted):
 --   * exactly 14 of the listed ids exist
---   * each is an unverified, non-admin account whose email matches the test
+--   * each is an unverified account with no admin rights or official badge whose email matches the test
 --     run naming (amigo-e2e-<run>-a|b / amigo-perf-<run>-a|b @example.com)
 --   * none shares a conversation or follow with an account outside the list
 -- Inspected 2026-10-17: 14 found, 0 shared conversations, 0 cross follows,
@@ -35,7 +35,9 @@ begin
    where u.id = any(ids)
      and u.email ~ '^amigo-(e2e|perf)-[0-9a-f]{6,8}-[ab]@example\.com$'
      and not u."emailVerified"
-     and coalesce((select p.role from public.profiles p where p.id = u.id), 'user') = 'user';
+     and coalesce(u.role, 'user') = 'user'
+     and not exists (select 1 from public.app_admins a where a.user_id = u.id)
+     and not exists (select 1 from public.profile_verifications v where v.user_id = u.id);
   if n <> 14 then raise exception 'expected 14 matching test accounts, found %', n; end if;
 
   if exists (select 1 from public.dm_participants p
