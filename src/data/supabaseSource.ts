@@ -18,7 +18,7 @@ import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPlatform } from "./supabase/platform";
-import { cached, remember, setCacheOwner } from "./supabase/viewCache";
+import { cached, prefetch, remember, setCacheOwner, takePrefetch } from "./supabase/viewCache";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
@@ -64,11 +64,15 @@ function liveQuery<T>(
   let running = false;
   let again = false;
 
+  let first = true;
   const run = async () => {
     if (running) { again = true; return; }
     running = true;
     try {
-      const value = await fetcher();
+      // The first load may already be on its way (started at sign-in, see prefetchStart).
+      const early = first ? takePrefetch<T>(name) : undefined;
+      first = false;
+      const value = (early && (await early)) ?? (await fetcher());
       remember(name, value);
       if (active) sub.onData(value);
     } catch (e) {
@@ -162,9 +166,17 @@ async function tryLegacySignIn(email: string, password: string): Promise<boolean
   return false;
 }
 
+/** Startup publishes the session twice (initial auth event + explicit sync): share a profile load that's still in flight. */
+let profileLoad: { id: string; promise: ReturnType<typeof q.fetchProfile> } | null = null;
+
 async function loadViewer(user: { id: string; email?: string | null; email_confirmed_at?: string | null }): Promise<Viewer> {
   // The profile row is created by a trigger in the same transaction as the user.
-  const data = await q.fetchProfile(supabase, user.id).catch(() => null);
+  if (profileLoad?.id !== user.id) {
+    const load = { id: user.id, promise: q.fetchProfile(supabase, user.id) };
+    profileLoad = load;
+    void load.promise.finally(() => profileLoad === load && (profileLoad = null)).catch(() => undefined);
+  }
+  const data = await profileLoad!.promise.catch(() => null);
   return {
     id: user.id,
     name: data?.display_name ?? "Amigo",
@@ -196,8 +208,22 @@ async function syncSession() {
   const { data } = await supabase.auth.getSession();
   currentUser = data.session?.user ?? null;
   setCacheOwner(currentUser?.id ?? null);
+  if (currentUser) prefetchStart(currentUser.id);
   await emitViewer();
 }
+
+/**
+ * Right after the session is known, start what the first screens will ask for
+ * (the legal check and the first page of the feed) alongside loading the
+ * profile, instead of one after another (each round trip is 0.2–0.5 s on
+ * mobile networks).
+ */
+function prefetchStart(userId: string) {
+  prefetch("legal:pending", () => platform.legal.pending());
+  prefetch("feed:latest", () => q.fetchFeed(supabase, "latest", FIRST_FEED_PAGE, userId));
+}
+/** Matches the feed's first page (src/features/feed/useFeed.ts). */
+const FIRST_FEED_PAGE = 15;
 
 supabase.auth.onAuthStateChange((event, session) => {
   const next = session?.user ?? null;
@@ -206,7 +232,10 @@ supabase.auth.onAuthStateChange((event, session) => {
   currentUser = next;
   if (event === "PASSWORD_RECOVERY") recoveryListeners.forEach((cb) => cb());
   // Supabase recommends not awaiting other client calls inside this callback.
-  if (changed) setTimeout(() => void emitViewer(), 0);
+  if (changed) setTimeout(() => {
+    if (next) prefetchStart(next.id);
+    void emitViewer();
+  }, 0);
 });
 
 // ------------------------------------------------------------------- source
@@ -231,7 +260,11 @@ export const supabaseSource: DataSource = {
   maxMediaPerPost: isNeon && !media ? 0 : 4,
   photoUploads: !isNeon || !!media,
 
-  legal: platform.legal,
+  legal: {
+    ...platform.legal,
+    // The check started at sign-in, if it's still fresh.
+    pending: async () => (await takePrefetch<Awaited<ReturnType<typeof platform.legal.pending>>>("legal:pending")) ?? platform.legal.pending(),
+  },
   monetization: platform.monetization,
   postTools: moderation?.postTools,
   accountStatus: moderation?.accountStatus,

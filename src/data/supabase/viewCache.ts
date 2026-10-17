@@ -14,7 +14,28 @@ let owner: string | null | undefined;
 export function setCacheOwner(userId: string | null) {
   if (userId === owner) return;
   values.clear();
+  inflight.clear();
   owner = userId;
+}
+
+/**
+ * Requests started early (right after the session is known, in parallel with
+ * loading the profile) and handed to the first screen that asks for the same
+ * thing within a few seconds — the same request, just sooner.
+ */
+const PREFETCH_TTL_MS = 15_000;
+const inflight = new Map<string, { at: number; promise: Promise<unknown> }>();
+
+export function prefetch(key: string, fn: () => Promise<unknown>) {
+  if (values.has(key) || inflight.has(key)) return;
+  inflight.set(key, { at: Date.now(), promise: fn().catch(() => undefined) });
+}
+
+/** The early request for `key`, if one is still fresh (resolves to undefined if it failed). */
+export function takePrefetch<T>(key: string): Promise<T | undefined> | undefined {
+  const entry = inflight.get(key);
+  inflight.delete(key);
+  return entry && Date.now() - entry.at < PREFETCH_TTL_MS ? (entry.promise as Promise<T | undefined>) : undefined;
 }
 
 export const cached = <T>(key: string): T | undefined => values.get(key) as T | undefined;
@@ -25,4 +46,7 @@ export function remember(key: string, value: unknown) {
   if (values.size > MAX_ENTRIES) values.delete(values.keys().next().value as string);
 }
 
-export const forgetAll = () => values.clear();
+export const forgetAll = () => {
+  values.clear();
+  inflight.clear();
+};
