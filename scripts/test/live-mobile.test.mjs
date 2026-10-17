@@ -81,7 +81,8 @@ try {
   // visitor's browser never sends.)
   const ctx = await browser.newContext({ ...devices["iPhone 13"] });
   const pass = await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 });
-  ok("preview opened for the test browser (bypass cookie)", (await ctx.cookies(BASE)).length > 0, String(pass.status()));
+  // A public deployment answers 200 without a cookie; a protected one sets the bypass cookie.
+  ok("site opened for the test browser", pass.status() === 200 || (await ctx.cookies(BASE)).length > 0, String(pass.status()));
   const host = new URL(BASE).hostname;
   await ctx.addCookies(
     A.cookies.map((c) => {
@@ -170,7 +171,7 @@ try {
     await compose(`Live photo post ${tag}`, "photo.png");
     await check("upload in progress is shown (Posting…)", await page.getByText("Posting…").first().isVisible().catch(() => false));
     await network({});
-    await check("photo post appears and its image loads from R2", await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img`).first(), 45000));
+    await check("photo post appears and its image loads from R2", await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img[src*="/api/media/"]`).first(), 45000));
     await check("no horizontal scroll with a photo post", await noOverflow());
   });
 
@@ -182,7 +183,7 @@ try {
     await check("offline: the post stays saved with a clear error and Retry", await failed.isVisible().catch(() => false));
     await ctx.setOffline(false);
     await page.locator(`article:has-text("Retry photo post ${tag}")`).getByRole("button", { name: "Retry" }).click();
-    await check("back online: Retry posts it and the image loads from R2", await waitImg(page.locator(`article:has-text("Retry photo post ${tag}") img`).first(), 30000));
+    await check("back online: Retry posts it and the image loads from R2", await waitImg(page.locator(`article:has-text("Retry photo post ${tag}") img[src*="/api/media/"]`).first(), 30000));
   });
 
   await step("profile picture", async () => {
