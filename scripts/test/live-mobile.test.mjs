@@ -243,6 +243,9 @@ try {
   await step("encrypted photo message", async () => {
     // B's phone opens Messages first, so B's encryption device exists.
     const pageB = await phoneFor(B);
+    const errorsB = [];
+    pageB.on("console", (m) => (m.type() === "error" || m.type() === "warning") && errorsB.push(m.text()));
+    pageB.on("pageerror", (e) => errorsB.push(`pageerror: ${e.message}`));
     await pageB.goto(`${BASE}/messages`, { waitUntil: "networkidle" });
     await pageB.waitForTimeout(3000);
     await check("recipient's messaging is ready (no device prompt)", !(await pageB.getByText("Confirm it's you").isVisible().catch(() => false)));
@@ -257,6 +260,8 @@ try {
     });
 
     // A opens B's profile → Message → attaches a photo → Send.
+    const bDevices = await get(`e2e_devices?user_id=eq.${B.id}&select=device_id`);
+    console.log(`info recipient's published encryption devices before sending: ${Array.isArray(bDevices) ? bDevices.length : "unreadable"}`);
     const [prof] = await get(`profiles?id=eq.${B.id}&select=username`);
     await page.goto(`${BASE}/u/${prof.username}`, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: /^Message / }).click();
@@ -273,7 +278,13 @@ try {
 
     await pageB.goto(`${BASE}${conversation}`, { waitUntil: "networkidle" });
     const got = pageB.locator(".msg--theirs", { hasText: `Encrypted photo ${tag}` }).locator(".msg__image img").first();
-    await check("recipient's phone decrypts and shows the photo", await waitImg(got, 45000));
+    const shown = await waitImg(got, 45000);
+    if (!shown) {
+      const bubbles = await pageB.locator(".msgs .msg").allInnerTexts().catch(() => []);
+      console.log(`info recipient's chat shows: ${JSON.stringify(bubbles.map((t) => t.replace(/\s+/g, " ").slice(0, 120)))}`);
+      console.log(`info recipient's console: ${redact(errorsB.slice(-4).join(" | ")).slice(0, 500)}`);
+    }
+    await check("recipient's phone decrypts and shows the photo", shown);
     const src = (await got.getAttribute("src").catch(() => "")) ?? "";
     await check("the shown photo was decrypted on the phone (local blob)", src.startsWith("blob:"));
     const isImage = (b) => !!b && b.length > 4 && (b.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) || b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) || b.subarray(0, 4).toString() === "GIF8" || b.subarray(8, 12).toString() === "WEBP");
