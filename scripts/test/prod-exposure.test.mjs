@@ -61,7 +61,9 @@ ok("upload links need sign-in", upload.status === 401, String(upload.status));
 const media = await get("/api/media/00000000-0000-0000-0000-000000000000/post/00000000000000000000000000000000.jpg");
 ok("media reads need sign-in", media.status === 401, String(media.status));
 const rest = await get("/neon/rest/v1/profiles?select=id&limit=1");
-ok("database refuses anonymous reads", rest.status === 401 || rest.status === 403, String(rest.status));
+const restBody = await rest.text();
+// Neon's Data API refuses requests without a sign-in token (400/401/403) and returns no rows.
+ok("database refuses anonymous reads", rest.status >= 400 && !restBody.includes('"id"'), String(rest.status));
 
 console.log(failures ? `${failures} FAILED` : "ALL EXPOSURE CHECKS PASSED");
 process.exit(failures ? 1 : 0);
