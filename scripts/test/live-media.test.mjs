@@ -97,25 +97,18 @@ try {
   const jpeg = randomBytes(4096);
   let b = await begin(A, "post", "image/jpeg", jpeg.length);
   ok("upload link issued (storage configured)", b.status === 200 && !!b.body.key, `${b.status} ${b.body.error ?? ""} ${b.body.message ?? ""}`);
-  if (b.status !== 200) {
-    // Diagnose: the same database call made directly through the Data API proxy.
-    const d = await rpc(A, "media_begin_upload", { p_purpose: "post", p_mime: "image/jpeg", p_size: jpeg.length, p_conversation: null });
-    console.log(`diag: direct media_begin_upload → ${d.status} ${d.data?.code ?? ""} ${d.data?.message ?? (typeof d.data === "string" ? "key" : "")}`);
-    const REST = "https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest/v1";
-    for (const [label, extra] of [["no origin", {}], ["with origin", { origin: BASE }], ["accept json", { accept: "application/json" }]]) {
-      const x = await fetch(`${REST}/rpc/media_begin_upload`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${A.token}`, "content-type": "application/json", ...extra },
-        body: JSON.stringify({ p_purpose: "post", p_mime: "image/jpeg", p_size: 10, p_conversation: null }),
-      });
-      const t = await x.text();
-      console.log(`diag: Neon direct (${label}) → ${x.status} ${x.ok ? "key" : t.slice(0, 120)}`);
-    }
-    const again = await begin(A, "post", "image/jpeg", jpeg.length);
-    console.log(`diag: upload function again → ${again.status} ${again.body.error ?? ""}`);
-    const me = await rpc(A, "my_account_status");
-    console.log(`diag: my_account_status → ${me.status} ${JSON.stringify(me.data).slice(0, 120)}`);
-  }
+  // --- what a browser on the app's origin does before uploading (CORS preflight)
+  const preflight = (origin) =>
+    fetch(b.body.url, { method: "OPTIONS", headers: { origin, "access-control-request-method": "PUT", "access-control-request-headers": "content-type" } });
+  const pf = await preflight(BASE);
+  const allowOrigin = pf.headers.get("access-control-allow-origin");
+  ok(
+    "R2 CORS allows a browser upload from the app (preflight)",
+    pf.ok && (allowOrigin === BASE || allowOrigin === "*") && /PUT/i.test(pf.headers.get("access-control-allow-methods") ?? ""),
+    `${pf.status} allow-origin=${allowOrigin ?? "none"} methods=${pf.headers.get("access-control-allow-methods") ?? "none"} headers=${pf.headers.get("access-control-allow-headers") ?? "none"}`,
+  );
+  const other = await preflight("https://example.com");
+  ok("R2 CORS refuses other websites", other.headers.get("access-control-allow-origin") !== "https://example.com", String(other.status));
   const wrongType = await fetch(b.body.url, { method: "PUT", headers: { "content-type": "text/html" }, body: jpeg });
   ok("R2 refuses a different content type than signed", wrongType.status === 403, String(wrongType.status));
   const wrongSize = await fetch(b.body.url, { method: "PUT", headers: { "content-type": "image/jpeg" }, body: randomBytes(4097) });
@@ -137,6 +130,9 @@ try {
   let r = await read(A, postKey);
   if (r.signed) created.push(r.signed);
   ok("owner reads it back from R2 (bytes match)", r.status === 302 && r.bytes?.equals(jpeg) && r.cache?.startsWith("private"));
+  // Encrypted message photos are fetched by script, so R2 must answer the app's origin.
+  const cg = r.signed ? await fetch(r.signed, { headers: { origin: BASE } }) : null;
+  ok("R2 CORS allows the app to fetch files by script", !!cg?.ok && [BASE, "*"].includes(cg.headers.get("access-control-allow-origin")), `${cg?.status} allow-origin=${cg?.headers.get("access-control-allow-origin") ?? "none"}`);
   const followersPost = await rpc(A, "create_post", { p_body: "followers-only photo", p_media: [{ kind: "image", storage_path: postKey, mime_type: "image/jpeg", width: 8, height: 8, byte_size: jpeg.length }], p_visibility: "followers" });
   ok("photo post created", followersPost.status === 200, String(followersPost.status));
   ok("followers-only photo hidden from non-followers", (await read(B, postKey)).status === 404);

@@ -33,8 +33,24 @@ async function account(tag, who) {
   const cookies = res.headers.getSetCookie();
   const cookie = cookies.map((c) => c.split(";")[0]).join("; ");
   const { token } = await (await fetch(`${BASE}/neon/auth/token`, { headers: { ...BYPASS, origin: BASE, cookie } })).json();
-  return { id: body.user.id, token, cookies };
+  return { id: body.user.id, token, cookies, email, password };
 }
+
+/** A fresh session and token (deleting an account needs a sign-in from the last 10 minutes). */
+async function signInAgain(p) {
+  const res = await fetch(`${BASE}/neon/auth/sign-in/email`, {
+    method: "POST",
+    headers: { ...BYPASS, origin: BASE, "content-type": "application/json" },
+    body: JSON.stringify({ email: p.email, password: p.password }),
+  });
+  if (!res.ok) return;
+  const cookie = res.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
+  const t = await (await fetch(`${BASE}/neon/auth/token`, { headers: { ...BYPASS, origin: BASE, cookie } })).json().catch(() => ({}));
+  if (t.token) p.token = t.token;
+}
+
+/** Signed URLs carry a credential id and signature; never print them. */
+const redact = (text) => String(text).replace(/\?X-Amz-[^\s'"]*/g, "?…");
 
 const rpc = (who, fn, args = {}) =>
   fetch(`${BASE}/neon/rest/v1/rpc/${fn}`, {
@@ -84,14 +100,14 @@ try {
   const describe = async () => {
     const text = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 220);
     const buttons = await page.locator("button:visible").evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label") || b.textContent?.trim()).filter(Boolean).slice(0, 25)).catch(() => []);
-    return `url=${new URL(page.url()).pathname} · text="${text}" · buttons=[${buttons.join(" | ")}] · failed requests=[${bad.slice(-6).join(", ")}] · errors=[${errors.slice(-3).join(" | ").slice(0, 300)}]`;
+    return redact(`url=${new URL(page.url()).pathname} · text="${text}" · buttons=[${buttons.join(" | ")}] · failed requests=[${bad.slice(-6).join(", ")}] · errors=[${errors.slice(-3).join(" | ").slice(0, 600)}]`);
   };
   const step = async (name, fn) => {
     try {
       await fn();
     } catch (e) {
       failures++;
-      console.log(`FAIL ${name}: ${e.message.split("\n")[0]}`);
+      console.log(`FAIL ${name}: ${redact(e.message.split("\n")[0])}`);
       console.log(`     page: ${await describe()}`);
     }
     await page.screenshot({ path: `${SHOTS}/${name.replace(/\W+/g, "-")}.png` }).catch(() => undefined);
@@ -202,14 +218,15 @@ try {
     if (r.ok) signedLinks.push((await r.json()).url);
   }
   const pageErrors = errors.filter((e) => !e.startsWith("console:"));
-  ok("no uncaught page errors during the flows", pageErrors.length === 0, pageErrors.join(" | ").slice(0, 300));
+  ok("no uncaught page errors during the flows", pageErrors.length === 0, redact(pageErrors.join(" | ")).slice(0, 300));
 } catch (e) {
-  console.error("error:", e.message);
+  console.error("error:", redact(e.message));
   failures++;
 } finally {
   clearTimeout(deadline);
   await browser.close().catch(() => undefined);
   const del = async (p) => {
+    await signInAgain(p);
     const d = await rpc(p, "delete_my_account", { p_confirm: "DELETE" }).catch(() => ({ status: 0 }));
     const done = d.status === 200 || d.status === 204;
     if (!done) failures++;
