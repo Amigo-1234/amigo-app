@@ -73,8 +73,34 @@ const deadline = setTimeout(() => {
 try {
   const A = await account(tag, "a");
   people.push(A);
+  const B = await account(tag, "b");
+  people.push(B);
   const D = await account(tag, "d");
   people.push(D);
+
+  const host = new URL(BASE).hostname;
+  const signIn = (c, who) =>
+    c.addCookies(
+      who.cookies.map((raw) => {
+        const [pair] = raw.split(";");
+        const i = pair.indexOf("=");
+        return { name: pair.slice(0, i), value: pair.slice(i + 1), domain: host, path: "/", secure: true, httpOnly: /httponly/i.test(raw), sameSite: "Lax" };
+      }),
+    );
+  /** Another iPhone, signed in as `who`, past the legal gate. */
+  const phoneFor = async (who) => {
+    const c = await browser.newContext({ ...devices["iPhone 13"] });
+    await c.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 });
+    await signIn(c, who);
+    const pg = await c.newPage();
+    pg.setDefaultTimeout(15000);
+    await pg.goto(BASE, { waitUntil: "networkidle" });
+    const agree = pg.getByRole("button", { name: "I agree" });
+    await agree.waitFor().catch(() => undefined);
+    if (await agree.isVisible().catch(() => false)) await agree.click();
+    await pg.locator(".bottom-create").waitFor();
+    return pg;
+  };
 
   // The protection bypass goes in a cookie for the preview's own host only. (As an extra
   // header it would also be sent to R2 and break the CORS preflight, which a real
@@ -83,7 +109,6 @@ try {
   const pass = await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 });
   // A public deployment answers 200 without a cookie; a protected one sets the bypass cookie.
   ok("site opened for the test browser", pass.status() === 200 || (await ctx.cookies(BASE)).length > 0, String(pass.status()));
-  const host = new URL(BASE).hostname;
   await ctx.addCookies(
     A.cookies.map((c) => {
       const [pair] = c.split(";");
@@ -115,6 +140,7 @@ try {
     const buttons = await page.locator("button:visible").evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label") || b.textContent?.trim()).filter(Boolean).slice(0, 25)).catch(() => []);
     return redact(`url=${new URL(page.url()).pathname} · text="${text}" · buttons=[${buttons.join(" | ")}] · requests=[${bad.slice(-6).join(", ")}] · errors=[${errors.slice(-3).join(" | ").slice(0, 600)}]`);
   };
+  const get = (path) => fetch(`${BASE}/neon/rest/v1/${path}`, { headers: { ...BYPASS, authorization: `Bearer ${A.token}` } }).then((r) => (r.ok ? r.json() : []), () => []);
   const step = async (name, fn) => {
     try {
       await fn();
@@ -149,7 +175,7 @@ try {
     (await loc.count()) > 0 && loc.evaluate((img) => img.complete && img.naturalWidth > 0, null, { timeout: 2000 }).catch(() => false);
   const waitImg = async (loc, ms = 20000) => {
     await loc.waitFor({ timeout: ms }).catch(() => undefined);
-    for (let t = 0; t < ms && !(await imgLoaded(loc)); t += 500) await page.waitForTimeout(500);
+    for (let t = 0; t < ms && !(await imgLoaded(loc)); t += 500) await new Promise((r) => setTimeout(r, 500));
     return imgLoaded(loc);
   };
   const noOverflow = async () => (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0;
@@ -214,9 +240,51 @@ try {
     await check("photo Moment opens and its image loads from R2", await waitImg(page.locator('img[src*="/api/media/"]').last()));
   });
 
+  await step("encrypted photo message", async () => {
+    // B's phone opens Messages first, so B's encryption device exists.
+    const pageB = await phoneFor(B);
+    await pageB.goto(`${BASE}/messages`, { waitUntil: "networkidle" });
+    await pageB.waitForTimeout(3000);
+    await check("recipient's messaging is ready (no device prompt)", !(await pageB.getByText("Confirm it's you").isVisible().catch(() => false)));
+    // Watch (not intercept) what B downloads from R2: it must be ciphertext.
+    const downloads = [];
+    pageB.on("response", async (r) => {
+      if (/r2\.cloudflarestorage\.com/.test(r.url()) && r.request().method() === "GET" && r.ok()) {
+        signedLinks.push(r.url());
+        downloads.push(await r.body().catch(() => null));
+      }
+    });
+
+    // A opens B's profile → Message → attaches a photo → Send.
+    const [prof] = await get(`profiles?id=eq.${B.id}&select=username`);
+    await page.goto(`${BASE}/u/${prof.username}`, { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: /^Message / }).click();
+    await page.waitForURL(/\/messages\/[0-9a-f-]{36}/, { timeout: 30000 });
+    const conversation = new URL(page.url()).pathname;
+    await page.waitForTimeout(1500);
+    await page.locator('form[aria-label="Write a message"] input[type="file"]').setInputFiles({ name: "dm.png", mimeType: "image/png", buffer: photo });
+    await page.waitForTimeout(1500);
+    await page.locator("#msg-input").fill(`Encrypted photo ${tag}`);
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    const sent = page.locator(".msg--mine", { hasText: `Encrypted photo ${tag}` }).locator(".msg__image img").first();
+    await check("sender's chat shows the sent photo", await waitImg(sent, 45000));
+    await check("no send error in the chat", !(await page.locator(".msg__status--failed").count()));
+
+    await pageB.goto(`${BASE}${conversation}`, { waitUntil: "networkidle" });
+    const got = pageB.locator(".msg--theirs", { hasText: `Encrypted photo ${tag}` }).locator(".msg__image img").first();
+    await check("recipient's phone decrypts and shows the photo", await waitImg(got, 45000));
+    const src = (await got.getAttribute("src").catch(() => "")) ?? "";
+    await check("the shown photo was decrypted on the phone (local blob)", src.startsWith("blob:"));
+    const isImage = (b) => !!b && b.length > 4 && (b.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff])) || b.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47])) || b.subarray(0, 4).toString() === "GIF8" || b.subarray(8, 12).toString() === "WEBP");
+    const files = downloads.filter(Boolean);
+    await check("what R2 stores and serves is ciphertext, not an image", files.length > 0 && files.every((b) => !isImage(b)));
+    if (files.length) console.log(`info encrypted file(s) downloaded by the recipient: ${files.length}, ${files.map((b) => b.length).join(", ")} bytes`);
+    await check("no horizontal scroll in the chat", (await pageB.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0);
+    await pageB.context().close();
+  });
+
   // Keep signed links to A's files to prove they're deleted from R2 later.
   const { data: rows } = await (await fetch(`${BASE}/neon/rest/v1/posts?author_id=eq.${A.id}&select=media:post_media(storage_path)`, { headers: { ...BYPASS, authorization: `Bearer ${A.token}` } })).json().then((d) => ({ data: d }));
-  const get = (path) => fetch(`${BASE}/neon/rest/v1/${path}`, { headers: { ...BYPASS, authorization: `Bearer ${A.token}` } }).then((r) => (r.ok ? r.json() : []), () => []);
   const [me] = await get(`profiles?id=eq.${A.id}&select=avatar_url`);
   const moments = await get(`moments?author_id=eq.${A.id}&select=media_path`);
   const keys = [
