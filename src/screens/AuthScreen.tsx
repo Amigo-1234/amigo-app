@@ -1,9 +1,16 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { Link } from "react-router";
 import { ArrowLeft, MailCheck } from "lucide-react";
 import { AuthError, dataSource } from "../data";
 import { AuthField, AuthHeading, AuthLayout, CodeField, PasswordField, authMessage } from "../features/auth";
 import { Button } from "../ui/Button";
 import { LoadingScreen } from "../ui/Loader";
+import { BUNDLED_VERSION, LEGAL_DOCS } from "../legal";
+import { legalCurrent } from "./LegalScreen";
+import "./LegalScreen.css";
+
+/** [OWNER/LEGAL] Minimum age in the draft Terms — confirm before launch. */
+const MIN_AGE = 13;
 
 type Step = "signIn" | "signUp" | "reset" | "resetCode" | "resetSent" | "resetDone";
 
@@ -22,6 +29,15 @@ export default function AuthScreen() {
   const [entering, setEntering] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [agreeTerms, setAgreeTerms] = useState(false);
+  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  const [versions, setVersions] = useState({ terms: BUNDLED_VERSION.terms, privacy: BUNDLED_VERSION.privacy });
+  useEffect(() => {
+    void legalCurrent().then((list) => {
+      const v = (slug: "terms" | "privacy") => list?.find((d) => d.slug === slug)?.version ?? BUNDLED_VERSION[slug];
+      setVersions({ terms: v("terms"), privacy: v("privacy") });
+    });
+  }, []);
   // Blocks a second submit before React re-renders the disabled button (double taps).
   const inFlight = useRef(false);
 
@@ -60,7 +76,12 @@ export default function AuthScreen() {
       case "signUp":
         return run(
           async () => {
-            const { needsEmailConfirmation } = await dataSource.signUp(trimmedEmail, password, name.trim());
+            const { needsEmailConfirmation } = await dataSource.signUp(trimmedEmail, password, name.trim(), {
+              acceptLegal: [
+                { slug: "terms", version: versions.terms },
+                { slug: "privacy", version: versions.privacy },
+              ],
+            });
             if (needsEmailConfirmation) {
               setEntering(false);
               go("signIn");
@@ -180,6 +201,35 @@ export default function AuthScreen() {
             />
           )}
 
+          {step === "signUp" && (
+            <div className="auth-consent">
+              <label className="auth-check">
+                <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} required />
+                <span>
+                  I'm at least {MIN_AGE} and I agree to the{" "}
+                  <Link to="/legal/terms" target="_blank" rel="noopener">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link to="/legal/guidelines" target="_blank" rel="noopener">
+                    Community Guidelines
+                  </Link>
+                  .
+                </span>
+              </label>
+              <label className="auth-check">
+                <input type="checkbox" checked={agreePrivacy} onChange={(e) => setAgreePrivacy(e.target.checked)} required />
+                <span>
+                  I've read the{" "}
+                  <Link to="/legal/privacy" target="_blank" rel="noopener">
+                    Privacy Policy
+                  </Link>
+                  , including how encrypted messages and reports work.
+                </span>
+              </label>
+            </div>
+          )}
+
           {error && (
             <p className="auth__error" role="alert">
               {error}
@@ -200,7 +250,7 @@ export default function AuthScreen() {
               busy ||
               (step !== "resetCode" && !trimmedEmail) ||
               (step === "signIn" && !password) ||
-              (step === "signUp" && (!name.trim() || !passwordOk)) ||
+              (step === "signUp" && (!name.trim() || !passwordOk || !agreeTerms || !agreePrivacy)) ||
               (step === "resetCode" && (code.length < 4 || !passwordOk))
             }
           >
@@ -219,6 +269,13 @@ export default function AuthScreen() {
           )}
         </form>
       )}
+      <nav className="legal-links auth__legal" aria-label="Legal">
+        {LEGAL_DOCS.filter((d) => ["terms", "privacy", "guidelines", "cookies"].includes(d.slug)).map((d) => (
+          <Link key={d.slug} to={`/legal/${d.slug}`}>
+            {d.title}
+          </Link>
+        ))}
+      </nav>
     </AuthLayout>
   );
 }

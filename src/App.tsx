@@ -17,6 +17,7 @@ import { dataSource } from "./data";
 import { ThemeProvider } from "./state/theme";
 import { ToastProvider } from "./state/toast";
 import { LoadingScreen } from "./ui/Loader";
+import { LegalGate } from "./features/legal/LegalGate";
 
 const PostScreen = lazy(() => import("./screens/PostScreen"));
 const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
@@ -36,6 +37,8 @@ const AdminScreen = lazy(() => import("./screens/AdminScreen"));
 const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
+const LegalScreen = lazy(() => import("./screens/LegalScreen"));
+const MonetizationScreen = lazy(() => import("./screens/MonetizationScreen"));
 
 function Splash() {
   return <LoadingScreen />;
@@ -60,6 +63,7 @@ function Root() {
     );
   }
   return (
+    <LegalGate>
     <ComposerProvider>
       <PublishingProvider>
         <NotificationsProvider>
@@ -75,6 +79,7 @@ function Root() {
         </NotificationsProvider>
       </PublishingProvider>
     </ComposerProvider>
+    </LegalGate>
   );
 }
 
@@ -85,6 +90,15 @@ function MeRedirect() {
 }
 
 const router = createBrowserRouter([
+  // Legal pages are public: readable signed out (e.g. from the sign-up form) and signed in.
+  {
+    path: "legal/:slug?",
+    element: (
+      <Suspense fallback={<Splash />}>
+        <LegalScreen />
+      </Suspense>
+    ),
+  },
   {
     element: <Root />,
     children: [
@@ -92,6 +106,7 @@ const router = createBrowserRouter([
       { path: "post/:postId", element: <PostScreen /> },
       { path: "profile", element: <MeRedirect /> },
       { path: "settings", element: <SettingsScreen /> },
+      ...(dataSource.monetization ? [{ path: "settings/monetization", element: <MonetizationScreen /> }] : []),
       ...(dataSource.messages?.security
         ? [
             { path: "settings/devices", element: <DevicesScreen /> },

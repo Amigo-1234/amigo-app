@@ -6,7 +6,9 @@ import {
   BellOff,
   ChevronRight,
   Eye,
+  FileText,
   Info,
+  Sparkles,
   KeyRound,
   LogOut,
   Mail,
@@ -16,6 +18,7 @@ import {
   RotateCcw,
   ShieldCheck,
   Sun,
+  Trash2,
   UserRound,
   Users,
 } from "lucide-react";
@@ -192,7 +195,11 @@ function AccountSection({ isAdmin }: { isAdmin: boolean }) {
       ) : (
         <DisplayNameRow />
       )}
+      {dataSource.monetization && (
+        <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator monetization" detail="Coming soon — see your standing and engagement" />
+      )}
       {isAdmin && <LinkRow to="/admin" icon={<ShieldCheck size={20} />} title="Amigo admin" detail="Moderation, verification and support tools" />}
+      {dataSource.deleteAccount && <DeleteAccountRow />}
     </Section>
   );
 }
@@ -502,6 +509,7 @@ function AboutSection() {
   return (
     <Section id="set-about" title="About">
       <InfoRow icon={<Info size={20} />} title="Amigo World" detail={`Version ${__APP_VERSION__} · ${BACKEND_LABEL[dataSource.kind] ?? dataSource.kind}`} />
+      <LinkRow to="/legal" icon={<FileText size={20} />} title="Terms, privacy and policies" detail="Terms of Service, Privacy Policy, Community Guidelines and more" />
       {dataSource.resetDemo && (
         <ButtonRow
           icon={<RotateCcw size={20} />}
@@ -519,3 +527,54 @@ function AboutSection() {
     </Section>
   );
 }
+
+/** Permanent deletion: explains what goes, re-checks the password, then deletes on the server. */
+function DeleteAccountRow() {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [confirmText, setConfirmText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inFlight = useRef(false);
+
+  async function remove(e: FormEvent) {
+    e.preventDefault();
+    if (inFlight.current || confirmText !== "DELETE" || !password) return;
+    inFlight.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      await dataSource.deleteAccount!(password);
+    } catch (err) {
+      setError(err instanceof AuthError && err.code === "invalid-credentials" ? "That password isn't right." : "Couldn't delete your account. Try again.");
+      inFlight.current = false;
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <ButtonRow icon={<Trash2 size={20} />} title="Delete account" detail="Permanently delete your account and data" onClick={() => setOpen((o) => !o)} expanded={open} danger />
+      {open && (
+        <form className="settings-panel" onSubmit={remove}>
+          <p className="settings-panel__text">
+            This permanently deletes your profile, posts (and the replies under them), likes, follows, Moments, World and Support Hub activity, messaging
+            devices, keys, backups and the conversations you're in. It can't be undone. See the <Link to="/legal/deletion">Account Deletion Policy</Link>.
+          </p>
+          {error && <p className="auth__error" role="alert">{error}</p>}
+          <PasswordField label="Your password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <div className="auth-field">
+            <label className="auth-field__label" htmlFor="delete-confirm">Type DELETE to confirm</label>
+            <input id="delete-confirm" className="auth-field__input" value={confirmText} autoCapitalize="characters" onChange={(e) => setConfirmText(e.target.value)} />
+          </div>
+          <div className="settings-panel__actions">
+            <Button type="submit" variant="danger" loading={busy} disabled={busy || !password || confirmText !== "DELETE"}>
+              Delete my account
+            </Button>
+          </div>
+        </form>
+      )}
+    </>
+  );
+}
+

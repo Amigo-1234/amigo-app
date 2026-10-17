@@ -569,8 +569,119 @@ export interface AdminUsersApi {
   listVerified(adminId: string): Promise<{ person: PersonSummary; verification: Verification }[]>;
 }
 
+// ------------------------------------------------------------------- legal
+
+export type LegalSlug = "terms" | "privacy" | "guidelines" | "copyright" | "monetization" | "deletion" | "cookies";
+
+export interface LegalVersion {
+  slug: LegalSlug;
+  version: string;
+  title: string;
+  effectiveAt: Date;
+  publishedAt: Date | null;
+  requiresAcceptance: boolean;
+  materialChange: boolean;
+  summary: string;
+}
+
+/** A current version this account hasn't accepted. required: must accept to continue; otherwise a notice. */
+export interface PendingLegal {
+  slug: LegalSlug;
+  version: string;
+  title: string;
+  summary: string;
+  required: boolean;
+}
+
+export interface LegalApi {
+  current(): Promise<LegalVersion[]>;
+  pending(): Promise<PendingLegal[]>;
+  accept(docs: { slug: LegalSlug; version: string }[]): Promise<void>;
+}
+
+export interface LegalAdminApi {
+  list(): Promise<LegalVersion[]>;
+  publish(input: { slug: LegalSlug; version: string; title: string; effectiveAt: Date; requiresAcceptance: boolean; materialChange: boolean; summary: string }): Promise<void>;
+}
+
+// ------------------------------------------------------------ monetization
+
+export type MonetizationStatus = "not_eligible" | "eligible" | "suspended";
+
+export interface CreatorEngagement {
+  verifiedFollowers: number;
+  followers: number;
+  posts30d: number;
+  supportReceived: number;
+  supportRequestsCompleted: number;
+  accountAgeDays: number;
+}
+
+/** What a creator sees. Nothing financial: there are no earnings, balances or payouts. */
+export interface CreatorOverview {
+  programmeOpen: boolean;
+  applicationsOpen: boolean;
+  /** Admin-configured criteria; empty until officially configured. */
+  criteria: Record<string, unknown>;
+  publicNote: string;
+  status: MonetizationStatus;
+  statusReason: string;
+  standing: "good" | "under_review" | "restricted";
+  application: { status: "pending" | "approved" | "rejected" | "withdrawn"; submittedAt: Date; reviewedAt: Date | null; reviewNote: string } | null;
+  engagement: CreatorEngagement;
+}
+
+export interface MonetizationApi {
+  overview(): Promise<CreatorOverview>;
+  apply(): Promise<void>;
+}
+
+export interface MonetizationSettings {
+  programmeOpen: boolean;
+  applicationsOpen: boolean;
+  criteria: Record<string, unknown>;
+  publicNote: string;
+  updatedAt: Date;
+}
+
+export interface CreatorApplication {
+  id: string;
+  person: Author;
+  status: "pending" | "approved" | "rejected" | "withdrawn";
+  snapshot: CreatorEngagement;
+  current: CreatorEngagement & { openFraudFlags: number };
+  submittedAt: Date;
+  reviewedAt: Date | null;
+  reviewNote: string;
+}
+
+export interface FraudFlag {
+  id: string;
+  userId: string;
+  handle: string;
+  kind: "support_farming" | "fake_followers" | "engagement_manipulation" | "duplicate_accounts" | "other";
+  detail: string;
+  createdAt: Date;
+  resolvedAt: Date | null;
+}
+
+export interface MonetizationAdminApi {
+  settings(): Promise<MonetizationSettings>;
+  saveSettings(input: { programmeOpen: boolean; applicationsOpen: boolean; criteria: Record<string, unknown>; publicNote: string }): Promise<void>;
+  applications(status: "pending" | "all"): Promise<CreatorApplication[]>;
+  review(applicationId: string, decision: "approved" | "rejected", note: string): Promise<void>;
+  setStatus(userId: string, status: MonetizationStatus, reason: string): Promise<void>;
+  flags(openOnly: boolean): Promise<FraudFlag[]>;
+  flag(userId: string, kind: FraudFlag["kind"], detail: string): Promise<void>;
+  resolveFlag(flagId: string): Promise<void>;
+}
+
 export interface AdminApi {
   isAdmin(viewerId: string): Promise<boolean>;
+  /** Legal documents: publish new versions (text ships with the app). */
+  legal?: LegalAdminApi;
+  /** Creator monetization — architecture only; nothing financial is enabled. */
+  monetization?: MonetizationAdminApi;
   support: SupportAdminApi;
   /** Message reports (only the evidence reporters submitted — admins can't read conversations). */
   messageReports?: MessageReportsAdminApi;
@@ -932,6 +1043,12 @@ export interface DataSource {
   photoUploads?: boolean;
   /** Email ownership check by emailed code, for backends that sign people in before verifying (Neon). */
   emailVerification?: { sendCode(): Promise<void>; verify(code: string): Promise<void> };
+  /** Permanently deletes the signed-in account after re-checking the password (Neon/Supabase). */
+  deleteAccount?(password: string): Promise<void>;
+  /** Versioned legal documents and acceptance records. */
+  legal?: LegalApi;
+  /** Creator monetization overview (coming soon; nothing financial). */
+  monetization?: MonetizationApi;
   /** Password reset by emailed code instead of a link (Neon). Without it, sendPasswordReset emails a link. */
   passwordResetByCode?: { send(email: string): Promise<void>; reset(email: string, code: string, password: string): Promise<void> };
 
@@ -958,7 +1075,8 @@ export interface DataSource {
   onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;
   signIn(email: string, password: string): Promise<void>;
   /** needsEmailConfirmation: the account exists but the person must click the emailed link first. */
-  signUp(email: string, password: string, name: string): Promise<{ needsEmailConfirmation: boolean }>;
+  /** acceptLegal: the Terms/Privacy versions accepted on the sign-up form, recorded once the account exists. */
+  signUp(email: string, password: string, name: string, opts?: { acceptLegal?: { slug: LegalSlug; version: string }[] }): Promise<{ needsEmailConfirmation: boolean }>;
   sendPasswordReset(email: string): Promise<void>;
   /** Fires when someone arrives through a password-reset link and must choose a new password. */
   onPasswordRecovery?(cb: () => void): Unsubscribe;

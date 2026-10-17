@@ -251,3 +251,37 @@
     animation: none;
   }
 }
+
+/* ---------- Sign-up agreement ---------- */
+
+.auth-consent {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.auth-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  cursor: pointer;
+}
+
+.auth-check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  accent-color: var(--accent);
+}
+
+.auth-check a {
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.auth__legal {
+  margin-top: var(--space-2);
+}

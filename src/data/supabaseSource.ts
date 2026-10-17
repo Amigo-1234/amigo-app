@@ -15,6 +15,7 @@ import type { AuthError as SupabaseAuthError, RealtimeChannel } from "@supabase/
 import { isNeon, supabase } from "./supabase/client";
 import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
+import { createPlatform } from "./supabase/platform";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
@@ -185,12 +186,38 @@ supabase.auth.onAuthStateChange((event, session) => {
 // Messages (E2EE to-device delivery) and Moments (photo storage) need Realtime
 // and Storage; on Neon they're migrated in a later step, so they stay off.
 const moments = isNeon ? null : createSupabaseMoments(supabase, liveQuery, invalidate);
+const platform = createPlatform(supabase);
 
 export const supabaseSource: DataSource = {
   kind: isNeon ? "neon" : "supabase",
   // post_media.position is 0–3 and create_post rejects more than 4. Neon: no photo storage yet.
   maxMediaPerPost: isNeon ? 0 : 4,
   photoUploads: !isNeon,
+
+  legal: platform.legal,
+  monetization: platform.monetization,
+
+  async deleteAccount(password) {
+    if (!currentUser?.email) throw new AuthError("unknown", "Not signed in");
+    const userId = currentUser.id;
+    // Fresh sign-in = recent authentication (the database refuses deletion without one).
+    const { error } = await supabase.auth.signInWithPassword({ email: currentUser.email, password });
+    if (error) throw authError(error);
+    const { error: delError } = await supabase.rpc("delete_my_account" as never, { p_confirm: "DELETE" } as never);
+    if (delError) throw new AuthError(delError.code === "AC001" ? "invalid-credentials" : "unknown", delError.message);
+    // Forget this browser's keys, drafts and session for the deleted account.
+    try {
+      for (const k of Object.keys(localStorage)) if (k.includes(userId)) localStorage.removeItem(k);
+      if (typeof indexedDB !== "undefined" && indexedDB.databases) {
+        for (const d of await indexedDB.databases()) if (d.name?.startsWith(`amigo-crypto-${userId}`)) indexedDB.deleteDatabase(d.name);
+      }
+    } catch {
+      /* best effort */
+    }
+    await supabase.auth.signOut().catch(() => undefined);
+    currentUser = null;
+    await emitViewer();
+  },
 
   emailVerification: isNeon
     ? {
@@ -258,12 +285,15 @@ export const supabaseSource: DataSource = {
     throw authError(first.error);
   },
 
-  async signUp(email, password, name) {
+  async signUp(email, password, name, opts) {
     if (isNeon) {
       const { neonSignUp } = await import("./supabase/neonClient");
       await neonSignUp(email, password, name.trim()).catch((e: Error) => {
         throw authError(e);
       });
+      // Record the Terms/Privacy versions accepted on the form (server time). If this
+      // fails, the acceptance screen asks again before the app opens — never skipped.
+      if (opts?.acceptLegal?.length) await platform.legal.accept(opts.acceptLegal).catch((e) => console.warn("legal acceptance not recorded yet", e));
       await syncSession();
       // Signed in straight away; the email is verified by code from Settings.
       return { needsEmailConfirmation: false };
@@ -501,6 +531,8 @@ export const supabaseSource: DataSource = {
   // The admin UI is only a convenience: every call below is re-checked by is_admin() in the database.
   admin: {
     isAdmin: () => q.fetchIsAdmin(supabase),
+    legal: platform.legalAdmin,
+    monetization: platform.monetizationAdmin,
     moments: moments?.admin,
     messageReports: isNeon
       ? undefined

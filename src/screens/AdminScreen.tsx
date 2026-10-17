@@ -1,5 +1,7 @@
 import { NavLink, useParams } from "react-router";
-import { Flag, HandHeart, LayoutDashboard, Orbit, ShieldAlert, UsersRound } from "lucide-react";
+import { FileText, Flag, HandHeart, LayoutDashboard, Orbit, ShieldAlert, Sparkles, UsersRound } from "lucide-react";
+import { dataSource } from "../data";
+import { AdminLegal, AdminMonetization } from "../features/admin/AdminPlatform";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
@@ -19,7 +21,9 @@ const SECTIONS = [
   { id: "worlds", label: "Worlds", icon: Orbit },
   { id: "users", label: "Users", icon: UsersRound },
   { id: "reports", label: "Reports", icon: Flag },
-] as const;
+  ...(dataSource.admin?.monetization ? [{ id: "monetization", label: "Monetization", icon: Sparkles }] : []),
+  ...(dataSource.admin?.legal ? [{ id: "legal", label: "Legal", icon: FileText }] : []),
+];
 
 export default function AdminScreen() {
   const admin = useIsAdmin();
@@ -62,6 +66,8 @@ export default function AdminScreen() {
         {section === "support" && <SupportAdmin />}
         {section === "worlds" && <AdminWorlds />}
         {section === "users" && <AdminUsers />}
+        {section === "monetization" && dataSource.admin?.monetization && <AdminMonetization />}
+        {section === "legal" && dataSource.admin?.legal && <AdminLegal />}
         {section === "reports" && (
           <>
             <AdminMomentReports />
