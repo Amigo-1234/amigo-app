@@ -656,9 +656,7 @@ export const supabaseSource: DataSource = {
         const blob = await (await fetch(update.avatar.dataUrl)).blob();
         if (media) {
           // Neon: the database checks it's your own avatar upload and releases the old one.
-          const key = await media.upload("avatar", blob).catch((e) => {
-            throw new ProfileError("unknown", (e as Error).message);
-          });
+          const key = await media.upload("avatar", blob);
           patch.avatar_url = media.url(key);
         } else {
           uploaded = `${viewerId}/${crypto.randomUUID()}.jpg`;

@@ -1,3 +1,4 @@
+import { limitText } from "../feed/errors";
 import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Trash2, X } from "lucide-react";
 import { dataSource, MOMENT_BACKGROUNDS, MOMENT_TEXT_MAX_LENGTH, type MomentAudience, type MomentBackground, type NewMediaInput } from "../../data";
@@ -72,8 +73,8 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
       await dataSource.moments!.create(viewer, { text: trimmed, background, image: image?.media ?? null, audience });
       toast("Moment shared — it disappears in 24 hours");
       onClose();
-    } catch {
-      setError("Couldn't share your Moment. Try again.");
+    } catch (e) {
+      setError(limitText(e) ?? "Couldn't share your Moment. Try again.");
       setPosting(false);
     }
   }

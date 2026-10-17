@@ -116,9 +116,8 @@ export function createSupabaseMoments(
       let path: string | null = null;
       if (input.image && !photos) throw new MomentError("unknown", "Photo Moments aren't available yet");
       if (input.image && store) {
-        path = await store.upload("moment", input.image.blob).catch((e) => {
-          throw new MomentError("unknown", (e as Error).message);
-        });
+        // Keep the media error (its code says quota / too large) for the composer's message.
+        path = await store.upload("moment", input.image.blob);
       } else if (input.image) {
         // Same processed photo as posts (src/lib/image.ts), into your own folder of the private bucket.
         const ext = input.image.blob.type === "image/png" ? "png" : input.image.blob.type === "image/gif" ? "gif" : input.image.blob.type === "image/webp" ? "webp" : "jpg";

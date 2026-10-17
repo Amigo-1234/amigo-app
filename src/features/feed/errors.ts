@@ -5,6 +5,8 @@ export function limitText(error: unknown): string | null {
   if (code === "RL001" || code === "rate-limited") return "You're doing that a lot — take a short break and try again.";
   if (code === "AS001" || code === "suspended") return "Your account is suspended, so you can't do that right now.";
   if (code === "BL001") return "You can't follow this account.";
+  if (code === "quota" || code === "MD003") return "You've reached the upload limit for now. Try again later.";
+  if (code === "too-large" || code === "MD002") return "That file is too large or not a supported type.";
   return null;
 }
 

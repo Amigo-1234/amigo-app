@@ -1,3 +1,4 @@
+import { limitText } from "../feed/errors";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Camera } from "lucide-react";
 import { BIO_MAX_LENGTH, HANDLE_PATTERN, NAME_MAX_LENGTH, ProfileError, dataSource, type Profile, type ProfileUpdate } from "../../data";
@@ -102,7 +103,7 @@ function EditProfileForm({ profile, onClose, onSaved }: { profile: Profile; onCl
     } catch (err) {
       if (err instanceof ProfileError && err.code === "handle-taken") setHandleState("taken");
       else if (err instanceof ProfileError && err.code === "handle-invalid") setHandleState("invalid");
-      else setError("We couldn't save your profile. Try again.");
+      else setError(limitText(err) ?? "We couldn't save your profile. Try again.");
     } finally {
       setSaving(false);
     }

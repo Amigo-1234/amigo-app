@@ -14,7 +14,7 @@ import { Sheet } from "../../ui/Sheet";
 import { Skeleton } from "../../ui/Skeleton";
 import { StateMessage } from "../../ui/StateMessage";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
-import { describeError } from "../feed/errors";
+import { describeError, limitText } from "../feed/errors";
 import { clockTime, dayLabel, sameDay, STATUS_LABEL } from "./format";
 import { REPORT_REASONS } from "../reports/reasons";
 import { MessageComposer } from "./MessageComposer";
@@ -442,6 +442,8 @@ function sendErrorText(e: Error, peerName: string) {
   if (e instanceof MessageError && e.code === "identity-changed") return `${peerName}'s security key changed. Check the notice above, then send again.`;
   if (e instanceof MessageError && e.code === "device-unverified") return "Approve this device from another of your devices before sending.";
   if (e instanceof MessageError && e.code === "rate-limited") return "You're sending messages very fast — wait a moment, then tap Retry.";
+  const limit = limitText(e);
+  if (limit && !(e instanceof MessageError)) return limit;
   if (e instanceof MessageError && e.code === "suspended") return "Your account is suspended, so you can't send messages right now.";
   return "Your message wasn't sent. Tap Retry to try again.";
 }
