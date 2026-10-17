@@ -147,7 +147,10 @@ try {
     return imgLoaded(loc);
   };
   const noOverflow = async () => (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0;
-  const R2 = /r2\.cloudflarestorage\.com/;
+  // No request interception anywhere (it would answer CORS preflights itself and hide
+  // real problems): a slow network and real offline mode, as on a phone.
+  const cdp = await ctx.newCDPSession(page);
+  const network = (o) => cdp.send("Network.emulateNetworkConditions", { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1, ...o });
   const compose = async (text, file) => {
     await page.locator(".bottom-create").click();
     const dialog = page.getByRole("dialog");
@@ -158,27 +161,23 @@ try {
   };
 
   await step("photo post", async () => {
-    // Slow R2 down so the in-progress state is visible.
-    await page.route(R2, async (route) => {
-      await new Promise((r) => setTimeout(r, 1500));
-      await route.continue();
-    });
+    await network({ latency: 400, uploadThroughput: 20_000, downloadThroughput: 200_000 }); // a slow mobile connection
     await compose(`Live photo post ${tag}`, "photo.png");
     await check("upload in progress is shown (Posting…)", await page.getByText("Posting…").first().isVisible().catch(() => false));
-    await check("photo post appears and its image loads from R2", await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img`).first()));
-    await page.unroute(R2);
+    await network({});
+    await check("photo post appears and its image loads from R2", await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img`).first(), 45000));
     await check("no horizontal scroll with a photo post", await noOverflow());
   });
 
   await step("upload failure and retry", async () => {
-    await page.route(R2, (route) => route.abort());
+    await ctx.setOffline(true);
     await compose(`Retry photo post ${tag}`, "photo2.png");
     const failed = page.getByText("Couldn't post. Your post is saved here.").first();
     await failed.waitFor({ timeout: 30000 }).catch(() => undefined);
-    await check("failed upload shows a clear error with Retry", await failed.isVisible().catch(() => false));
-    await page.unroute(R2);
+    await check("offline: the post stays saved with a clear error and Retry", await failed.isVisible().catch(() => false));
+    await ctx.setOffline(false);
     await page.locator(`article:has-text("Retry photo post ${tag}")`).getByRole("button", { name: "Retry" }).click();
-    await check("Retry posts it and the image loads", await waitImg(page.locator(`article:has-text("Retry photo post ${tag}") img`).first(), 30000));
+    await check("back online: Retry posts it and the image loads from R2", await waitImg(page.locator(`article:has-text("Retry photo post ${tag}") img`).first(), 30000));
   });
 
   await step("profile picture", async () => {
