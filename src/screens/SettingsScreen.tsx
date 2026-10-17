@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   Ban,
+  Download,
   Bookmark,
   ArrowLeft,
   Bell,
@@ -37,6 +38,7 @@ import { useToast } from "../state/toast";
 import { Avatar } from "../ui/Avatar";
 import { Button, IconButton } from "../ui/Button";
 import { LoadingScreen } from "../ui/Loader";
+import { canPromptInstall, isIOS, isStandalone, promptInstall } from "../lib/install";
 import "./SettingsScreen.css";
 
 const THEMES: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
@@ -514,6 +516,7 @@ function AboutSection() {
     <Section id="set-about" title="About">
       <InfoRow icon={<Info size={20} />} title="Amigo World" detail={`Version ${__APP_VERSION__} · ${BACKEND_LABEL[dataSource.kind] ?? dataSource.kind}`} />
       <LinkRow to="/legal" icon={<FileText size={20} />} title="Terms, privacy and policies" detail="Terms of Service, Privacy Policy, Community Guidelines and more" />
+      <InstallRow />
       {dataSource.resetDemo && (
         <ButtonRow
           icon={<RotateCcw size={20} />}
@@ -529,6 +532,39 @@ function AboutSection() {
         />
       )}
     </Section>
+  );
+}
+
+/** Install as an app: the browser's prompt where there is one, Add to Home Screen steps on iPhone. Hidden once installed. */
+function InstallRow() {
+  const [, rerender] = useState(0);
+  const [showSteps, setShowSteps] = useState(false);
+  if (isStandalone()) return null;
+  if (canPromptInstall()) {
+    return (
+      <ButtonRow
+        icon={<Download size={20} />}
+        title="Install Amigo"
+        detail="Add Amigo to your home screen and open it like an app"
+        onClick={async () => {
+          await promptInstall();
+          rerender((n) => n + 1);
+        }}
+      />
+    );
+  }
+  if (!isIOS()) return null;
+  return (
+    <>
+      <ButtonRow icon={<Download size={20} />} title="Install Amigo on iPhone" detail="Add it to your Home Screen from Safari" onClick={() => setShowSteps((v) => !v)} expanded={showSteps} />
+      {showSteps && (
+        <ol className="settings-steps">
+          <li>Open Amigo World in Safari.</li>
+          <li>Tap the Share button (the square with an arrow).</li>
+          <li>Choose “Add to Home Screen”, then “Add”.</li>
+        </ol>
+      )}
+    </>
   );
 }
 

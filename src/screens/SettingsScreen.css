@@ -258,3 +258,10 @@
   padding: var(--space-4);
   color: var(--text-3);
 }
+
+.settings-steps {
+  margin: 0 var(--space-4) var(--space-3) calc(var(--space-4) + 36px);
+  padding-left: var(--space-4);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
