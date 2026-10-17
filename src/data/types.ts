@@ -724,6 +724,17 @@ export interface DirectMessage {
   undecryptable?: boolean;
   /** E2E backends: sent from one of their devices they haven't verified. */
   unverifiedDevice?: boolean;
+  /** One reaction per person; grouped by emoji. */
+  reactions?: MessageReaction[];
+  /** The sender changed the text after sending. */
+  edited?: boolean;
+}
+
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  /** Includes your reaction. */
+  mine: boolean;
 }
 
 /** One-to-one only (no groups yet). */
@@ -809,6 +820,25 @@ export interface MessagesApi {
   report(viewerId: string, conversationId: string, input: { reason: MessageReportReason; note: string; messageIds: string[] }): Promise<void>;
   /** Devices, verification and key backup. Present on end-to-end encrypted backends (and simulated in the demo). */
   security?: MessagingSecurityApi;
+  /** Reactions, edits, unsend and older history, where the backend supports them. */
+  actions?: MessageActionsApi;
+}
+
+/** Edits are allowed for this long after sending (your own text messages only). */
+export const MESSAGE_EDIT_WINDOW_MS = 15 * 60_000;
+
+export interface MessageActionsApi {
+  /** Your reaction to a message; null removes it. Encrypted like a message. */
+  react(viewerId: string, conversationId: string, messageId: string, emoji: string | null): Promise<void>;
+  /** Replace the text of one of your messages (within MESSAGE_EDIT_WINDOW_MS). Encrypted like a message. */
+  edit(viewerId: string, conversationId: string, messageId: string, text: string): Promise<void>;
+  /**
+   * Remove one of your messages for everyone: the server deletes its ciphertext,
+   * reactions and edits. The other person may already have read it.
+   */
+  unsend(viewerId: string, conversationId: string, messageId: string): Promise<void>;
+  /** Fetches older messages into the open conversation. Resolves false when there are none left. */
+  loadOlder(viewerId: string, conversationId: string): Promise<boolean>;
 }
 
 // -------------------------------------------------------- messaging security

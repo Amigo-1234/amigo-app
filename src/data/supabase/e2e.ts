@@ -49,8 +49,10 @@ const BACKUP_ALGORITHM = "m.megolm_backup.v1.curve25519-aes-sha2";
 
 /** What travels inside the ciphertext. */
 export interface MessagePayload {
-  msgtype: "m.text" | "m.image";
+  /** amigo.reaction: body is the emoji ("" removes it). amigo.edit: body is the new text. Both name their message in amigo.target. */
+  msgtype: "m.text" | "m.image" | "amigo.reaction" | "amigo.edit";
   body: string;
+  "amigo.target"?: string;
   /** Reply relation and the photo's location + key are private, so they live in here too. */
   "amigo.reply_to"?: string | null;
   "amigo.image"?: { path: string; info: string; width: number; height: number; mimetype: string } | null;
@@ -66,6 +68,8 @@ export interface StoredMessage {
   sender_id: string;
   content: unknown;
   created_at: string;
+  /** Reactions and edits: the message they belong to (the only part the server sees). */
+  relates_to?: string | null;
 }
 
 export interface E2EOptions {

@@ -17,6 +17,10 @@ import {
   type ConversationView,
   type DirectMessage,
   type MediaItem,
+  MESSAGE_EDIT_WINDOW_MS,
+  MESSAGE_MAX_LENGTH,
+  type MessageActionsApi,
+  type MessageReaction,
   type MessagesApi,
   type MessageStatus,
   type MessagingSecurityApi,
@@ -279,6 +283,8 @@ export function createSupabaseMessages(
     members: Member[];
     blockedByMe: boolean;
     blockedEither: boolean;
+    /** More history exists before the oldest loaded row. */
+    hasOlder: boolean;
   }
   const threads = new Map<string, Thread>();
 
@@ -291,17 +297,78 @@ export function createSupabaseMessages(
       if (error.code === "DM003") return null;
       fail(error);
     }
-    const res = data as unknown as { members: Member[] | null; blocked_by_me: boolean; blocked_either: boolean; messages: StoredMessage[] };
+    const res = data as unknown as ThreadResponse;
+    const thread = merge(conversationId, known, res);
+    if (!known) thread.hasOlder = res.messages.length >= 50;
+    return thread;
+  }
+
+  interface ThreadResponse {
+    members: Member[] | null;
+    blocked_by_me: boolean;
+    blocked_either: boolean;
+    messages: StoredMessage[];
+    /** Unsent since the cursor (ids only). */
+    deleted?: string[];
+  }
+
+  function merge(conversationId: string, known: Thread | undefined, res: ThreadResponse): Thread {
     const byId = new Map((known?.rows ?? []).map((r) => [r.id, r]));
     for (const m of res.messages) byId.set(m.id, m);
+    const gone = new Set(res.deleted ?? []);
+    for (const id of gone) byId.delete(id);
     const thread: Thread = {
-      rows: [...byId.values()].sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1)),
-      members: res.members ?? [],
+      rows: [...byId.values()]
+        .filter((r) => !(r.relates_to && gone.has(r.relates_to)))
+        .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1)),
+      members: res.members ?? known?.members ?? [],
       blockedByMe: res.blocked_by_me,
       blockedEither: res.blocked_either,
+      hasOlder: known?.hasOlder ?? false,
     };
     threads.set(conversationId, thread);
     return thread;
+  }
+
+  /** Reactions and edits found in the loaded rows, keyed by the message they belong to. */
+  interface Annotations {
+    /** target → sender → emoji ("" = removed). Later events win. */
+    reactions: Map<string, Map<string, string>>;
+    /** target → newest text from the target's own sender. */
+    edits: Map<string, string>;
+  }
+
+  function annotations(rows: StoredMessage[], results: Map<string, DecryptResult>): Annotations {
+    const out: Annotations = { reactions: new Map(), edits: new Map() };
+    const senderOf = new Map(rows.filter((r) => !r.relates_to).map((r) => [r.id, r.sender_id]));
+    for (const r of rows) {
+      if (!r.relates_to) continue;
+      const res = results.get(r.id);
+      // The server only links rows; the encrypted target must agree, so it can't re-point anything.
+      if (!res?.ok || res.senderMismatch || res.payload["amigo.target"] !== r.relates_to) continue;
+      const target = r.relates_to;
+      if (res.payload.msgtype === "amigo.reaction") {
+        let m = out.reactions.get(target);
+        if (!m) out.reactions.set(target, (m = new Map()));
+        m.set(r.sender_id, res.payload.body.slice(0, 16));
+      } else if (res.payload.msgtype === "amigo.edit" && senderOf.get(target) === r.sender_id) {
+        out.edits.set(target, res.payload.body);
+      }
+    }
+    return out;
+  }
+
+  function reactionList(byPerson: Map<string, string> | undefined, viewerId: string): MessageReaction[] {
+    if (!byPerson) return [];
+    const groups = new Map<string, MessageReaction>();
+    for (const [who, emoji] of byPerson) {
+      if (!emoji) continue;
+      const g = groups.get(emoji) ?? { emoji, count: 0, mine: false };
+      g.count++;
+      g.mine ||= who === viewerId;
+      groups.set(emoji, g);
+    }
+    return [...groups.values()];
   }
 
   async function conversation(conversationId: string, viewerId: string): Promise<ConversationView | null> {
@@ -315,9 +382,15 @@ export function createSupabaseMessages(
     const blocks = thread.blockedByMe ? [peer.user_id] : [];
     const blockedEither = thread.blockedEither;
 
-    const list = thread.rows;
-    const results = await Promise.all(list.map((m) => open(viewerId, m as StoredMessage).catch((): DecryptResult => ({ ok: false, reason: "missing-key" }))));
-    const byId = new Map(list.map((m, i) => [m.id, results[i]]));
+    const all = thread.rows;
+    const decryptedAll = await Promise.all(all.map((m) => open(viewerId, m).catch((): DecryptResult => ({ ok: false, reason: "missing-key" }))));
+    const byId = new Map(all.map((m, i) => [m.id, decryptedAll[i]]));
+    const notes = annotations(all, byId);
+    const isMessage = (r: DecryptResult | undefined) => !r?.ok || r.payload.msgtype === "m.text" || r.payload.msgtype === "m.image";
+    // A reaction/edit whose row lost its link is never shown as a message.
+    const list = all.filter((m) => !m.relates_to && isMessage(byId.get(m.id)));
+    const results = list.map((m) => byId.get(m.id)!);
+    const textOf = (id: string, res: DecryptResult | undefined) => notes.edits.get(id) ?? (res?.ok ? res.payload.body : "");
 
     const messages: DirectMessage[] = await Promise.all(
       list.map(async (m, i): Promise<DirectMessage> => {
@@ -344,7 +417,9 @@ export function createSupabaseMessages(
         const quotedRow = quotedId ? list.find((x) => x.id === quotedId) : null;
         return {
           ...base,
-          text: p.body,
+          text: textOf(m.id, res),
+          edited: notes.edits.has(m.id),
+          reactions: reactionList(notes.reactions.get(m.id), viewerId),
           unverifiedDevice: !!res.unverifiedDevice && !fromViewer,
           media,
           replyTo:
@@ -352,7 +427,7 @@ export function createSupabaseMessages(
               ? {
                   id: quotedId,
                   fromViewer: quotedRow.sender_id === viewerId,
-                  text: quoted?.ok ? quoted.payload.body : "",
+                  text: textOf(quotedId, quoted ?? undefined),
                   hasImage: !!(quoted?.ok && quoted.payload["amigo.image"]),
                 }
               : null,
@@ -637,10 +712,87 @@ export function createSupabaseMessages(
     },
   };
 
+  /** This device and the other person, checked once per conversation. */
+  async function sender(viewerId: string, conversationId: string) {
+    let peerId = peers.get(conversationId);
+    if (!peerId) {
+      const { data: members, error } = await db.from("dm_participants").select("user_id").eq("conversation_id", conversationId);
+      if (error) fail(error);
+      peerId = members?.find((m) => m.user_id !== viewerId)?.user_id;
+      if (!peerId) throw new MessageError("not-found");
+      peers.set(conversationId, peerId);
+    }
+    // Encrypting for someone with no devices would make the message unreadable forever.
+    // (Checked until they have one; devices don't disappear in a way this check would catch anyway.)
+    if (!peersWithDevices.has(peerId)) {
+      const { count } = await db.from("e2e_devices").select("device_id", { count: "exact", head: true }).eq("user_id", peerId);
+      if (!count) throw new MessageError("peer-unavailable");
+      peersWithDevices.add(peerId);
+    }
+    const d = await device(viewerId).catch(translate);
+    return { d, peerId };
+  }
+
+  /** A reaction or edit: encrypted like a message, linked to its message by id. */
+  async function annotate(viewerId: string, conversationId: string, target: string, payload: MessagePayload) {
+    const { d, peerId } = await sender(viewerId, conversationId);
+    const content = await d.encrypt(conversationId, peerId, { ...payload, "amigo.target": target }).catch(translate);
+    const id = globalThis.crypto.randomUUID();
+    const { error } = await db.rpc("dm_send_v3" as never, { p_id: id, p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json, p_relates_to: target } as never);
+    if (error) fail(error);
+    decrypted.set(id, { ok: true, payload: { ...payload, "amigo.target": target }, senderMismatch: false, unverifiedDevice: false });
+    changed();
+  }
+
+  const ownMessage = (viewerId: string, conversationId: string, messageId: string) => {
+    const row = threads.get(conversationId)?.rows.find((r) => r.id === messageId && !r.relates_to);
+    if (!row || row.sender_id !== viewerId) throw new MessageError("not-found");
+    return row;
+  };
+
+  const actions: MessageActionsApi = {
+    react: (viewerId, conversationId, messageId, emoji) =>
+      annotate(viewerId, conversationId, messageId, { msgtype: "amigo.reaction", body: emoji ? [...emoji].slice(0, 8).join("") : "" }),
+
+    async edit(viewerId, conversationId, messageId, text) {
+      const body = text.trim();
+      if (!body) throw new MessageError("empty");
+      if (body.length > MESSAGE_MAX_LENGTH) throw new MessageError("too-long");
+      const row = ownMessage(viewerId, conversationId, messageId);
+      if (Date.now() - new Date(row.created_at).getTime() > MESSAGE_EDIT_WINDOW_MS) throw new MessageError("unknown", "too late to edit");
+      await annotate(viewerId, conversationId, messageId, { msgtype: "amigo.edit", body });
+    },
+
+    async unsend(viewerId, conversationId, messageId) {
+      ownMessage(viewerId, conversationId, messageId);
+      const { error } = await db.rpc("dm_unsend" as never, { p_id: messageId } as never);
+      if (error) fail(error);
+      const t = threads.get(conversationId);
+      if (t) t.rows = t.rows.filter((r) => r.id !== messageId && r.relates_to !== messageId);
+      decrypted.delete(messageId);
+      changed();
+    },
+
+    async loadOlder(_viewerId, conversationId) {
+      const known = threads.get(conversationId);
+      const oldest = known?.rows[0]?.created_at;
+      if (!known || !oldest || !known.hasOlder) return false;
+      const { data, error } = await db.rpc("dm_thread" as never, { p_conversation: conversationId, p_before: oldest, p_limit: 50 } as never);
+      if (error) fail(error);
+      const res = data as unknown as ThreadResponse;
+      const thread = merge(conversationId, threads.get(conversationId), { ...res, deleted: [] });
+      thread.hasOlder = res.messages.length >= 50;
+      changed();
+      return thread.hasOlder;
+    },
+  };
+
   return {
     encryption: "e2e",
     photos: realtime,
     security,
+    // Reactions, edits and unsend need the dm_send_v3 / dm_unsend functions (Neon schema).
+    actions: realtime ? undefined : actions,
 
     subscribeConversations: (viewerId, sub) => live("inbox", viewerId, "dm:inbox", () => inbox(viewerId), sub, dmListen(viewerId)),
 
@@ -673,22 +825,7 @@ export function createSupabaseMessages(
     async send(viewerId, conversationId, input) {
       const text = input.text.trim();
       if (!text && !input.image) throw new MessageError("empty");
-      let peerId = peers.get(conversationId);
-      if (!peerId) {
-        const { data: members, error } = await db.from("dm_participants").select("user_id").eq("conversation_id", conversationId);
-        if (error) fail(error);
-        peerId = members?.find((m) => m.user_id !== viewerId)?.user_id;
-        if (!peerId) throw new MessageError("not-found");
-        peers.set(conversationId, peerId);
-      }
-      // Encrypting for someone with no devices would make the message unreadable forever.
-      // (Checked until they have one; devices don't disappear in a way this check would catch anyway.)
-      if (!peersWithDevices.has(peerId)) {
-        const { count } = await db.from("e2e_devices").select("device_id", { count: "exact", head: true }).eq("user_id", peerId);
-        if (!count) throw new MessageError("peer-unavailable");
-        peersWithDevices.add(peerId);
-      }
-      const d = await device(viewerId).catch(translate);
+      const { d, peerId } = await sender(viewerId, conversationId);
       let image: MessagePayload["amigo.image"] = null;
       if (input.image) {
         const enc = d.encryptAttachment(new Uint8Array(await input.image.blob.arrayBuffer()));

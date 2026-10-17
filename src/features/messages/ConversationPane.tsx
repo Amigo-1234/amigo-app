@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, Ban, CircleAlert, Flag, Info, Lock, MoreHorizontal, Reply, RotateCcw, ShieldAlert, ShieldCheck, UserRound, X } from "lucide-react";
+import { ArrowLeft, Ban, CircleAlert, Flag, Info, Lock, MoreHorizontal, Reply, RotateCcw, Search, ShieldAlert, ShieldCheck, UserRound, X } from "lucide-react";
 import { dataSource, MessageError, type Conversation, type DirectMessage, type MessageQuote, type MessageReportReason, type PeerTrust } from "../../data";
 import { fullTimestamp } from "../../lib/time";
 import { useMediaViewer } from "../posts/MediaViewer";
@@ -18,6 +18,7 @@ import { describeError } from "../feed/errors";
 import { clockTime, dayLabel, sameDay, STATUS_LABEL } from "./format";
 import { REPORT_REASONS } from "../reports/reasons";
 import { MessageComposer } from "./MessageComposer";
+import { canEdit, EditSheet, MessageActionSheet, ReactionChips, SearchSheet, UnsendSheet, useBubbleGestures } from "./MessageActions";
 import { useConversation, type PendingMessage } from "./useMessages";
 import "./Security.css";
 
@@ -35,7 +36,10 @@ export function ConversationPane({ conversationId }: { conversationId: string })
   const navigate = useNavigate();
   const toast = useToast();
   const [replyTo, setReplyTo] = useState<MessageQuote | null>(null);
-  const [sheet, setSheet] = useState<null | "menu" | "block" | "report">(null);
+  const [sheet, setSheet] = useState<null | "menu" | "block" | "report" | "search" | "actions" | "edit" | "unsend">(null);
+  const [target, setTarget] = useState<DirectMessage | null>(null);
+  const [older, setOlder] = useState<"idle" | "loading" | "none">("idle");
+  const actions = dataSource.messages?.actions;
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const conversation = c.view?.conversation;
@@ -66,7 +70,10 @@ export function ConversationPane({ conversationId }: { conversationId: string })
     if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
 
-  useEffect(() => setReplyTo(null), [conversationId]);
+  useEffect(() => {
+    setReplyTo(null);
+    setOlder("idle");
+  }, [conversationId]);
 
   const back = (
     <IconButton label="Back to messages" className="convo__back" onClick={() => navigate("/messages")}>
@@ -124,6 +131,44 @@ export function ConversationPane({ conversationId }: { conversationId: string })
     setTrustKey((k) => k + 1);
   };
   const keyChanged = trust === "changed" || trust === "changed-verified";
+
+  const quote = (m: DirectMessage): MessageQuote => ({ id: m.id, fromViewer: m.fromViewer, text: m.text, hasImage: m.media.length > 0 });
+  const openActions = (m: DirectMessage) => {
+    setTarget(m);
+    setSheet("actions");
+  };
+  const closeSheet = () => {
+    setSheet(null);
+    setTarget(null);
+  };
+  const react = (m: DirectMessage, emoji: string | null) => {
+    if (!actions) return;
+    actions.react(viewer.id, conversationId, m.id, emoji).catch((e) => toast(sendErrorText(e, peer.name), "error"));
+  };
+  const loadOlder = async () => {
+    if (!actions) return;
+    const el = scrollRef.current;
+    const fromBottom = el ? el.scrollHeight - el.scrollTop : 0;
+    setOlder("loading");
+    try {
+      const more = await actions.loadOlder(viewer.id, conversationId);
+      setOlder(more ? "idle" : "none");
+      // Keep the reading position while older messages appear above.
+      requestAnimationFrame(() => el && (el.scrollTop = el.scrollHeight - fromBottom));
+    } catch {
+      setOlder("idle");
+      toast("Couldn't load earlier messages. Try again.", "error");
+    }
+  };
+  const showMessage = (id: string) => {
+    closeSheet();
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) return;
+    stick.current = false;
+    el.scrollIntoView({ block: "center", behavior: "smooth" });
+    el.classList.add("is-flash");
+    setTimeout(() => el.classList.remove("is-flash"), 1200);
+  };
 
   return (
     <div className="convo">
@@ -185,6 +230,13 @@ export function ConversationPane({ conversationId }: { conversationId: string })
           )}
         </div>
 
+        {actions && older !== "none" && c.messages.length >= 50 && (
+          <div className="msgs__older">
+            <Button variant="ghost" size="sm" loading={older === "loading"} onClick={loadOlder}>
+              Load earlier messages
+            </Button>
+          </div>
+        )}
         <ol className="msgs" aria-label={`Messages with ${peer.name}`}>
           {rows.map((row, i) => {
             const at = row.kind === "message" ? row.m.createdAt : row.p.createdAt;
@@ -208,7 +260,9 @@ export function ConversationPane({ conversationId }: { conversationId: string })
                     peerName={peer.name}
                     showMeta={endOfRun || row.m.id === lastOwn?.id}
                     showStatus={row.m.id === lastOwn?.id && c.pending.length === 0}
-                    onReply={() => setReplyTo({ id: row.m.id, fromViewer: row.m.fromViewer, text: row.m.text, hasImage: row.m.media.length > 0 })}
+                    onReply={() => setReplyTo(quote(row.m))}
+                    onMenu={() => openActions(row.m)}
+                    onReact={actions && !row.m.undecryptable && conversation.canSend ? (emoji) => react(row.m, emoji) : undefined}
                   />
                 ) : (
                   <PendingBubble p={row.p} onRetry={() => c.retrySend(row.p.localId).then((e) => e && toast(sendErrorText(e, peer.name), "error"))} onDiscard={() => c.discard(row.p.localId)} />
@@ -283,6 +337,9 @@ export function ConversationPane({ conversationId }: { conversationId: string })
               <ShieldCheck size={20} aria-hidden="true" /> {keyChanged ? `Verify @${peer.handle} again` : `Verify @${peer.handle}`}
             </button>
           )}
+          <button className="sheet-menu__item" onClick={() => setSheet("search")}>
+            <Search size={20} aria-hidden="true" /> Search conversation
+          </button>
           <button className="sheet-menu__item" onClick={() => setSheet("block")}>
             <Ban size={20} aria-hidden="true" /> {conversation.blockedByViewer ? `Unblock @${peer.handle}` : `Block @${peer.handle}`}
           </button>
@@ -300,7 +357,75 @@ export function ConversationPane({ conversationId }: { conversationId: string })
       </Sheet>
 
       <Sheet open={sheet === "report"} onClose={() => setSheet(null)} label="Report conversation">
-        {sheet === "report" && <ReportSheet conversation={conversation} messages={c.messages} viewerId={viewer.id} onDone={() => setSheet(null)} />}
+        {sheet === "report" && (
+          <ReportSheet conversation={conversation} messages={c.messages} viewerId={viewer.id} initialPick={target && !target.fromViewer ? target.id : null} onDone={closeSheet} />
+        )}
+      </Sheet>
+
+      <Sheet open={sheet === "search"} onClose={closeSheet} label="Search conversation">
+        {sheet === "search" && <SearchSheet messages={c.messages} peerName={peer.name} onPick={showMessage} />}
+      </Sheet>
+
+      <Sheet open={sheet === "actions" && !!target} onClose={closeSheet} label="Message options">
+        {target && (
+          <MessageActionSheet
+            m={target}
+            canReact={!!actions && !target.undecryptable && conversation.canSend}
+            onReact={(emoji) => {
+              react(target, emoji);
+              closeSheet();
+            }}
+            onReply={() => {
+              setReplyTo(quote(target));
+              closeSheet();
+            }}
+            onCopy={
+              target.text && !target.undecryptable
+                ? () => {
+                    void navigator.clipboard?.writeText(target.text).then(() => toast("Copied"), () => toast("Couldn't copy", "error"));
+                    closeSheet();
+                  }
+                : undefined
+            }
+            onEdit={actions && canEdit(target) && conversation.canSend ? () => setSheet("edit") : undefined}
+            onUnsend={actions && target.fromViewer ? () => setSheet("unsend") : undefined}
+            onReport={!target.fromViewer ? () => setSheet("report") : undefined}
+          />
+        )}
+      </Sheet>
+
+      <Sheet open={sheet === "edit" && !!target} onClose={closeSheet} label="Edit message">
+        {sheet === "edit" && target && (
+          <EditSheet
+            m={target}
+            onCancel={closeSheet}
+            onSave={async (text) => {
+              try {
+                await actions!.edit(viewer.id, conversationId, target.id, text);
+                closeSheet();
+              } catch (e) {
+                toast(e instanceof MessageError && e.message === "too late to edit" ? "Messages can only be edited for 15 minutes." : sendErrorText(e as Error, peer.name), "error");
+              }
+            }}
+          />
+        )}
+      </Sheet>
+
+      <Sheet open={sheet === "unsend" && !!target} onClose={closeSheet} label="Unsend message">
+        {sheet === "unsend" && target && (
+          <UnsendSheet
+            onCancel={closeSheet}
+            onConfirm={async () => {
+              try {
+                await actions!.unsend(viewer.id, conversationId, target.id);
+                closeSheet();
+                toast("Message unsent");
+              } catch {
+                toast("Couldn't unsend. Try again.", "error");
+              }
+            }}
+          />
+        )}
       </Sheet>
     </div>
   );
@@ -331,8 +456,30 @@ function EncryptionNote() {
   );
 }
 
-function MessageBubble({ m, peerName, showMeta, showStatus, onReply }: { m: DirectMessage; peerName: string; showMeta: boolean; showStatus: boolean; onReply: () => void }) {
+function MessageBubble({
+  m,
+  peerName,
+  showMeta,
+  showStatus,
+  onReply,
+  onMenu,
+  onReact,
+}: {
+  m: DirectMessage;
+  peerName: string;
+  showMeta: boolean;
+  showStatus: boolean;
+  onReply: () => void;
+  onMenu: () => void;
+  onReact?: (emoji: string | null) => void;
+}) {
   const openMedia = useMediaViewer();
+  const mineReaction = m.reactions?.find((r) => r.mine)?.emoji ?? null;
+  const { dx, handlers } = useBubbleGestures({
+    onMenu,
+    onReply,
+    onDoubleTap: onReact ? () => onReact(mineReaction === "❤️" ? null : "❤️") : undefined,
+  });
   const jump = () => {
     const el = m.replyTo && document.getElementById(`msg-${m.replyTo.id}`);
     if (!el) return;
@@ -343,7 +490,12 @@ function MessageBubble({ m, peerName, showMeta, showStatus, onReply }: { m: Dire
   return (
     <li id={`msg-${m.id}`} className={`msg ${m.fromViewer ? "msg--mine" : "msg--theirs"}`}>
       <div className="msg__line">
-        <div className="msg__bubble">
+        {dx > 0 && (
+          <span className="msg__swipe-hint" style={{ opacity: Math.min(1, dx / 56) }} aria-hidden="true">
+            <Reply size={16} />
+          </span>
+        )}
+        <div className="msg__bubble" {...handlers} style={dx ? { transform: `translateX(${dx}px)` } : undefined}>
           <span className="visually-hidden">{m.fromViewer ? "You" : peerName}: </span>
           {m.replyTo && (
             <button type="button" className="msg__quote" onClick={jump} aria-label={`Reply to ${m.replyTo.fromViewer ? "you" : peerName}: ${m.replyTo.text || "Photo"}. Show message`}>
@@ -369,16 +521,26 @@ function MessageBubble({ m, peerName, showMeta, showStatus, onReply }: { m: Dire
         <IconButton label="Reply" size="sm" className="msg__reply" onClick={onReply}>
           <Reply size={16} />
         </IconButton>
+        <IconButton label="More options for this message" size="sm" className="msg__reply" onClick={onMenu}>
+          <MoreHorizontal size={16} />
+        </IconButton>
       </div>
+      <ReactionChips
+        reactions={m.reactions ?? []}
+        fromViewer={m.fromViewer}
+        onToggle={onReact ? (r) => onReact(r.mine ? null : r.emoji) : undefined}
+      />
       {showMeta && (
         <p className="msg__meta">
           <time dateTime={m.createdAt.toISOString()} title={fullTimestamp(m.createdAt)}>
             {clockTime(m.createdAt)}
           </time>
+          {m.edited && <span className="msg__status"> · Edited</span>}
           {showStatus && <span className={`msg__status msg__status--${m.status}`}>· {STATUS_LABEL[m.status]}</span>}
           {m.unverifiedDevice && <span className="msg__status"> · from a device they haven't verified</span>}
         </p>
       )}
+      {!showMeta && m.edited && <p className="msg__meta"><span className="msg__status">Edited</span></p>}
     </li>
   );
 }
@@ -456,12 +618,24 @@ function BlockSheet({ conversation, viewerId, onDone }: { conversation: Conversa
 }
 
 
-function ReportSheet({ conversation, messages, viewerId, onDone }: { conversation: Conversation; messages: DirectMessage[]; viewerId: string; onDone: () => void }) {
+function ReportSheet({
+  conversation,
+  messages,
+  viewerId,
+  initialPick = null,
+  onDone,
+}: {
+  conversation: Conversation;
+  messages: DirectMessage[];
+  viewerId: string;
+  initialPick?: string | null;
+  onDone: () => void;
+}) {
   const api = dataSource.messages!;
   const toast = useToast();
   const [reason, setReason] = useState<MessageReportReason | null>(null);
   const [note, setNote] = useState("");
-  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [picked, setPicked] = useState<Set<string>>(() => new Set(initialPick ? [initialPick] : []));
   const [busy, setBusy] = useState(false);
   const theirs = messages.filter((m) => !m.fromViewer && !m.undecryptable && (m.text || m.media.length)).slice(-REPORT_CONTEXT);
   const toggle = (id: string) =>
