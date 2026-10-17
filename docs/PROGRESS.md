@@ -28,7 +28,7 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 ## Next
 1. Media service, once approved: upload and read functions, encrypted DM attachments, avatars, multi-image posts, photo Moments.
 2. Voice notes after media. **GIFs are blocked:** Tenor's API shut down on 2026-06-30. GIPHY's free key is reportedly a beta key (about 100 calls/hour); production needs an application and possibly payment, and searches may have to come from the user's browser, which exposes their IP to GIPHY. An owner decision and key are needed, and GIF URLs in encrypted chats would be external, unencrypted media.
-3. PWA manifest and icons, SEO/OG tags, onboarding, privacy-safe analytics.
+3. Error-rate monitoring (privacy-safe) and per-page sharing previews (needs a small server function).
 4. Live re-test on Neon for the new DM actions, with two dedicated accounts, then remove them.
 
 ## Notes
