@@ -1,0 +1,28 @@
+# Live media test against the branch preview (real Neon + Cloudflare R2).
+# Needs the repository secret VERCEL_AUTOMATION_BYPASS_SECRET (Vercel → amigo-app →
+# Settings → Deployment Protection → Protection Bypass for Automation).
+# Runs when .github/live-media.run changes on this branch (main stays untouched).
+# Creates and deletes its own temporary test accounts.
+name: live-media
+on:
+  push:
+    branches: [claude/amigo-world-restart-7mrbrf]
+    paths: [.github/live-media.run]
+jobs:
+  live-media:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Bypass secret present
+        run: test -n "${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}" || { echo "Add the VERCEL_AUTOMATION_BYPASS_SECRET repository secret"; exit 1; }
+      - run: npm ci
+      - name: Live media test
+        env:
+          BASE: https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/test/live-media.test.mjs
