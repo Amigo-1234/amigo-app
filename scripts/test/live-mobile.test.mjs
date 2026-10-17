@@ -76,7 +76,12 @@ try {
   const D = await account(tag, "d");
   people.push(D);
 
-  const ctx = await browser.newContext({ ...devices["iPhone 13"], extraHTTPHeaders: BYPASS });
+  // The protection bypass goes in a cookie for the preview's own host only. (As an extra
+  // header it would also be sent to R2 and break the CORS preflight, which a real
+  // visitor's browser never sends.)
+  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  const pass = await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 });
+  ok("preview opened for the test browser (bypass cookie)", (await ctx.cookies(BASE)).length > 0, String(pass.status()));
   const host = new URL(BASE).hostname;
   await ctx.addCookies(
     A.cookies.map((c) => {
