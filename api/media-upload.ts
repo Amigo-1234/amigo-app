@@ -17,12 +17,14 @@ export default async function handler(req: Request): Promise<Response> {
   const body = (await req.json().catch(() => null)) as { purpose?: string; mime?: string; size?: number; conversationId?: string | null } | null;
   if (!body?.purpose || !body.mime || typeof body.size !== "number") return json(400, { error: "bad-request" });
 
-  const begun = await rpc<string>(token, "media_begin_upload", {
-    p_purpose: body.purpose,
-    p_mime: body.mime,
-    p_size: body.size,
-    p_conversation: body.conversationId ?? null,
-  });
+  const args = { p_purpose: body.purpose, p_mime: body.mime, p_size: body.size, p_conversation: body.conversationId ?? null };
+  let begun = await rpc<string>(token, "media_begin_upload", args);
+  // A token issued moments ago can be accepted by the Data API before Postgres
+  // resolves its user (seen live right after sign-up): ask once more.
+  if (!begun.ok && begun.code === "MD001" && begun.message === "sign in first") {
+    await new Promise((r) => setTimeout(r, 600));
+    begun = await rpc<string>(token, "media_begin_upload", args);
+  }
   if (!begun.ok) return json(begun.status === 401 ? 401 : 403, { error: begun.code ?? "refused", message: begun.message });
 
   const key = begun.data;

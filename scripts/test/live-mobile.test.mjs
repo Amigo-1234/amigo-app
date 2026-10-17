@@ -70,6 +70,13 @@ try {
   const photo = await page.locator("div").screenshot();
 
   await page.goto(BASE, { waitUntil: "networkidle" });
+  // A new account first accepts the legal documents, as in the app.
+  const agree = page.getByRole("button", { name: "I agree" });
+  await agree.waitFor({ timeout: 15000 }).catch(() => undefined);
+  if (await agree.isVisible().catch(() => false)) {
+    await agree.click();
+    ok("legal acceptance gate works on a phone", true);
+  }
   await page.locator(".bottom-create").waitFor({ timeout: 15000 }).catch(() => undefined);
   const home = (await page.locator(".bottom-create").count()) === 1;
   await page.screenshot({ path: `${SHOTS}/mobile-home.png` });
