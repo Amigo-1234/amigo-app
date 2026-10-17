@@ -82,15 +82,28 @@ async function read(who, key, { cookie = false, json = false } = {}) {
 
 const tag = randomBytes(4).toString("hex");
 const people = [];
+/** Signed links to files the test created, checked after cleanup to prove the objects are gone from R2. */
+const created = [];
 try {
-  const [A, B, C] = await Promise.all(["a", "b", "c"].map((w) => account(tag, w)));
-  people.push(A, B, C);
+  const A = await account(tag, "a");
+  people.push(A);
+  const B = await account(tag, "b");
+  people.push(B);
+  const C = await account(tag, "c");
+  people.push(C);
   ok("three temporary accounts signed up", !!(A.token && B.token && C.token));
 
   // --- uploads: validation and signature enforcement (real R2)
   const jpeg = randomBytes(4096);
   let b = await begin(A, "post", "image/jpeg", jpeg.length);
-  ok("upload link issued (storage configured)", b.status === 200 && !!b.body.key, `${b.status} ${b.body.error ?? ""}`);
+  ok("upload link issued (storage configured)", b.status === 200 && !!b.body.key, `${b.status} ${b.body.error ?? ""} ${b.body.message ?? ""}`);
+  if (b.status !== 200) {
+    // Diagnose: the same database call made directly through the Data API proxy.
+    const d = await rpc(A, "media_begin_upload", { p_purpose: "post", p_mime: "image/jpeg", p_size: jpeg.length, p_conversation: null });
+    console.log(`diag: direct media_begin_upload → ${d.status} ${d.data?.code ?? ""} ${d.data?.message ?? (typeof d.data === "string" ? "key" : "")}`);
+    const me = await rpc(A, "my_account_status");
+    console.log(`diag: my_account_status → ${me.status} ${JSON.stringify(me.data).slice(0, 120)}`);
+  }
   const wrongType = await fetch(b.body.url, { method: "PUT", headers: { "content-type": "text/html" }, body: jpeg });
   ok("R2 refuses a different content type than signed", wrongType.status === 403, String(wrongType.status));
   const wrongSize = await fetch(b.body.url, { method: "PUT", headers: { "content-type": "image/jpeg" }, body: randomBytes(4097) });
@@ -110,6 +123,7 @@ try {
   // --- reads follow the content's visibility
   ok("others can't read an unattached upload", (await read(B, postKey)).status === 404);
   let r = await read(A, postKey);
+  if (r.signed) created.push(r.signed);
   ok("owner reads it back from R2 (bytes match)", r.status === 302 && r.bytes?.equals(jpeg) && r.cache?.startsWith("private"));
   const followersPost = await rpc(A, "create_post", { p_body: "followers-only photo", p_media: [{ kind: "image", storage_path: postKey, mime_type: "image/jpeg", width: 8, height: 8, byte_size: jpeg.length }], p_visibility: "followers" });
   ok("photo post created", followersPost.status === 200, String(followersPost.status));
@@ -131,6 +145,7 @@ try {
   });
   ok("avatar saved on the profile", patch.ok, String(patch.status));
   r = await read(C, avatarKey, { cookie: true });
+  if (r.signed) created.push(r.signed);
   ok("avatar visible to other members", r.status === 302 && r.bytes?.equals(avatarBytes));
 
   // --- Moment photo: visible while live, gone after delete, file removed from R2
@@ -192,10 +207,21 @@ try {
   console.error("error:", e.message);
   failures++;
 } finally {
-  // Remove the temporary accounts through the app's own deletion (files are queued and purged).
-  for (const p of people) {
-    const del = await rpc(p, "delete_my_account", { p_confirm: "DELETE" }).catch(() => ({ status: 0 }));
-    console.log(`cleanup: temporary account ${del.status === 200 || del.status === 204 ? "deleted" : `NOT deleted (${del.status}) id=${p.id}`}`);
+  // Remove the temporary accounts through the app's own deletion. Their files are
+  // queued for removal; the last account's upload calls drain the queue from R2.
+  const drainer = people.at(-1);
+  const del = async (p) => {
+    const d = await rpc(p, "delete_my_account", { p_confirm: "DELETE" }).catch(() => ({ status: 0 }));
+    const done = d.status === 200 || d.status === 204;
+    if (!done) failures++;
+    console.log(`cleanup: temporary account ${done ? "deleted" : `NOT deleted (${d.status}) id=${p.id}`}`);
+  };
+  for (const p of people.slice(0, -1)) await del(p);
+  if (drainer) {
+    for (let i = 0; i < 4; i++) await begin(drainer, "post", "image/jpeg", 1).catch(() => undefined);
+    const gone = await Promise.all(created.map((u) => fetch(u).then((x) => x.status, () => 0)));
+    ok("cleanup: test files removed from R2", gone.every((st) => st === 404), gone.join(","));
+    await del(drainer);
   }
 }
 console.log(failures ? `${failures} FAILED` : "ALL LIVE MEDIA TESTS PASSED");
