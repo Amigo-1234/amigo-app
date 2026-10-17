@@ -1,0 +1,38 @@
+# Temporary: confirms the preview deployed this commit (removed after use).
+name: preview-probe
+on:
+  push:
+    branches: [claude/amigo-world-restart-7mrbrf]
+    paths: [.github/workflows/preview-probe.yml]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Probe preview
+        env:
+          BASE: https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app
+        run: |
+          for i in $(seq 1 40); do
+            html=$(curl -s "$BASE/legal/terms")
+            found=0
+            for a in $(echo "$html" | grep -o '/assets/[^"]*\.js' | sort -u); do
+              curl -s "$BASE$a" | grep -q "legal_current" && found=1
+            done
+            echo "attempt $i: legal bundle found=$found"
+            [ $found = 1 ] && break
+            sleep 20
+          done
+          [ $found = 1 ] || { echo "new build not live"; exit 1; }
+          echo "--- /legal/terms status: $(curl -s -o /dev/null -w '%{http_code}' $BASE/legal/terms)"
+          echo "--- legal_current via proxy (anonymous):"
+          for i in 1 2 3 4 5 6; do
+            out=$(curl -s -X POST "$BASE/neon/rest/v1/rpc/legal_current" -H 'Content-Type: application/json' -d '{}')
+            echo "$out" | head -c 400; echo
+            echo "$out" | grep -q '"slug"' && break
+            sleep 15
+          done
+          echo "--- delete_my_account anonymous (expect denied):"
+          curl -s -X POST "$BASE/neon/rest/v1/rpc/delete_my_account" -H 'Content-Type: application/json' -d '{"p_confirm":"DELETE"}' | head -c 300; echo
+          echo "--- admin_monetization_settings anonymous (expect denied):"
+          curl -s -X POST "$BASE/neon/rest/v1/rpc/admin_monetization_settings" -H 'Content-Type: application/json' -d '{}' | head -c 300; echo
