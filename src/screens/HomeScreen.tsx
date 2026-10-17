@@ -8,6 +8,7 @@ import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { FeedFooter } from "../features/feed/FeedFooter";
 import { MomentsRow } from "../features/moments/MomentsRow";
+import { WelcomeCard } from "../features/onboarding/WelcomeCard";
 import { messagesInBottomBar } from "../shell/nav";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
@@ -94,6 +95,9 @@ export default function HomeScreen() {
       </ScreenHeader>
 
       {momentsEnabled && <MomentsRow />}
+      {feed.followingCount !== null && (
+        <WelcomeCard followingCount={feed.followingCount} hasOwnPosts={pending.length > 0 || feed.posts.some((p) => p.author.id === viewer.id)} />
+      )}
 
       <div className="home-composer">
         <Composer variant="inline" />
