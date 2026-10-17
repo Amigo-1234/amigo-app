@@ -1,4 +1,4 @@
-# Temporary: confirms the preview deployed this commit (removed after use).
+# Temporary: anonymous checks against the Neon Data API (removed after use).
 name: preview-probe
 on:
   push:
@@ -7,31 +7,18 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - name: Probe preview
+      - name: Anonymous Data API checks
         env:
-          BASE: https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app
+          API: https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest/v1
         run: |
-          # The entry bundle names its lazy chunks; the Messages chunk of this build has the new actions UI.
-          for i in $(seq 1 30); do
-            entry=$(curl -s "$BASE/" | grep -o '/assets/index-[^"]*\.js' | head -1)
-            chunk=$(curl -s "$BASE$entry" | grep -o 'assets/MessagesScreen-[A-Za-z0-9_-]*\.js' | head -1)
-            if [ -n "$chunk" ] && curl -s "$BASE/$chunk" | grep -q "Load earlier messages"; then echo "attempt $i: new build live ($entry, $chunk)"; break; fi
-            echo "attempt $i: not yet ($entry $chunk)"
-            sleep 20
-          done
-          echo "--- /legal/terms status: $(curl -s -o /dev/null -w '%{http_code}' $BASE/legal/terms)"
-          echo "--- legal_current via proxy (anonymous):"
-          for i in 1 2 3 4 5 6; do
-            out=$(curl -s -X POST "$BASE/neon/rest/v1/rpc/legal_current" -H 'Content-Type: application/json' -d '{}')
-            echo "$out" | head -c 400; echo
-            echo "$out" | grep -q '"slug"' && break
-            sleep 15
-          done
-          echo "--- delete_my_account anonymous (expect denied):"
-          curl -s -X POST "$BASE/neon/rest/v1/rpc/delete_my_account" -H 'Content-Type: application/json' -d '{"p_confirm":"DELETE"}' | head -c 300; echo
-          echo "--- dm_unsend anonymous (expect denied):"
-          curl -s -X POST "$BASE/neon/rest/v1/rpc/dm_unsend" -H 'Content-Type: application/json' -d '{"p_id":"00000000-0000-0000-0000-000000000000"}' | head -c 300; echo
-          echo "--- admin_monetization_settings anonymous (expect denied):"
-          curl -s -X POST "$BASE/neon/rest/v1/rpc/admin_monetization_settings" -H 'Content-Type: application/json' -d '{}' | head -c 300; echo
+          post() { curl -s -m 20 -o /tmp/out -w '%{http_code}' -X POST "$API/rpc/$1" -H 'Content-Type: application/json' -d "$2"; echo " $(head -c 160 /tmp/out)"; }
+          echo "legal_current (expect 200 + 7 docs):"; post legal_current '{}'; grep -o '"slug"' /tmp/out | wc -l
+          echo "delete_my_account (expect 401/403):"; post delete_my_account '{"p_confirm":"DELETE"}'
+          echo "dm_unsend (expect 401/403):"; post dm_unsend '{"p_id":"00000000-0000-0000-0000-000000000000"}'
+          echo "dm_send_v3 (expect 401/403):"; post dm_send_v3 '{"p_id":"00000000-0000-0000-0000-000000000000","p_conversation":"00000000-0000-0000-0000-000000000000","p_device":"x","p_content":{}}'
+          echo "moments_feed (expect 401/403):"; post moments_feed '{}'
+          echo "admin_monetization_settings (expect 401/403):"; post admin_monetization_settings '{}'
+          echo "dm_messages table (expect 401/403 or []):"; curl -s -m 20 -w ' %{http_code}\n' "$API/dm_messages?select=id&limit=1"
+          echo "legal_acceptances table (expect 401/403 or []):"; curl -s -m 20 -w ' %{http_code}\n' "$API/legal_acceptances?select=user_id&limit=1"
