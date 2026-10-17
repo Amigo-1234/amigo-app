@@ -121,3 +121,30 @@ a {
 @keyframes splash-breathe {
   50% { transform: scale(0.92); opacity: 0.7; }
 }
+
+.crash {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  min-height: 100dvh;
+  padding: var(--space-4);
+  text-align: center;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.crash h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.crash p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.crash__home {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}

@@ -140,6 +140,13 @@ export function createModeration(db: Db, invalidate: () => void) {
     async warn(userId, message) {
       await call(db, "admin_warn_user", { p_user: userId, p_message: message });
     },
+    async clientErrors(hours) {
+      const r = await call<{ total: number; top: { message: string; route: string; app_version: string; n: number; last_at: string }[] }>(db, "admin_client_errors", { p_hours: hours });
+      return {
+        total: Number(r?.total ?? 0),
+        top: (r?.top ?? []).map((t) => ({ message: t.message, route: t.route, version: t.app_version, count: Number(t.n), lastAt: new Date(t.last_at) })),
+      };
+    },
     async stats() {
       const s = await call<Record<string, number>>(db, "admin_platform_stats");
       const n = (k: string) => Number(s?.[k] ?? 0);
@@ -161,5 +168,9 @@ export function createModeration(db: Db, invalidate: () => void) {
     },
   };
 
-  return { postTools, accountStatus, acknowledgeWarning, blocking, admin };
+  async function reportError(kind: "error" | "unhandledrejection" | "render", message: string, route: string) {
+    await call(db, "log_client_error", { p_kind: kind, p_message: message, p_route: route, p_version: __APP_VERSION__ });
+  }
+
+  return { postTools, accountStatus, acknowledgeWarning, blocking, reportError, admin };
 }

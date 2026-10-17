@@ -3,7 +3,7 @@ import { NavLink, useParams } from "react-router";
 import { FileText, Flag, HandHeart, LayoutDashboard, Orbit, ShieldAlert, Sparkles, UsersRound } from "lucide-react";
 import { dataSource } from "../data";
 import { AdminLegal, AdminMonetization } from "../features/admin/AdminPlatform";
-import { AdminContentReports, AdminStats, AdminSuspensions } from "../features/admin/AdminModeration";
+import { AdminClientErrors, AdminContentReports, AdminStats, AdminSuspensions } from "../features/admin/AdminModeration";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
@@ -69,6 +69,7 @@ export default function AdminScreen() {
           <>
             {dataSource.admin?.moderation && <AdminStats />}
             <AdminOverview />
+            {dataSource.admin?.moderation && <AdminClientErrors />}
           </>
         )}
         {section === "support" && <SupportAdmin />}

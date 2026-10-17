@@ -791,6 +791,8 @@ export interface ModerationAdminApi {
   /** A warning the person sees until they acknowledge it. */
   warn(userId: string, message: string): Promise<void>;
   stats(): Promise<PlatformStats>;
+  /** App errors people's devices reported, grouped (no personal data). */
+  clientErrors(hours: number): Promise<{ total: number; top: { message: string; route: string; version: string; count: number; lastAt: Date }[] }>;
 }
 
 // ----------------------------------------------------------------- messages
@@ -1183,6 +1185,8 @@ export interface DataSource {
   /** Whether your account is suspended, plus unacknowledged warnings. */
   accountStatus?(): Promise<AccountStatus>;
   acknowledgeWarning?(warningId: string): Promise<void>;
+  /** Records an uncaught app error (redacted, not linked to the person). */
+  reportError?(kind: "error" | "unhandledrejection" | "render", message: string, route: string): Promise<void>;
   blocking?: BlockingApi;
   /** Permanently deletes the signed-in account after re-checking the password (Neon/Supabase). */
   deleteAccount?(password: string): Promise<void>;

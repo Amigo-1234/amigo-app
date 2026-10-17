@@ -1,3 +1,4 @@
+import { RouteError } from "./ui/ErrorBoundary";
 import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { Bell, Compass, Mail } from "lucide-react";
@@ -95,6 +96,7 @@ const router = createBrowserRouter([
   // Legal pages are public: readable signed out (e.g. from the sign-up form) and signed in.
   {
     path: "legal/:slug?",
+    errorElement: <RouteError />,
     element: (
       <Suspense fallback={<Splash />}>
         <LegalScreen />
@@ -103,6 +105,7 @@ const router = createBrowserRouter([
   },
   {
     element: <Root />,
+    errorElement: <RouteError />,
     children: [
       { index: true, element: <HomeScreen /> },
       { path: "post/:postId", element: <PostScreen /> },

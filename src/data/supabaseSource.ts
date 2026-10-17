@@ -204,6 +204,7 @@ export const supabaseSource: DataSource = {
   postTools: moderation?.postTools,
   accountStatus: moderation?.accountStatus,
   acknowledgeWarning: moderation?.acknowledgeWarning,
+  reportError: moderation?.reportError,
   blocking: moderation?.blocking,
 
   async deleteAccount(password) {

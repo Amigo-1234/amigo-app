@@ -168,6 +168,36 @@ export function AdminStats() {
   );
 }
 
+/** Admin → Overview: app errors reported by devices in the last 24 hours (redacted, not linked to people). */
+export function AdminClientErrors() {
+  const api = dataSource.admin!.moderation!;
+  const [data, setData] = useState<Awaited<ReturnType<typeof api.clientErrors>> | null>(null);
+  useEffect(() => void api.clientErrors(24).then(setData, () => setData(null)), [api]);
+  if (!data) return null;
+  return (
+    <section className="admin-card" aria-labelledby="client-errors">
+      <h2 id="client-errors" className="admin-card__title">App errors (24 h): {data.total}</h2>
+      {data.top.length === 0 ? (
+        <p className="admin-muted">No errors reported.</p>
+      ) : (
+        <ul className="admin-rows">
+          {data.top.map((t, i) => (
+            <li key={i} className="admin-row">
+              <p>
+                <strong>{t.count}×</strong> <code>{t.message}</code>
+              </p>
+              <p className="admin-muted">
+                {t.route || "/"} · v{t.version} · last {timeAgo(t.lastAt)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p className="admin-muted">Messages are redacted on the device and the server; reports aren't linked to accounts.</p>
+    </section>
+  );
+}
+
 /** Admin → Reports: suspended accounts, suspending by @handle, restoring. */
 export function AdminSuspensions({ refreshKey = 0 }: { refreshKey?: number }) {
   const api = dataSource.admin!.moderation!;
