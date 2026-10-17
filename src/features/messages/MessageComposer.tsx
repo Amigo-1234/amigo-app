@@ -8,6 +8,28 @@ import { IconButton } from "../../ui/Button";
 const TYPING_IDLE_MS = 3000;
 
 /**
+ * Unsent text per conversation, in this tab's sessionStorage: it survives a
+ * reload or the phone discarding the tab, and is gone when the tab is closed.
+ * Never sent anywhere; photos aren't kept.
+ */
+const draftKey = (viewerId: string, conversationId: string) => `amigo:dm-draft:${viewerId}:${conversationId}`;
+function readDraft(key: string) {
+  try {
+    return sessionStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+function writeDraft(key: string, text: string) {
+  try {
+    if (text.trim()) sessionStorage.setItem(key, text);
+    else sessionStorage.removeItem(key);
+  } catch {
+    /* storage unavailable: drafts are a convenience */
+  }
+}
+
+/**
  * Text + one photo + optional reply. Enter sends on devices with a keyboard;
  * Shift+Enter adds a line. Typing state is sent while you type and cleared
  * after a pause or when you send.
@@ -27,7 +49,14 @@ export function MessageComposer({
 }) {
   const viewer = useViewer();
   const api = dataSource.messages!;
-  const [text, setText] = useState("");
+  const key = draftKey(viewer.id, conversationId);
+  const [text, setText] = useState(() => readDraft(key));
+  // Switching conversations: that conversation's own draft.
+  useEffect(() => setText(readDraft(key)), [key]);
+  useEffect(() => {
+    const t = setTimeout(() => writeDraft(key, text), 300);
+    return () => clearTimeout(t);
+  }, [key, text]);
   const [image, setImage] = useState<{ media: NewMediaInput; url: string } | null>(null);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +126,7 @@ export function MessageComposer({
     if (!canSend) return;
     stopTyping();
     onSend({ text: trimmed, image: image?.media ?? null, replyToId: replyTo?.id ?? null });
+    writeDraft(key, "");
     setText("");
     // The pending bubble keeps its own preview URL.
     setImage(null);

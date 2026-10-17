@@ -139,6 +139,13 @@ export function useConversation(conversationId: string) {
     [pending, deliver],
   );
 
+  // Back online: resend what failed while the connection was down (sends are idempotent, so never twice).
+  useEffect(() => {
+    const onOnline = () => pending.filter((x) => x.failed).forEach((x) => void retrySend(x.localId));
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [pending, retrySend]);
+
   const discard = useCallback((localId: string) => {
     setPending((list) => list.filter((x) => x.localId !== localId));
   }, []);

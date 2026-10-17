@@ -405,6 +405,16 @@ try {
   ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);
   const { error: genErr } = await ama.rpc("generate_username", { seed: "x" });
   ok("internal helpers blocked", genErr?.code === "42501", genErr?.code);
+
+  // (Last: these add posts, which would change the counts checked above.)
+  // A retry with the same client reference returns the saved post instead of posting twice.
+  const ref = randomUUID();
+  const once = await q.createPost(ama, `retry-safe ${tag}`, { clientRef: ref });
+  const again = await q.createPost(ama, `retry-safe ${tag}`, { clientRef: ref });
+  const { data: dupes } = await ama.from("posts").select("id").eq("body", `retry-safe ${tag}`);
+  ok("retrying a post never creates a duplicate", once?.id && again?.id === once.id && dupes?.length === 1, `${dupes?.length}`);
+  const other = await q.createPost(ama, `retry-safe ${tag}`, { clientRef: randomUUID() });
+  ok("a different post with the same text is still created", other?.id && other.id !== once.id);
 } finally {
   await db.query("delete from public.worlds where slug like $1", [`%-${tag}`]);
   await db.query("delete from auth.users where id = any($1)", [Object.values(ids)]);

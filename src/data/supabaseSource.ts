@@ -18,7 +18,7 @@ import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPlatform } from "./supabase/platform";
-import { cached, prefetch, remember, setCacheOwner, takePrefetch } from "./supabase/viewCache";
+import { cached, dropPrefetches, prefetch, remember, setCacheOwner, takePrefetch } from "./supabase/viewCache";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
@@ -32,7 +32,10 @@ const NEON_POLL_MS = 30_000;
 // the realtime round trip.
 
 const invalidators = new Set<() => void>();
-const invalidate = () => invalidators.forEach((fn) => fn());
+const invalidate = () => {
+  dropPrefetches();
+  invalidators.forEach((fn) => fn());
+};
 
 // Nobody has touched the app for a while (phone on the table, tab left open):
 // open views refresh 4× less often; the first touch afterwards refreshes them at once.
@@ -166,6 +169,9 @@ async function tryLegacySignIn(email: string, password: string): Promise<boolean
   return false;
 }
 
+/** Photos of a post being published that already reached the bucket (reused if the post is retried). */
+const uploadedPostMedia = new WeakMap<Blob, string>();
+
 /** Startup publishes the session twice (initial auth event + explicit sync): share a profile load that's still in flight. */
 let profileLoad: { id: string; promise: ReturnType<typeof q.fetchProfile> } | null = null;
 
@@ -264,6 +270,10 @@ export const supabaseSource: DataSource = {
     ...platform.legal,
     // The check started at sign-in, if it's still fresh.
     pending: async () => (await takePrefetch<Awaited<ReturnType<typeof platform.legal.pending>>>("legal:pending")) ?? platform.legal.pending(),
+    async accept(docs) {
+      dropPrefetches();
+      return platform.legal.accept(docs);
+    },
   },
   monetization: platform.monetization,
   postTools: moderation?.postTools,
@@ -435,7 +445,9 @@ export const supabaseSource: DataSource = {
       input.media.map(async (m) => {
         if (media) {
           // Neon: Postgres picks the key; unused uploads are swept after a day.
-          const key = await media.upload("post", m.blob);
+          // A retry reuses a photo that already reached the bucket (not attached to anything yet).
+          const key = uploadedPostMedia.get(m.blob) ?? (await media.upload("post", m.blob));
+          uploadedPostMedia.set(m.blob, key);
           return { kind: "image" as const, storage_path: key, mime_type: m.blob.type, width: m.width, height: m.height, byte_size: m.blob.size };
         }
         const ext = m.blob.type === "image/png" ? "png" : m.blob.type === "image/webp" ? "webp" : m.blob.type === "image/gif" ? "gif" : "jpg";
@@ -456,8 +468,8 @@ export const supabaseSource: DataSource = {
     try {
       // One transaction: the post and all its post_media rows, in order.
       created = input.world
-        ? await q.createWorldPost(supabase, input.world.id, input.world.entry, input.text, uploaded)
-        : await q.createPost(supabase, input.text, { media: uploaded });
+        ? await q.createWorldPost(supabase, input.world.id, input.world.entry, input.text, uploaded, input.clientRef)
+        : await q.createPost(supabase, input.text, { media: uploaded, clientRef: input.clientRef });
     } catch (e) {
       cleanup(); // don't leave orphaned uploads behind
       throw e;

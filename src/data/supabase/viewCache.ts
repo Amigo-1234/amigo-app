@@ -31,6 +31,9 @@ export function prefetch(key: string, fn: () => Promise<unknown>) {
   inflight.set(key, { at: Date.now(), promise: fn().catch(() => undefined) });
 }
 
+/** After any write: an early answer may now be out of date. */
+export const dropPrefetches = () => inflight.clear();
+
 /** The early request for `key`, if one is still fresh (resolves to undefined if it failed). */
 export function takePrefetch<T>(key: string): Promise<T | undefined> | undefined {
   const entry = inflight.get(key);

@@ -149,6 +149,8 @@ export interface NewPostInput {
   media: NewMediaInput[];
   /** Post inside a World (only on backends with the worlds capability). entry: a competition entry. */
   world?: { id: string; entry: boolean };
+  /** Same on every retry of this post, so a retry after a lost answer never posts twice. */
+  clientRef?: string;
 }
 
 /** Product-wide limits for new posts. */

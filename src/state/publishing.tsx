@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { clearDraft, loadDraft, saveDraft } from "../features/composer/draft";
 import { dataSource, type NewPostInput, type Post } from "../data";
 import { useViewer } from "./session";
 import { useToast } from "./toast";
@@ -54,11 +55,15 @@ export function PublishingProvider({ children }: { children: ReactNode }) {
       try {
         const { id } = await dataSource.createPost(viewer, input);
         update(localId, { status: "sent", postId: id });
+        // A draft kept from an earlier failed attempt of this post isn't needed any more.
+        if (!input.world && loadDraft(viewer.id)?.text === input.text.slice(0, 2000)) clearDraft(viewer.id);
         toast("Posted");
         setTimeout(() => remove(localId), SENT_GRACE_MS);
       } catch (e) {
         console.error(e);
         update(localId, { status: "failed" });
+        // Also keep the text as the composer's draft, so closing or reloading the app doesn't lose it.
+        if (!input.world && !loadDraft(viewer.id)) saveDraft(viewer.id, input.text, input.media.length);
         toast("Your post didn't go through. It's saved — tap Retry.", "error");
       }
     },
@@ -68,8 +73,10 @@ export function PublishingProvider({ children }: { children: ReactNode }) {
   const publish = useCallback(
     (input: NewPostInput, previews: string[]) => {
       const localId = `local-${crypto.randomUUID()}`;
-      setPending((list) => [{ localId, input, previews, status: "sending" }, ...list]);
-      void send(localId, input);
+      // One reference per post, reused by every retry: the server never creates it twice.
+      const withRef = { ...input, clientRef: input.clientRef ?? crypto.randomUUID() };
+      setPending((list) => [{ localId, input: withRef, previews, status: "sending" }, ...list]);
+      void send(localId, withRef);
     },
     [send],
   );
@@ -81,6 +88,14 @@ export function PublishingProvider({ children }: { children: ReactNode }) {
     },
     [send],
   );
+
+  // Back online: send posts that failed while the connection was down (each has its client
+  // reference, so a post the server already saved is returned, never created twice).
+  useEffect(() => {
+    const onOnline = () => ref.current.filter((p) => p.status === "failed").forEach((p) => retry(p.localId));
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [retry]);
 
   // Free previews if the app unmounts with posts still pending.
   useEffect(() => () => ref.current.forEach((p) => p.previews.forEach((u) => URL.revokeObjectURL(u))), []);

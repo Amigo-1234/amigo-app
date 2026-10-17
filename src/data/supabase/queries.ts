@@ -187,12 +187,13 @@ export async function fetchSuggestions(db: Db, max: number): Promise<PersonSumma
 
 export type NewMedia = { kind: "image" | "video"; storage_path: string; mime_type: string; width?: number; height?: number; byte_size?: number };
 
-export async function createPost(db: Db, body: string, opts: { parentId?: string; media?: NewMedia[] } = {}) {
+export async function createPost(db: Db, body: string, opts: { parentId?: string; media?: NewMedia[]; clientRef?: string } = {}) {
   const { data, error } = await db.rpc("create_post", {
     p_body: body,
     p_parent_id: opts.parentId,
     p_media: (opts.media ?? []) as unknown as Json,
-  });
+    ...(opts.clientRef ? { p_client_ref: opts.clientRef } : {}),
+  } as never);
   if (error) throw dataError(error);
   return data;
 }
@@ -579,13 +580,14 @@ export async function leaveWorld(db: Db, worldId: string, viewerId: string) {
   if (error) throw dataError(error);
 }
 
-export async function createWorldPost(db: Db, worldId: string, entry: boolean, body: string, media: NewMedia[] = []) {
+export async function createWorldPost(db: Db, worldId: string, entry: boolean, body: string, media: NewMedia[] = [], clientRef?: string) {
   const { data, error } = await db.rpc("create_world_post", {
     p_world_id: worldId,
     p_body: body,
     p_media: media as unknown as Json,
     p_entry: entry,
-  });
+    ...(clientRef ? { p_client_ref: clientRef } : {}),
+  } as never);
   if (error) throw worldError(error);
   return data;
 }

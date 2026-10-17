@@ -200,9 +200,16 @@ try {
   // Each accepts the legal documents once (as in the app) so measurements see the real home.
   for (const who of [A, B]) {
     const w = await phone(who, null);
+    const errs = [];
+    w.page.on("console", (m) => m.type() === "error" && errs.push(m.text().slice(0, 200)));
+    w.page.on("pageerror", (e) => errs.push(`pageerror ${e.message.slice(0, 200)}`));
     await w.page.goto(BASE, { waitUntil: "load" });
     await acceptLegal(w.page);
-    await w.page.locator(".bottom-create").waitFor();
+    const home = await w.page.locator(".bottom-create").waitFor().then(() => true, () => false);
+    if (!home) {
+      const text = (await w.page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 300);
+      throw new Error(`home not reached after the legal gate: "${text}" errors=${JSON.stringify(errs.slice(-4))}`);
+    }
     await w.ctx.close();
   }
   const { handle } = await (await fetch(`${BASE}/neon/rest/v1/profiles?id=eq.${A.id}&select=handle:username`, { headers: { ...BYPASS, authorization: `Bearer ${A.token}` } })).json().then((r) => r[0] ?? {});
