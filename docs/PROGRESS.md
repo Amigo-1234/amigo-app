@@ -13,6 +13,8 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - **Post tools**: bookmarks (private), edit (marked edited), delete, copy link, report; Bookmarks screen.
 - **Safety**: database rate limits that only stop floods (RL001). Blocking removes follows both ways and prevents re-following; you can block from posts and profiles, and see blocked accounts in Settings. Admins can warn people (shown until acknowledged) and see aggregate platform stats. Worlds can be reported.
 - **PWA / sharing**: a minimal service worker (offline page only; no data, messages or keys cached), install prompt or iPhone steps in Settings, generic OG tags, robots.txt, security headers.
+- **Messages, round 3**: typing indicators on Neon without Realtime, and delivered receipts fixed (they were never sent).
+- **Reliability**: crash screens instead of blank pages; privacy-safe error reports (redacted, unlinked) with an admin summary.
 - **Onboarding**: a skippable welcome card on Home with people to follow, first post, profile setup, and links to Worlds and Support Hub.
 - **Legal (drafts v0.1)**: 7 documents at `/legal`, versioned; acceptance recorded at registration; re-acceptance gate.
 - **Creator monetization**: architecture only, programme closed; users see "Creator monetization is coming soon."
@@ -28,7 +30,7 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 ## Next
 1. Media service, once approved: upload and read functions, encrypted DM attachments, avatars, multi-image posts, photo Moments.
 2. Voice notes after media. **GIFs are blocked:** Tenor's API shut down on 2026-06-30. GIPHY's free key is reportedly a beta key (about 100 calls/hour); production needs an application and possibly payment, and searches may have to come from the user's browser, which exposes their IP to GIPHY. An owner decision and key are needed, and GIF URLs in encrypted chats would be external, unencrypted media.
-3. Error-rate monitoring (privacy-safe) and per-page sharing previews (needs a small server function).
+3. Per-page sharing previews (needs a small server function).
 4. Live re-test on Neon for the new DM actions, with two dedicated accounts, then remove them.
 
 ## Notes

@@ -28,10 +28,11 @@ four blockers below are cleared.
 | Account deletion | READY | Password re-check + typed DELETE; full cascade (tested locally) |
 | Legal pages + acceptance | NEEDS ATTENTION | Machinery ready; the text itself is a draft (blocker 1) |
 | Encrypted 1:1 messages | READY | Live-tested on Neon (20/20), 70 local E2E checks |
-| Reactions, edit, unsend, search, older history | READY (local) | 19 local checks; **not yet live-tested on Neon** |
+| Reactions, edit, unsend, search, older history | READY (local) | 25 local checks; **not yet live-tested on Neon** |
+| Delivered receipts | READY (local) | Were never sent before (lazy query builder bug); fixed and tested |
 | Message photos, voice notes, video | DEFERRED | Needs media storage |
 | GIFs | BLOCKED | Tenor API shut down (2026-06-30); GIPHY production access reportedly needs an application/payment — owner decision |
-| Typing indicator | DEFERRED on Neon | Needs Realtime; skipped to save Free-plan resources |
+| Typing indicator | READY (local) | No Realtime needed: short-lived unlogged rows, 3 s heartbeat, read via the existing pulse; hidden across blocks |
 | Feed, posts, replies, likes | READY | Text posts on Neon |
 | Bookmarks, edit/delete post, copy link | READY (local) | Not yet exercised live |
 | Profiles, follow, discovery | READY | Avatars need media storage |
@@ -47,7 +48,8 @@ four blockers below are cleared.
 | Creator monetization | DEFERRED | Architecture only; programme closed |
 | PWA (install, offline page) | READY (local browser test) | Nothing sensitive cached; per-page OG previews need a server and are deferred |
 | Onboarding | READY | Welcome card; avatar step waits for media storage |
-| Analytics | NEEDS ATTENTION | Admin aggregate stats only; no error-rate tracking yet (no third-party tracker added) |
+| Analytics & errors | READY (local) | Admin aggregate stats; redacted app-error reports not linked to accounts; no third-party tracker |
+| Crash handling | READY | Error boundary + router error screens; stale-deployment reload prompt |
 | Test-account cleanup | BLOCKED (awaiting confirmation) | Script prepared, guarded, not run |
 
 ## Security checks (live Neon, after every migration today)
