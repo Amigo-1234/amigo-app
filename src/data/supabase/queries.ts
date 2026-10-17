@@ -58,12 +58,18 @@ export function toAuthor(p: ProfileRow | null) {
     : { id: "unknown", name: "Amigo", handle: "amigo", avatarUrl: null };
 }
 
+/** How a stored file becomes a URL: Supabase Storage public URLs, or the media service on Neon. */
+let mediaUrl = (db: Db, bucket: string, path: string) => db.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+export function useMediaService(url: (path: string) => string) {
+  mediaUrl = (_db, _bucket, path) => url(path);
+}
+
 function toMedia(db: Db, rows: MediaRow[]): MediaItem[] {
   return [...rows]
     .sort((a, b) => a.position - b.position)
     .map((m) => ({
       type: m.kind,
-      url: db.storage.from(m.bucket).getPublicUrl(m.storage_path).data.publicUrl,
+      url: mediaUrl(db, m.bucket, m.storage_path),
       width: m.width ?? undefined,
       height: m.height ?? undefined,
       alt: m.alt ?? undefined,

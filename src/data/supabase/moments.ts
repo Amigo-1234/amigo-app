@@ -21,6 +21,7 @@ import {
   type Subscription,
 } from "../types";
 import { fetchAuthors, toAuthor, type Db } from "./queries";
+import type { MediaStore } from "./mediaStore";
 
 type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel) => () => void;
 
@@ -53,7 +54,7 @@ export function createSupabaseMoments(
   db: Db,
   liveQuery: LiveQuery,
   invalidate: () => void,
-  { photos = true }: { photos?: boolean } = {},
+  { photos = true, media: store = null }: { photos?: boolean; media?: MediaStore | null } = {},
 ): { api: MomentsApi; admin: MomentsAdminApi } {
   async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
     const { data, error } = await db.rpc(fn as never, args as never);
@@ -65,6 +66,8 @@ export function createSupabaseMoments(
   const urls = new Map<string, { url: string; until: number }>();
   async function signed(paths: string[]): Promise<Map<string, string>> {
     const now = Date.now();
+    // Media service (Neon): one same-origin URL per file, authorized on each request.
+    if (store) return new Map(paths.map((p) => [p, store.url(p)] as const));
     const need = [...new Set(paths)].filter((p) => (urls.get(p)?.until ?? 0) < now + 60_000);
     if (need.length && photos) {
       const { data } = await db.storage.from(BUCKET).createSignedUrls(need, URL_TTL_S);
@@ -112,7 +115,11 @@ export function createSupabaseMoments(
     async create(viewer, input) {
       let path: string | null = null;
       if (input.image && !photos) throw new MomentError("unknown", "Photo Moments aren't available yet");
-      if (input.image) {
+      if (input.image && store) {
+        path = await store.upload("moment", input.image.blob).catch((e) => {
+          throw new MomentError("unknown", (e as Error).message);
+        });
+      } else if (input.image) {
         // Same processed photo as posts (src/lib/image.ts), into your own folder of the private bucket.
         const ext = input.image.blob.type === "image/png" ? "png" : input.image.blob.type === "image/gif" ? "gif" : input.image.blob.type === "image/webp" ? "webp" : "jpg";
         path = `${viewer.id}/${crypto.randomUUID()}.${ext}`;
@@ -131,14 +138,15 @@ export function createSupabaseMoments(
         invalidate();
         return { id };
       } catch (e) {
-        if (path) void db.storage.from(BUCKET).remove([path]);
+        if (path && !store) void db.storage.from(BUCKET).remove([path]);
         throw e;
       }
     },
 
     async delete(_viewerId, momentId) {
       const path = await rpc<string | null>("delete_moment", { p_moment: momentId });
-      if (path && photos) void db.storage.from(BUCKET).remove([path]);
+      // With the media service the database queues the file for deletion itself.
+      if (path && photos && !store) void db.storage.from(BUCKET).remove([path]);
       invalidate();
     },
 

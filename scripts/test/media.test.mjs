@@ -12,6 +12,7 @@ import { createHmac, randomUUID } from "node:crypto";
 import pg from "pg";
 import { createServer } from "vite";
 import { AwsClient } from "aws4fetch";
+import { createClient } from "@supabase/supabase-js";
 
 const { PGRST_URL, JWT_SECRET, DATABASE_URL, S3_URL } = process.env;
 if (!PGRST_URL || !JWT_SECRET || !DATABASE_URL || !S3_URL) throw new Error("Set PGRST_URL, JWT_SECRET, DATABASE_URL, S3_URL");
@@ -114,6 +115,45 @@ try {
   await ask(A, { purpose: "post", mime: "image/jpeg", size: 10 }); // drains the queue
   const head = await s3.fetch(`${S3_URL}/amigo-media/${momentKey}`, { method: "HEAD" });
   ok("deleted Moment's file removed from storage", head.status === 404, String(head.status));
+
+  // Encrypted photo message, end to end: the app's own messaging code with a
+  // media store that calls the two functions directly.
+  const { createSupabaseMessages } = await vite.ssrLoadModule("/src/data/supabase/messages.ts");
+  const storeFor = (token) => ({
+    async upload(purpose, blob, opts = {}) {
+      const res = await ask(token, { purpose, mime: "application/octet-stream", size: blob.size, conversationId: opts.conversationId });
+      const { key, url } = await res.json();
+      const p = await fetch(url, { method: "PUT", headers: { "content-type": "application/octet-stream" }, body: Buffer.from(await blob.arrayBuffer()) });
+      if (!p.ok) throw new Error("put failed");
+      return key;
+    },
+    url: (key) => `/api/media/${key}`,
+    async bytes(key) {
+      const r = await read(token, key, true);
+      if (r.status !== 200) throw new Error("refused " + r.status);
+      return new Uint8Array(await (await fetch((await r.json()).url)).arrayBuffer());
+    },
+  });
+  const fetchRewrite = (u, o) => fetch(String(u).replace("/rest/v1", ""), o);
+  const client = (token) => createClient(PGRST_URL, "x", { auth: { persistSession: false }, global: { fetch: fetchRewrite, headers: { Authorization: `Bearer ${token}` } } });
+  const once = (_n, f, sub) => { f().then(sub.onData, sub.onError); return () => {}; };
+  const appA = createSupabaseMessages(client(A), once, () => {}, { memoryStore: true, realtime: false, media: storeFor(A) });
+  const appB = createSupabaseMessages(client(B), once, () => {}, { memoryStore: true, realtime: false, media: storeFor(B) });
+  ok("message photos enabled with the media service", appA.photos === true);
+  await appA.security.setup(ids.a);
+  await appB.security.setup(ids.b);
+  const dmConv = await appA.openConversation(ids.a, ids.b);
+  const pixels = new Uint8Array(512).map((_, i) => i % 251);
+  await appA.send(ids.a, dmConv, { text: "photo!", image: { kind: "image", blob: new Blob([pixels], { type: "image/png" }), width: 16, height: 16 } });
+  const viewB = await new Promise((res, rej) => appB.subscribeConversation(dmConv, ids.b, { onData: res, onError: rej }));
+  const msg = viewB.messages.at(-1);
+  ok("recipient decrypts the photo message", msg?.text === "photo!" && msg.media.length === 1, JSON.stringify(msg?.media?.length));
+  const blobUrl = msg?.media[0]?.url;
+  const decrypted = blobUrl ? new Uint8Array(await (await fetch(blobUrl)).arrayBuffer()) : null;
+  ok("decrypted bytes match the original", !!decrypted && Buffer.compare(Buffer.from(decrypted), Buffer.from(pixels)) === 0);
+  const { rows: [stored] } = await db.query("select path from public.media_objects where conversation_id = $1 order by created_at desc limit 1", [dmConv]);
+  const raw = Buffer.from(await (await s3.fetch(`${S3_URL}/amigo-media/${stored.path}`)).arrayBuffer());
+  ok("the bucket holds ciphertext, not the photo", raw.length > 0 && Buffer.compare(raw, Buffer.from(pixels)) !== 0 && !raw.includes(Buffer.from(pixels.slice(0, 64))));
 } catch (e) {
   console.error(e);
   failures++;

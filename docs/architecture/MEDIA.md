@@ -72,45 +72,49 @@ Video can be added without changing posts again: `kind: 'video'` already exists,
 6. **Schema delta (when approved):** `post_media.status`, `poster_path`, maybe `variants jsonb`
    (rendition URLs), plus storage policies for the new bucket.
 
-## Neon deployment: storage plan (Vercel Blob) — evaluated, not built
+## Neon deployment: Cloudflare R2 (built; needs the owner to configure)
 
-Neon Object Storage isn't offered in this project's region, and the Neon Data API has no Storage
-API, so on Neon photos are off for now (`photoUploads: false`, `maxMediaPerPost: 0`, text-only
-Moments, text-only messages). Expired Moments with photos are queued in `media_cleanup_queue`.
+Decision (owner, 2026-10-17): Cloudflare R2 instead of Vercel Blob. Neon stays the database.
 
-**What the Vercel docs confirm** (checked 2026-10-17 through Vercel's documentation search):
+**Checked 2026-10-17** (Cloudflare docs via search and recent reports; the Cloudflare site itself
+couldn't be fetched from this environment):
+- Free tier, Standard storage: 10 GB-month, 1M Class A (writes/lists) and 10M Class B (reads)
+  operations a month, **no egress fees**. Above that: about $0.015/GB-month, $4.50 per million
+  Class A, $0.36 per million Class B.
+- **Turning on R2 asks for a payment method**, because usage above the free tier is billed with
+  no hard cap (recent Cloudflare Community reports). Billing alerts are recommended.
+- Buckets are private unless public access (r2.dev or a custom domain) is switched on — leave it off.
+- Presigned URLs: valid 1 second to 7 days, made locally (no R2 call), and can be locked to a
+  Content-Type. Browser uploads need a bucket CORS rule.
 
-- Blob stores can be **private** (`access: 'private'`, SDK ≥ 2.3). A private blob can only be read
-  with the store's token or a Vercel OIDC token: there is **no public or signed URL**. Delivery goes
-  through our own function, which calls `get(pathname, { access: 'private' })` and streams it.
-  So access control lives in our code, never in an unguessable URL.
-- **Client uploads** go straight from the browser to Blob with a short-lived token our function
-  issues in `handleUpload({ onBeforeGenerateToken })`. That callback is where we authenticate the
-  user and set `allowedContentTypes`, `maximumSizeInBytes` and the token's expiry (default 1 hour).
-  `onUploadCompleted` is a webhook that confirms the upload.
-- Multipart uploads exist for large files (video); `del()` deletes; `copy()`, `head()` and
-  ETag-conditional writes exist.
+**How it works here**
+- `media_objects` (migration `20261017170000_media_registry.sql`): Postgres approves each upload
+  (`media_begin_upload`: purpose, type, size, 60 uploads/hour, 1 GB/day, conversation membership,
+  suspension) and chooses the key `<owner>/<purpose>/[<conversation>/]<random>.<ext>`.
+- `api/media-upload` signs a **PUT valid 10 minutes for exactly that key, type and length**.
+- `api/media/<key>` asks `media_can_read` **as the viewer** (post visibility, Moment audience and
+  expiry, conversation membership) and redirects to a **GET valid 1 hour** (`Cache-Control: private`).
+  Missing and forbidden both answer 404. Works for `<img>` via the first-party session cookie.
+- Attaching: posts, Moments and avatars can only use your own unused upload of the right purpose.
+- Deleting a Moment, a replaced avatar or an account queues files; each upload call deletes a few.
+- **Message photos are encrypted on the device first**; the bucket only holds ciphertext.
+- Limits: images 10 MB (avatars 5 MB), video 50 MB (posts/Moments; UI for video not built yet),
+  encrypted attachments 50 MB.
 
-**Not yet verified (needed before building):** the Hobby plan's included storage, operations and
-data transfer for Blob, what happens when they run out (paused vs billed), and whether private
-delivery through functions counts against function limits. The pricing page couldn't be fetched
-from this environment. **No store has been created**; doing so needs the Vercel project owner
-(the Vercel connection in this session lost access to the team scope).
+**Owner setup (about 10 minutes)**
+1. Cloudflare dashboard → R2 → enable (add a payment method) → **Create bucket** (e.g. `amigo-media`,
+   location hint Western Europe). Do **not** enable public access.
+2. Bucket → Settings → CORS policy:
+   `[{"AllowedOrigins":["https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app"],"AllowedMethods":["PUT","GET"],"AllowedHeaders":["content-type"],"MaxAgeSeconds":3600}]`
+   (add the production domain later).
+3. R2 → Manage API tokens → **Create token**: permission *Object Read & Write*, **only this bucket**.
+4. Vercel → amigo-app → Settings → Environment Variables (Preview): `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`,
+   `R2_SECRET_ACCESS_KEY` (mark Sensitive), `R2_BUCKET`, and `VITE_MEDIA_STORAGE` = `r2`. Redeploy.
+5. Optional: Cloudflare billing notification at, say, $1.
 
-**Proposed design** (one reusable media service):
+Until then the functions answer 503 and the app stays text-only — nothing breaks.
 
-1. `api/media-upload` (Node function): verifies the caller's Neon Auth JWT (JWKS), asks Postgres
-   (as that user, via the Data API) whether the target is allowed — your avatar, your post, your
-   Moment, a conversation you're in — then returns a client-upload token restricted to one
-   pathname, type and size.
-2. `api/media` (Node function): verifies the JWT, calls a `media_can_read(path)` database function
-   as that user (same rules as the content: post visibility, Moment audience/expiry, conversation
-   membership), then streams the blob with `Cache-Control: private`. Public post photos could later
-   move to a public store behind a CDN to save function time.
-3. **Direct-message photos, video and voice notes** are encrypted on the device before upload
-   (the existing `encryptAttachment`); the key stays inside the Megolm-encrypted message. The
-   server only ever holds ciphertext, so even a leaked blob reveals nothing.
-4. Deletion: deleting a post, Moment, message or account queues its paths (`media_cleanup_queue`);
-   the upload function drains a few entries per call (no scheduler needed on Free plans).
-5. Limits per upload (initial, adjustable): images 10 MB (resized on device, metadata stripped as
-   today), voice notes 2 minutes, video 60 seconds / 50 MB, plus a per-user daily quota in Postgres.
+Tests: `npm run test:media` (local PostgREST + S3 emulator, 24 checks: authorization, quotas,
+followers-only and Moment visibility, DM membership, cleanup, and an encrypted photo message that
+the recipient decrypts while the bucket holds only ciphertext). Signature enforcement itself
+(exact type/size, expiry) is R2's and is verified only once a real bucket exists.

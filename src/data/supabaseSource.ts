@@ -16,6 +16,7 @@ import { isNeon, supabase } from "./supabase/client";
 import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
+import { createMediaStore } from "./supabase/mediaStore";
 import { createPlatform } from "./supabase/platform";
 import * as q from "./supabase/queries";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
@@ -186,8 +187,13 @@ supabase.auth.onAuthStateChange((event, session) => {
 
 // Messages (E2EE to-device delivery) and Moments (photo storage) need Realtime
 // and Storage; on Neon they're migrated in a later step, so they stay off.
-// Neon: text Moments only until photo storage is set up (no Storage API there).
-const moments = createSupabaseMoments(supabase, liveQuery, invalidate, { photos: !isNeon });
+// Neon keeps files in Cloudflare R2 through the media service, once it's configured
+// (VITE_MEDIA_STORAGE=r2 at build time, R2_* variables on the server). Until then: text only.
+const media = isNeon && import.meta.env.VITE_MEDIA_STORAGE === "r2"
+  ? createMediaStore(async () => (await supabase.auth.getSession()).data.session?.access_token ?? null)
+  : null;
+if (media) q.useMediaService(media.url);
+const moments = createSupabaseMoments(supabase, liveQuery, invalidate, { photos: !isNeon || !!media, media });
 const platform = createPlatform(supabase);
 // Post tools + moderation need migration 20261017130000 (applied on Neon only).
 if (isNeon) q.enablePostTools();
@@ -196,8 +202,8 @@ const moderation = isNeon ? createModeration(supabase, invalidate) : null;
 export const supabaseSource: DataSource = {
   kind: isNeon ? "neon" : "supabase",
   // post_media.position is 0–3 and create_post rejects more than 4. Neon: no photo storage yet.
-  maxMediaPerPost: isNeon ? 0 : 4,
-  photoUploads: !isNeon,
+  maxMediaPerPost: isNeon && !media ? 0 : 4,
+  photoUploads: !isNeon || !!media,
 
   legal: platform.legal,
   monetization: platform.monetization,
@@ -366,6 +372,11 @@ export const supabaseSource: DataSource = {
     // Upload in parallel, keep the composer's order. Paths live in the author's own folder (Storage RLS).
     const uploads = await Promise.allSettled(
       input.media.map(async (m) => {
+        if (media) {
+          // Neon: Postgres picks the key; unused uploads are swept after a day.
+          const key = await media.upload("post", m.blob);
+          return { kind: "image" as const, storage_path: key, mime_type: m.blob.type, width: m.width, height: m.height, byte_size: m.blob.size };
+        }
         const ext = m.blob.type === "image/png" ? "png" : m.blob.type === "image/webp" ? "webp" : m.blob.type === "image/gif" ? "gif" : "jpg";
         const path = `${viewer.id}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage.from("post-media").upload(path, m.blob, { contentType: m.blob.type, cacheControl: "31536000" });
@@ -374,7 +385,7 @@ export const supabaseSource: DataSource = {
       }),
     );
     const uploaded = uploads.flatMap((u) => (u.status === "fulfilled" ? [u.value] : []));
-    const cleanup = () => uploaded.length && void supabase.storage.from("post-media").remove(uploaded.map((u) => u.storage_path));
+    const cleanup = () => !media && uploaded.length && void supabase.storage.from("post-media").remove(uploaded.map((u) => u.storage_path));
     const failed = uploads.find((u) => u.status === "rejected");
     if (failed) {
       cleanup();
@@ -585,7 +596,7 @@ export const supabaseSource: DataSource = {
   moments: moments?.api,
 
   // End-to-end encrypted; the crypto library loads on first use.
-  messages: createSupabaseMessages(supabase, liveQuery, invalidate, { realtime: !isNeon }),
+  messages: createSupabaseMessages(supabase, liveQuery, invalidate, { realtime: !isNeon, media }),
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {
@@ -643,10 +654,18 @@ export const supabaseSource: DataSource = {
       if (update.avatar === null) patch.avatar_url = null;
       else if (update.avatar) {
         const blob = await (await fetch(update.avatar.dataUrl)).blob();
-        uploaded = `${viewerId}/${crypto.randomUUID()}.jpg`;
-        const { error } = await supabase.storage.from("avatars").upload(uploaded, blob, { contentType: blob.type, cacheControl: "31536000" });
-        if (error) throw new ProfileError("unknown", error.message);
-        patch.avatar_url = supabase.storage.from("avatars").getPublicUrl(uploaded).data.publicUrl;
+        if (media) {
+          // Neon: the database checks it's your own avatar upload and releases the old one.
+          const key = await media.upload("avatar", blob).catch((e) => {
+            throw new ProfileError("unknown", (e as Error).message);
+          });
+          patch.avatar_url = media.url(key);
+        } else {
+          uploaded = `${viewerId}/${crypto.randomUUID()}.jpg`;
+          const { error } = await supabase.storage.from("avatars").upload(uploaded, blob, { contentType: blob.type, cacheControl: "31536000" });
+          if (error) throw new ProfileError("unknown", error.message);
+          patch.avatar_url = supabase.storage.from("avatars").getPublicUrl(uploaded).data.publicUrl;
+        }
       }
       try {
         await q.updateProfileRow(supabase, viewerId, patch);

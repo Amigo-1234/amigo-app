@@ -30,6 +30,7 @@ import {
 import type { DecryptResult, E2EBackend, E2EDevice, MessagePayload, StoredMessage } from "./e2e";
 import type { Db } from "./queries";
 import { toAuthor, VERIFICATION_EMBED } from "./queries";
+import type { MediaStore } from "./mediaStore";
 import type { Json } from "./database.types";
 import { describeDevice } from "../../lib/device";
 
@@ -72,7 +73,7 @@ export function createSupabaseMessages(
   db: Db,
   liveQuery: LiveQuery,
   invalidate: () => void,
-  opts: { memoryStore?: boolean; realtime?: boolean } = {},
+  opts: { memoryStore?: boolean; realtime?: boolean; media?: MediaStore | null } = {},
 ): MessagesApi {
   // Neon: no Realtime channels (polling instead, no typing indicator) and no Storage (text only for now).
   const realtime = opts.realtime ?? true;
@@ -99,11 +100,14 @@ export function createSupabaseMessages(
       return data;
     },
     async uploadAttachment(path, bytes) {
+      // Neon: ciphertext goes to the media service; it assigns the key.
+      if (opts.media) return opts.media.upload("dm", new Blob([bytes as BlobPart]), { conversationId: path.split("/")[0] });
       if (!realtime) throw new MessageError("unknown", "Photos in messages aren't available yet");
       const { error } = await db.storage.from("dm-attachments").upload(path, new Blob([bytes as BlobPart]), { contentType: "application/octet-stream" });
       if (error) throw new MessageError("unknown", error.message);
     },
     async downloadAttachment(path) {
+      if (opts.media) return opts.media.bytes(path);
       if (!realtime) throw new MessageError("unknown", "Photos in messages aren't available yet");
       const { data, error } = await db.storage.from("dm-attachments").download(path);
       if (error || !data) throw new MessageError("unknown", error?.message ?? "download failed");
@@ -816,7 +820,7 @@ export function createSupabaseMessages(
 
   return {
     encryption: "e2e",
-    photos: realtime,
+    photos: realtime || !!opts.media,
     security,
     // Reactions, edits and unsend need the dm_send_v3 / dm_unsend functions (Neon schema).
     actions: realtime ? undefined : actions,
@@ -856,8 +860,9 @@ export function createSupabaseMessages(
       let image: MessagePayload["amigo.image"] = null;
       if (input.image) {
         const enc = d.encryptAttachment(new Uint8Array(await input.image.blob.arrayBuffer()));
-        const path = `${conversationId}/${crypto.randomUUID()}`;
-        await backend.uploadAttachment!(path, enc.data);
+        let path = `${conversationId}/${crypto.randomUUID()}`;
+        // The media service returns the key it assigned (the path is a hint for the conversation).
+        path = (await backend.uploadAttachment!(path, enc.data)) || path;
         image = { path, info: enc.info, width: input.image.width, height: input.image.height, mimetype: input.image.blob.type || "image/jpeg" };
       }
       const payload: MessagePayload = { msgtype: image ? "m.image" : "m.text", body: text, "amigo.reply_to": input.replyToId ?? null, "amigo.image": image };

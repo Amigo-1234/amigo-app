@@ -38,7 +38,8 @@ export interface E2EBackend {
     changes: { user_id: string; changed_at: string }[];
     counts: { signed_curve25519: number; unused_fallback: boolean };
   }>;
-  uploadAttachment?(path: string, data: Uint8Array): Promise<void>;
+  /** Resolves with the stored key when the backend assigns one. */
+  uploadAttachment?(path: string, data: Uint8Array): Promise<string | void>;
   downloadAttachment?(path: string): Promise<Uint8Array>;
 }
 

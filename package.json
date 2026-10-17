@@ -16,6 +16,7 @@
     "test:e2e": "node scripts/test/supabase-e2e.test.mjs",
     "test:moments": "node scripts/test/supabase-moments.test.mjs",
     "test:dm-actions": "node scripts/test/neon-dm-actions.test.mjs",
+    "test:media": "node scripts/test/media.test.mjs",
     "migrate:extract": "node scripts/migration/extract.ts",
     "migrate:audit": "node scripts/migration/audit.ts",
     "migrate:plan": "node scripts/migration/migrate.ts --plan-only",
