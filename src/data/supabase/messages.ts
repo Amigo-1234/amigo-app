@@ -235,7 +235,8 @@ export function createSupabaseMessages(
     const { data, error } = await db.rpc("dm_inbox");
     if (error) fail(error);
     const rows = data ?? [];
-    if (rows.some((r) => r.unread_count > 0)) void db.rpc("dm_mark_delivered");
+    // .then() is what sends it (builders are lazy).
+    if (rows.some((r) => r.unread_count > 0)) db.rpc("dm_mark_delivered").then(() => undefined, () => undefined);
     await authors(rows.map((r) => r.peer_id));
     return Promise.all(
       rows.map(async (r): Promise<Conversation> => {
@@ -462,6 +463,27 @@ export function createSupabaseMessages(
   let pulseForced = false;
   let lastPulse: string | null = null;
   let lastMail: unknown = undefined;
+  let lastTyping: string | null = null;
+
+  // ------------------------------------------------- typing (no Realtime)
+
+  /** Open conversations' typing listeners (usually just the one on screen). */
+  const typingListeners = new Map<string, Set<(typing: boolean) => void>>();
+  const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** When this device last told the server it's typing, per conversation (heartbeat throttle). */
+  const typingSent = new Map<string, number>();
+
+  function refreshTyping() {
+    for (const [conversationId, cbs] of typingListeners) {
+      void db.rpc("dm_peer_typing_ms" as never, { p_conversation: conversationId } as never).then(({ data }) => {
+        const ms = Number(data ?? 0);
+        clearTimeout(typingTimers.get(conversationId));
+        cbs.forEach((cb) => cb(ms > 0));
+        // Expire locally too: a stop that never arrives (closed tab) still ends.
+        if (ms > 0) typingTimers.set(conversationId, setTimeout(() => cbs.forEach((cb) => cb(false)), ms));
+      });
+    }
+  }
   const visible = () => typeof document === "undefined" || document.visibilityState === "visible";
 
   let lastChangeAt = Date.now();
@@ -486,8 +508,13 @@ export function createSupabaseMessages(
       const d = await device(pulseViewer);
       const { data, error } = await db.rpc("dm_pulse" as never, { p_device: d.deviceId } as never);
       if (error) throw error;
-      const { x, ...rest } = (data ?? {}) as { x?: unknown };
+      // t (someone typing to you) only refreshes the typing indicator, never the views.
+      const { x, t, ...rest } = (data ?? {}) as { x?: unknown; t?: string | null };
       const key = JSON.stringify(rest);
+      if ((t ?? null) !== lastTyping) {
+        lastTyping = t ?? null;
+        refreshTyping();
+      }
       const mail = x !== lastMail && lastMail !== undefined;
       lastMail = x;
       // New key/verification mail for this device: take it in before re-rendering (may unlock messages).
@@ -853,13 +880,41 @@ export function createSupabaseMessages(
     },
 
     setTyping(viewerId, conversationId, typing) {
-      if (!realtime) return;
+      // Receivers keep "typing" for 6 s; send a heartbeat every 3 s at most while typing.
+      const last = typingSent.get(conversationId);
+      if (typing) {
+        if (last && Date.now() - last < 3000) return;
+        typingSent.set(conversationId, Date.now());
+      } else {
+        if (!last) return;
+        typingSent.delete(conversationId);
+      }
+      if (!realtime) {
+        // Builders are lazy: .then() is what sends it. Failures just mean no indicator.
+        db.rpc("dm_set_typing" as never, { p_conversation: conversationId, p_typing: typing } as never).then(
+          () => undefined,
+          () => undefined,
+        );
+        return;
+      }
       const { channel } = typingChannel(conversationId);
       void channel.send({ type: "broadcast", event: "typing", payload: { user: viewerId, typing } });
     },
 
     subscribeTyping(conversationId, viewerId, cb) {
-      if (!realtime) return () => {};
+      if (!realtime) {
+        let set = typingListeners.get(conversationId);
+        if (!set) typingListeners.set(conversationId, (set = new Set()));
+        set.add(cb);
+        if (lastTyping) refreshTyping();
+        return () => {
+          set!.delete(cb);
+          if (!set!.size) {
+            typingListeners.delete(conversationId);
+            clearTimeout(typingTimers.get(conversationId));
+          }
+        };
+      }
       const entry = typingChannel(conversationId);
       let timer: ReturnType<typeof setTimeout> | undefined;
       const handler = ({ payload }: { payload: { user: string; typing: boolean } }) => {

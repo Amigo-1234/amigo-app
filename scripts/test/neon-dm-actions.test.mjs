@@ -65,6 +65,11 @@ try {
   const conv = await A.openConversation(ids.ana, ids.ben);
 
   const { id: m1 } = await A.send(ids.ana, conv, { text: "hello there" });
+  // Ben's inbox loading marks it delivered (not read).
+  await value((s) => B.subscribeConversations(ids.ben, s));
+  await new Promise((r) => setTimeout(r, 500));
+  const delivered = (await value((s) => A.subscribeConversation(conv, ids.ana, s))).messages.find((m) => m.id === m1);
+  ok("delivered receipt after the other person's inbox loads", delivered?.status === "delivered", delivered?.status);
   const { id: m2 } = await B.send(ids.ben, conv, { text: "hi ana" });
   const viewB = () => value((s) => B.subscribeConversation(conv, ids.ben, s));
   const viewA = () => value((s) => A.subscribeConversation(conv, ids.ana, s));
@@ -127,6 +132,24 @@ try {
   ok("ciphertext, reactions and edits deleted from the server", left.n === 0);
   const inboxB = await value((s) => B.subscribeConversations(ids.ben, s));
   ok("conversation still listed with remaining message", inboxB[0]?.lastMessage?.text === "hi ana");
+
+  // typing (no Realtime): heartbeat in, pulse picks it up, stop clears it
+  const seen = [];
+  const stopConv = B.subscribeConversation(conv, ids.ben, { onData: () => {}, onError: () => {} });
+  const stopTyping = B.subscribeTyping(conv, ids.ben, (t) => seen.push(t));
+  A.setTyping(ids.ana, conv, true);
+  A.setTyping(ids.ana, conv, true); // throttled: one request
+  await new Promise((r) => setTimeout(r, 3000));
+  ok("peer sees typing through the pulse", seen.includes(true), JSON.stringify(seen));
+  const { rows: [ty] } = await db.query("select count(*)::int n from public.dm_typing where conversation_id = $1", [conv]);
+  ok("typing is one short-lived row, no content", ty.n === 1);
+  A.setTyping(ids.ana, conv, false);
+  await new Promise((r) => setTimeout(r, 3000));
+  ok("typing stops", seen.at(-1) === false, JSON.stringify(seen));
+  const { error: outsiderTyping } = await cyDb.rpc("dm_set_typing", { p_conversation: conv, p_typing: true });
+  ok("outsiders can't set typing", !!outsiderTyping);
+  stopTyping();
+  stopConv();
 
   // older history
   for (let i = 0; i < 55; i++) await B.send(ids.ben, conv, { text: `n${i}` });

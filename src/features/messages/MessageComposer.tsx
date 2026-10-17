@@ -64,7 +64,8 @@ export function MessageComposer({
     setText(value);
     setError(null);
     if (!value.trim()) return stopTyping();
-    if (!typingOn.current) api.setTyping(viewer.id, conversationId, true);
+    // Every keystroke; the data layer throttles it to a heartbeat.
+    api.setTyping(viewer.id, conversationId, true);
     typingOn.current = true;
     clearTimeout(typingTimer.current);
     typingTimer.current = setTimeout(stopTyping, TYPING_IDLE_MS);
