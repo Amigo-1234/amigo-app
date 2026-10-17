@@ -116,5 +116,7 @@ Until then the functions answer 503 and the app stays text-only — nothing brea
 
 Tests: `npm run test:media` (local PostgREST + S3 emulator, 24 checks: authorization, quotas,
 followers-only and Moment visibility, DM membership, cleanup, and an encrypted photo message that
-the recipient decrypts while the bucket holds only ciphertext). Signature enforcement itself
-(exact type/size, expiry) is R2's and is verified only once a real bucket exists.
+the recipient decrypts while the bucket holds only ciphertext). Against the real bucket:
+`scripts/test/live-media.test.mjs` (API, 31 checks incl. signature and CORS) and
+`scripts/test/live-mobile.test.mjs` (iPhone-profile browser), run by `.github/workflows/live-media.yml`
+when `.github/live-media.run` changes. Both passed on 2026-10-17.
