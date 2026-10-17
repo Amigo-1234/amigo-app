@@ -90,7 +90,14 @@ try {
   const errors = [];
   const bad = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text()}`));
+  page.on("console", (m) => m.type() === "error" && errors.push(`console: ${m.text().replace(/Access to XMLHttpRequest at '[^']*' from origin '[^']*'/, "XHR to R2")}`));
+  // How R2 answers the browser itself (status and CORS headers only).
+  page.on("requestfailed", (r) => /r2\.cloudflarestorage\.com/.test(r.url()) && bad.push(`R2 ${r.method()} failed: ${r.failure()?.errorText}`));
+  page.on("response", async (r) => {
+    if (!/r2\.cloudflarestorage\.com/.test(r.url()) || r.request().method() === "GET") return;
+    const h = r.headers();
+    bad.push(`R2 ${r.request().method()} ${r.status()} acao=${h["access-control-allow-origin"] ?? "none"} acah=${h["access-control-allow-headers"] ?? "none"} reqheaders=${r.request().headers()["access-control-request-headers"] ?? "-"}`);
+  });
   page.on("response", (r) => {
     const u = new URL(r.url());
     if (r.status() >= 400 && (u.pathname.startsWith("/api/") || u.pathname.startsWith("/neon/") || u.hostname.endsWith("r2.cloudflarestorage.com")))
@@ -100,7 +107,7 @@ try {
   const describe = async () => {
     const text = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 220);
     const buttons = await page.locator("button:visible").evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label") || b.textContent?.trim()).filter(Boolean).slice(0, 25)).catch(() => []);
-    return redact(`url=${new URL(page.url()).pathname} · text="${text}" · buttons=[${buttons.join(" | ")}] · failed requests=[${bad.slice(-6).join(", ")}] · errors=[${errors.slice(-3).join(" | ").slice(0, 600)}]`);
+    return redact(`url=${new URL(page.url()).pathname} · text="${text}" · buttons=[${buttons.join(" | ")}] · requests=[${bad.slice(-6).join(", ")}] · errors=[${errors.slice(-3).join(" | ").slice(0, 600)}]`);
   };
   const step = async (name, fn) => {
     try {

@@ -113,8 +113,9 @@ try {
   ok("R2 refuses a different content type than signed", wrongType.status === 403, String(wrongType.status));
   const wrongSize = await fetch(b.body.url, { method: "PUT", headers: { "content-type": "image/jpeg" }, body: randomBytes(4097) });
   ok("R2 refuses a different size than signed", wrongSize.status === 403, String(wrongSize.status));
-  const put = await fetch(b.body.url, { method: "PUT", headers: { "content-type": "image/jpeg" }, body: jpeg });
+  const put = await fetch(b.body.url, { method: "PUT", headers: { "content-type": "image/jpeg", origin: BASE }, body: jpeg });
   ok("upload to the real bucket succeeds", put.ok, String(put.status));
+  ok("the upload response allows the app's origin (CORS)", [BASE, "*"].includes(put.headers.get("access-control-allow-origin")), `allow-origin=${put.headers.get("access-control-allow-origin") ?? "none"}`);
   const postKey = b.body.key;
   ok("disallowed type refused", (await begin(A, "post", "text/html", 10)).status === 403);
   ok("oversized file refused", (await begin(A, "post", "image/jpeg", 20 * 1024 * 1024)).status === 403);
