@@ -1022,6 +1022,8 @@ export class MomentError extends Error {
  * Supabase backend end-to-end encrypted like any message.
  */
 export interface MomentsApi {
+  /** False where photo storage isn't available yet (Neon, for now): text Moments only. */
+  photos?: boolean;
   /** Everyone whose Moments you can see right now: you first, then unseen, newest first. */
   subscribeFeed(viewerId: string, sub: Subscription<MomentGroup[]>): Unsubscribe;
   /** One person's active Moments you can see (empty when none). */

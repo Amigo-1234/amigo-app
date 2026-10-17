@@ -49,7 +49,12 @@ interface FeedRow {
   view_count: number | null;
 }
 
-export function createSupabaseMoments(db: Db, liveQuery: LiveQuery, invalidate: () => void): { api: MomentsApi; admin: MomentsAdminApi } {
+export function createSupabaseMoments(
+  db: Db,
+  liveQuery: LiveQuery,
+  invalidate: () => void,
+  { photos = true }: { photos?: boolean } = {},
+): { api: MomentsApi; admin: MomentsAdminApi } {
   async function rpc<T>(fn: string, args: Record<string, unknown> = {}): Promise<T> {
     const { data, error } = await db.rpc(fn as never, args as never);
     if (error) fail(error);
@@ -61,7 +66,7 @@ export function createSupabaseMoments(db: Db, liveQuery: LiveQuery, invalidate: 
   async function signed(paths: string[]): Promise<Map<string, string>> {
     const now = Date.now();
     const need = [...new Set(paths)].filter((p) => (urls.get(p)?.until ?? 0) < now + 60_000);
-    if (need.length) {
+    if (need.length && photos) {
       const { data } = await db.storage.from(BUCKET).createSignedUrls(need, URL_TTL_S);
       for (const s of data ?? []) if (s.signedUrl && s.path) urls.set(s.path, { url: s.signedUrl, until: now + URL_TTL_S * 1000 });
     }
@@ -96,6 +101,7 @@ export function createSupabaseMoments(db: Db, liveQuery: LiveQuery, invalidate: 
   }
 
   const api: MomentsApi = {
+    photos,
     subscribeFeed: (viewerId, sub) =>
       liveQuery("moments", () => feed(viewerId), sub, (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "moments" }, refresh)),
 
@@ -105,6 +111,7 @@ export function createSupabaseMoments(db: Db, liveQuery: LiveQuery, invalidate: 
 
     async create(viewer, input) {
       let path: string | null = null;
+      if (input.image && !photos) throw new MomentError("unknown", "Photo Moments aren't available yet");
       if (input.image) {
         // Same processed photo as posts (src/lib/image.ts), into your own folder of the private bucket.
         const ext = input.image.blob.type === "image/png" ? "png" : input.image.blob.type === "image/gif" ? "gif" : input.image.blob.type === "image/webp" ? "webp" : "jpg";
@@ -131,7 +138,7 @@ export function createSupabaseMoments(db: Db, liveQuery: LiveQuery, invalidate: 
 
     async delete(_viewerId, momentId) {
       const path = await rpc<string | null>("delete_moment", { p_moment: momentId });
-      if (path) void db.storage.from(BUCKET).remove([path]);
+      if (path && photos) void db.storage.from(BUCKET).remove([path]);
       invalidate();
     },
 

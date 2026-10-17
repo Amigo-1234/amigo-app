@@ -96,7 +96,7 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
           <Button variant="secondary" size="sm" icon={<Trash2 size={16} aria-hidden="true" />} onClick={() => setImage(null)}>
             Remove photo
           </Button>
-        ) : (
+        ) : dataSource.moments?.photos === false ? null : (
           <Button variant="secondary" size="sm" loading={processing} icon={<ImagePlus size={16} aria-hidden="true" />} onClick={() => fileRef.current?.click()}>
             Add a photo
           </Button>

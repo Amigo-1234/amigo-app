@@ -5,8 +5,15 @@ Casual posts that disappear **24 hours** after posting:
 - text on a background (Coral, Sunset, Ocean, Forest, Night, Plain)
 - text over a photo
 
-Each person can have several at once. Optional capability `moments` (demo + Supabase). Not on
-the Firebase source.
+Each person can have several at once. Optional capability `moments` (demo, Supabase and Neon).
+Not on the Firebase source.
+
+**On Neon:** text-on-background Moments only, until photo storage is set up (`photos: false`; the
+composer hides *Add a photo* and the client refuses images). Expiry is enforced by the database:
+`moment_visible()` hides a Moment the instant it expires. With no scheduler on Neon Free, posting
+a Moment sweeps rows that expired over an hour ago (`moments_sweep`, migration
+`20261017120000_moments_sweep.sql`); any photo paths go to `media_cleanup_queue` for the media
+service to delete.
 
 ## Where
 

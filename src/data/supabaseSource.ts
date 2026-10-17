@@ -185,7 +185,8 @@ supabase.auth.onAuthStateChange((event, session) => {
 
 // Messages (E2EE to-device delivery) and Moments (photo storage) need Realtime
 // and Storage; on Neon they're migrated in a later step, so they stay off.
-const moments = isNeon ? null : createSupabaseMoments(supabase, liveQuery, invalidate);
+// Neon: text Moments only until photo storage is set up (no Storage API there).
+const moments = createSupabaseMoments(supabase, liveQuery, invalidate, { photos: !isNeon });
 const platform = createPlatform(supabase);
 
 export const supabaseSource: DataSource = {
