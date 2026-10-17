@@ -17,6 +17,11 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - **Reliability**: crash screens instead of blank pages; privacy-safe error reports (redacted, unlinked) with an admin summary.
 - **Messages on mobile**: long-press menu fixed (it closed on finger lift), reply cleared when its message is unsent; iPhone-profile touch test 12/12.
 - **Media service (R2)**: Postgres decides every upload and read; signed links (10 min upload for exact type/size, 1 h read); encrypted DM photos stored as ciphertext; client wired for posts, avatars, photo Moments and DM photos behind `VITE_MEDIA_STORAGE=r2`.
+- **Media live-verified (2026-10-17, preview `a0a0a52`)** via `.github/workflows/live-media.yml` (runs when `.github/live-media.run` changes; uses the `VERCEL_AUTOMATION_BYPASS_SECRET` repo secret):
+  - API, real R2 + Neon (31 checks): signature enforces exact type and size, private bucket, CORS allows only the app, followers-only and Moment visibility, no reuse of others' uploads, avatar, Moment deletion removes the file, encrypted DM photo round trip (ciphertext only), outsiders refused, cleanup verified.
+  - iPhone 13 browser (Chromium): legal gate, photo post with "Posting…" on a slow network, offline failure → saved with Retry → posts when back online, profile picture after reload, photo Moment, no horizontal scroll, no page errors, cleanup verified.
+  - Fixed on the way: upload links could be refused right after sign-up (retry once in `api/media-upload`); uploads now time out after 3 minutes instead of spinning forever.
+  - Test accounts are deleted even when tests fail (re-sign-in before deletion; an 8-minute deadline). Two accounts left by one interrupted run were removed by exact id.
 - **Onboarding**: a skippable welcome card on Home with people to follow, first post, profile setup, and links to Worlds and Support Hub.
 - **Legal (drafts v0.1)**: 7 documents at `/legal`, versioned; acceptance recorded at registration; re-acceptance gate.
 - **Creator monetization**: architecture only, programme closed; users see "Creator monetization is coming soon."
@@ -24,13 +29,13 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 
 ## Blockers / owner decisions
 - **Vercel**: deployments are readable again (calls must omit the team id); the latest commit is READY on the branch preview. **Opening the protected preview from here still fails (403 on the protection bypass)** — the owner must re-authorize the Vercel connector for the "amigo's projects" team (claude.ai → Settings → Connectors → Vercel → reconnect, select the team), or add a Protection Bypass for Automation secret.
-- **Media storage → Cloudflare R2**: owner configured the bucket, CORS, bucket-scoped token and 5 Preview env vars (verified by name/scope/type, 2026-10-17); preview redeployed READY. **Not yet verified live** — needs `VERCEL_AUTOMATION_BYPASS_SECRET` as a GitHub repository secret, then `scripts/test/live-media.test.mjs` runs via `.github/workflows/live-media.yml`.
+- ~~Media storage → Cloudflare R2~~ **Live-verified 2026-10-17** (see Done). For production: add the production domain to the bucket CORS rule and set the R2 variables for Production.
 - **Legal drafts**: `[OWNER: …]` placeholders cover entity, address, contact, governing law and minimum age (drafted as 13). Needs legal review.
 - ~~Test-account cleanup~~ **Done 2026-10-17** (owner-approved): 14 test accounts removed after re-verification; 3 real accounts and their data untouched.
 - **No admin account yet**: admin is granted to the owner's account only after identity is confirmed.
 
 ## Next
-1. Once R2 is configured: live test of uploads (post photos, avatars, photo Moments, encrypted DM photos), then video posts and voice notes.
+1. Drive an encrypted message photo through the browser UI in the live test; then video posts and voice notes.
 2. Voice notes after media. **GIFs are blocked:** Tenor's API shut down on 2026-06-30. GIPHY's free key is reportedly a beta key (about 100 calls/hour); production needs an application and possibly payment, and searches may have to come from the user's browser, which exposes their IP to GIPHY. An owner decision and key are needed, and GIF URLs in encrypted chats would be external, unencrypted media.
 3. Per-page sharing previews (needs a small server function).
 4. Live re-test on Neon for the new DM actions, with two dedicated accounts, then remove them.
