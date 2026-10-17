@@ -29,7 +29,8 @@ four blockers below are cleared.
 | Legal pages + acceptance | NEEDS ATTENTION | Machinery ready; the text itself is a draft (blocker 1) |
 | Encrypted 1:1 messages | READY | Live-tested on Neon (20/20), 70 local E2E checks |
 | Reactions, edit, unsend, search, older history | READY (local) | 19 local checks; **not yet live-tested on Neon** |
-| Message photos, voice notes, video, GIFs | DEFERRED | Needs media storage; GIFs need a provider's terms checked first |
+| Message photos, voice notes, video | DEFERRED | Needs media storage |
+| GIFs | BLOCKED | Tenor API shut down (2026-06-30); GIPHY production access reportedly needs an application/payment — owner decision |
 | Typing indicator | DEFERRED on Neon | Needs Realtime; skipped to save Free-plan resources |
 | Feed, posts, replies, likes | READY | Text posts on Neon |
 | Bookmarks, edit/delete post, copy link | READY (local) | Not yet exercised live |
@@ -39,9 +40,14 @@ four blockers below are cleared.
 | Notifications (in-app) | READY | Polling on Neon (30 s), paused when the tab is hidden |
 | Reporting (messages, Moments, posts, replies, profiles, Worlds, Support) | READY | Admin queues for each |
 | Suspension | READY (local) | Enforced by database triggers on 11 tables |
+| Warnings, rate limits, block side-effects | READY (local) | Limits: posts 30/10 min and 300/day, likes 300/h, follows 100/h, messages 60/min |
+| Admin platform stats | READY (local) | Aggregate counts only |
+| Blocked accounts list | READY (local) | Settings → Privacy |
 | Admin access to messages | READY (by design) | No backdoor: admins see only what reporters choose to share |
 | Creator monetization | DEFERRED | Architecture only; programme closed |
-| PWA / SEO / OG / onboarding / analytics | DEFERRED | Not started in this phase |
+| PWA (install, offline page) | READY (local browser test) | Nothing sensitive cached; per-page OG previews need a server and are deferred |
+| Onboarding | READY | Welcome card; avatar step waits for media storage |
+| Analytics | NEEDS ATTENTION | Admin aggregate stats only; no error-rate tracking yet (no third-party tracker added) |
 | Test-account cleanup | BLOCKED (awaiting confirmation) | Script prepared, guarded, not run |
 
 ## Security checks (live Neon, after every migration today)
