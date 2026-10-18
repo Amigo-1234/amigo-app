@@ -48,6 +48,7 @@ async function tokenOf(p) {
 
 async function open(browserType, who, opts = {}) {
   const browser = await browserType.launch(opts.launch ?? {});
+  browsers.push(browser);
   const ctx = await browser.newContext({ ...(opts.device ?? {}), ...(opts.context ?? {}) });
   await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 }).catch(() => undefined);
   await ctx.addCookies(
@@ -75,6 +76,7 @@ const shown = (page) =>
   });
 
 const tag = randomBytes(4).toString("hex");
+let step = "start";
 const people = [];
 const browsers = [];
 try {
@@ -84,11 +86,12 @@ try {
   people.push(B);
 
   // B: Firefox, with Mozilla's push service. Notifications allowed as if the person tapped "Allow".
+  step = "open Firefox signed in as B";
   const b = await open(firefox, B, {
     launch: { firefoxUserPrefs: { "dom.push.enabled": true, "dom.serviceWorkers.enabled": true, "permissions.default.desktop-notification": 1, "dom.webnotifications.requireuserinteraction": false } },
   });
-  browsers.push(b.browser);
   await b.page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.getRegistration(), null, { timeout: 30000 }).catch(() => undefined);
+  step = "Settings → notifications row";
   await b.page.goto(`${BASE}/settings`);
   const row = b.page.getByRole("button", { name: /Notifications on this device/ });
   await row.waitFor();
@@ -102,6 +105,7 @@ try {
   const listed = await b.page.locator(".settings-devices li").count();
   ok("the device appears in the device list", listed === 1, String(listed));
 
+  step = "test notification";
   // 1. Test notification through the real push service.
   await b.page.getByRole("button", { name: "Send a test notification" }).click();
   let got = [];
@@ -125,8 +129,8 @@ try {
   await sleep(8000);
   await b.page.goto("about:blank");
 
+  step = "A sends a message";
   const a = await open(chromium, A, { device: devices["Pixel 5"] });
-  browsers.push(a.browser);
   await a.page.goto(`${BASE}/u/${handleB}`);
   await a.page.getByRole("button", { name: /^Message / }).first().click();
   const input = a.page.locator("#msg-input:not([disabled])");
@@ -157,7 +161,13 @@ try {
   ok("turning notifications off unregisters the device", off);
 } catch (e) {
   failures++;
-  console.log(`FAIL ${String(e.message).split("\n")[0]}`);
+  console.log(`FAIL at "${step}": ${String(e.message).split("\n")[0]}`);
+  for (const br of browsers)
+    for (const c of br.contexts())
+      for (const pg of c.pages()) {
+        const text = await pg.locator("body").innerText().catch(() => "");
+        console.log(`     page ${new URL(pg.url()).pathname}: "${text.replace(/\s+/g, " ").slice(0, 160)}"`);
+      }
 } finally {
   for (const br of browsers) await br.close().catch(() => undefined);
   for (const p of people) {

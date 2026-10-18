@@ -178,6 +178,21 @@ try {
     for (let t = 0; t < ms && !(await imgLoaded(loc)); t += 500) await new Promise((r) => setTimeout(r, 500));
     return imgLoaded(loc);
   };
+  /** Why a post's image isn't showing: the post's state and its <img> (kind of source only, never URLs or keys). */
+  const postState = (text) =>
+    page.evaluate((t) => {
+      const arts = [...document.querySelectorAll("main article")];
+      const i = arts.findIndex((a) => a.textContent.includes(t));
+      if (i < 0) return `post not on the page (${arts.length} posts shown)`;
+      const a = arts[i];
+      const imgs = [...a.querySelectorAll("img")].map((img) => {
+        const src = img.getAttribute("src") ?? "";
+        const kind = !src ? "no-src" : src.startsWith("blob:") ? "blob" : src.includes("r2.cloudflarestorage.com") ? (src.includes("-sm.") ? "r2-small" : "r2") : src.startsWith("/api/media/") ? "media-fn" : "other";
+        return `${kind}${img.complete ? "/complete" : "/loading"}/${img.naturalWidth}px/${img.style.visibility || "visible"}`;
+      });
+      const r = a.getBoundingClientRect();
+      return `post #${i + 1} at y=${Math.round(r.top)} · "${(a.innerText.match(/Posting…|Couldn.t[^\n]*|Retry/) ?? ["no status"])[0]}" · imgs=[${imgs.join(", ")}]`;
+    }, text);
   const noOverflow = async () => (await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 0;
   // No request interception anywhere (it would answer CORS preflights itself and hide
   // real problems): a slow network and real offline mode, as on a phone.
@@ -197,7 +212,9 @@ try {
     await compose(`Live photo post ${tag}`, "photo.png");
     await check("upload in progress is shown (Posting…)", await page.getByText("Posting…").first().isVisible().catch(() => false));
     await network({});
-    await check("photo post appears and its image loads from R2", await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img:is([src*="/api/media/"],[src*=".r2.cloudflarestorage.com/"])`).first(), 45000));
+    const shownPhoto = await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img:is([src*="/api/media/"],[src*=".r2.cloudflarestorage.com/"])`).first(), 45000);
+    if (!shownPhoto) console.log(`info photo post state: ${await postState(`Live photo post ${tag}`)}`);
+    await check("photo post appears and its image loads from R2", shownPhoto);
     await check("no horizontal scroll with a photo post", await noOverflow());
   });
 
