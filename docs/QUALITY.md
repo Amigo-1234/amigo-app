@@ -222,9 +222,21 @@ aren't stored, at most 300 kept with oldest first out, old Moment photos refetch
 - Test runs overlapped a new Preview build taking over the URL mid-run (a push to the branch rebuilds it);
   re-runs now go on an unchanged commit.
 
-- **The feed came back grouped by author on Neon** instead of newest first (the request relied on the
-  order inside `feed_posts`, which isn't guaranteed once authors and photos are embedded). A new post could
-  land far down the feed. The request now orders explicitly (efa7658); iPhone run passed twice after it.
+- **A new post landed 11th in the feed** in two iPhone runs, with the list not newest first. The feed request
+  relied on the order inside `feed_posts`, which isn't guaranteed once authors and photos are embedded; it
+  now asks for newest first explicitly (efa7658). The exact cause wasn't confirmed: on the production
+  smoke test (18:00 UTC) the unordered request also came back newest first. After the fix the new post
+  was first in every run (Preview twice, production once).
+
+## Production (efa7658, `dpl_9W3zzhEK2AmdvTS5jeisyM1MfNE9`, 2026-10-18)
+
+Production smoke test (18:00 UTC), all passed: read-only exposure checks (no secrets, keys or source
+maps shipped; private endpoints refuse anonymous calls); real R2 + Neon API (uploads, CORS, private bucket,
+visibility rules, avatars, Moments, encrypted message photo decrypted by the recipient, ciphertext only
+stored); feed newest first with a fresh post on top; iPhone 13 browser (photo post first in the feed,
+offline retry without duplicates, profile photo, viewer with locked background and exact position restore,
+Moments, composer above the keyboard, encrypted photo sent and decrypted on the recipient's phone).
+Temporary accounts and files removed afterwards. Push is not part of the production smoke test.
 
 ## G. Remaining limits
 
