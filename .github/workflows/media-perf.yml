@@ -20,6 +20,7 @@ jobs:
       - name: Audit
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          PW_EXPERIMENTAL_SERVICE_WORKER_NETWORK_EVENTS: "1"
         run: BASE=$(head -1 .github/media-perf.run) OUT=media.json node scripts/test/media-perf.mjs
       - name: Results
         if: always()

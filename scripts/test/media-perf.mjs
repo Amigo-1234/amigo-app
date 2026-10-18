@@ -99,39 +99,48 @@ async function phone(who, profile) {
       true,
     );
   });
-  const page = await ctx.newPage();
-  page.setDefaultTimeout(60000);
-  const cdp = await ctx.newCDPSession(page);
-  await cdp.send("Network.enable");
-  if (profile) {
-    await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: profile.latency, downloadThroughput: profile.down, uploadThroughput: profile.up });
-    await cdp.send("Emulation.setCPUThrottlingRate", { rate: profile.cpu });
-  }
-  const net = { hops: [], cached: 0 };
-  const open = new Map();
-  cdp.on("Network.requestWillBeSent", (e) => {
-    const k = kind(e.request.url);
-    const prev = open.get(e.requestId);
-    // A redirect ends the previous hop of the same request.
-    if (prev && e.redirectResponse) net.hops.push({ kind: prev.kind, ms: (e.timestamp - prev.t) * 1000, bytes: 0, status: e.redirectResponse.status });
-    if (k !== "other") open.set(e.requestId, { kind: k, t: e.timestamp });
-    else open.delete(e.requestId);
-  });
-  cdp.on("Network.requestServedFromCache", (e) => open.has(e.requestId) && net.cached++);
-  cdp.on("Network.responseReceived", (e) => {
-    const o = open.get(e.requestId);
-    if (o) o.status = e.response.status;
-    if (o && e.response.fromDiskCache) o.disk = true;
-    if (o && e.response.fromServiceWorker) o.sw = true;
-  });
-  cdp.on("Network.loadingFinished", (e) => {
-    const o = open.get(e.requestId);
-    if (!o) return;
-    open.delete(e.requestId);
-    if (o.disk) return void net.cached++;
-    net.hops.push({ kind: o.kind, ms: (e.timestamp - o.t) * 1000, bytes: e.encodedDataLength, status: o.status, sw: !!o.sw });
-  });
-  return { ctx, page, cdp, net, reset: () => ((net.hops = []), (net.cached = 0)) };
+  const net = { hops: [], cached: 0, swDownloads: 0 };
+  // Requests made by the service worker (reported by Playwright for Chromium).
+  ctx.on("request", (r) => r.serviceWorker() && kind(r.url()) === "r2" && net.swDownloads++);
+  const p = { ctx, net, reset: () => ((net.hops = []), (net.cached = 0), (net.swDownloads = 0)) };
+  /** A tab with throttling and request tracking; a new one has no in-memory image cache. */
+  p.newTab = async () => {
+    const page = await ctx.newPage();
+    page.setDefaultTimeout(60000);
+    const cdp = await ctx.newCDPSession(page);
+    await cdp.send("Network.enable");
+    if (profile) {
+      await cdp.send("Network.emulateNetworkConditions", { offline: false, latency: profile.latency, downloadThroughput: profile.down, uploadThroughput: profile.up });
+      await cdp.send("Emulation.setCPUThrottlingRate", { rate: profile.cpu });
+    }
+    const open = new Map();
+    cdp.on("Network.requestWillBeSent", (e) => {
+      const k = kind(e.request.url);
+      const prev = open.get(e.requestId);
+      // A redirect ends the previous hop of the same request.
+      if (prev && e.redirectResponse) net.hops.push({ kind: prev.kind, ms: (e.timestamp - prev.t) * 1000, bytes: 0, status: e.redirectResponse.status });
+      if (k !== "other") open.set(e.requestId, { kind: k, t: e.timestamp });
+      else open.delete(e.requestId);
+    });
+    cdp.on("Network.requestServedFromCache", (e) => open.has(e.requestId) && net.cached++);
+    cdp.on("Network.responseReceived", (e) => {
+      const o = open.get(e.requestId);
+      if (o) o.status = e.response.status;
+      if (o && e.response.fromDiskCache) o.disk = true;
+      if (o && e.response.fromServiceWorker) o.sw = true;
+    });
+    cdp.on("Network.loadingFinished", (e) => {
+      const o = open.get(e.requestId);
+      if (!o) return;
+      open.delete(e.requestId);
+      if (o.disk) return void net.cached++;
+      net.hops.push({ kind: o.kind, ms: (e.timestamp - o.t) * 1000, bytes: e.encodedDataLength, status: o.status, sw: !!o.sw });
+    });
+    p.page = page;
+    p.cdp = cdp;
+  };
+  await p.newTab();
+  return p;
 }
 
 const summary = (net) => {
@@ -145,8 +154,9 @@ const summary = (net) => {
   const out = {};
   for (const [k, v] of Object.entries(by)) out[k] = { n: v.n, kb: Math.round(v.kb), p50: pct(v.ms, 50), p95: pct(v.ms, 95) };
   // Answered by the app's photo cache (service worker) rather than the network.
-  const fromApp = net.hops.filter((h) => h.sw && h.kind === "R2 file").length;
-  return { ...out, servedFromCache: net.cached, photosFromAppCache: fromApp };
+  const fromApp = net.hops.filter((h) => h.sw && h.kind === "r2").length;
+  // Photos the service worker itself had to download (a cache miss, or a link it may not reuse).
+  return { ...out, servedFromCache: net.cached, photosFromAppCache: Math.max(0, fromApp - net.swDownloads), swDownloads: net.swDownloads };
 };
 
 /** Image timings since this page's navigation, read in the page. */
@@ -268,7 +278,11 @@ try {
     // and iOS evicts it), so only the app's photo cache can avoid re-downloading.
     p.reset();
     await p.cdp.send("Network.clearBrowserCache");
-    await p.page.reload({ waitUntil: "commit" });
+    const before = p.page;
+    await p.newTab();
+    await before.close();
+    p.reset();
+    await p.page.goto(BASE, { waitUntil: "commit" });
     await p.page.locator(".post-media img").first().waitFor({ timeout: 90000 }).catch(() => results.failures.push(`${name}: no feed image (returning)`));
     await sleep(settle / 2);
     out.returning = { ...(await images(p.page)), network: summary(p.net) };

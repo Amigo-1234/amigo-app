@@ -122,6 +122,8 @@ try {
   const why = on ? "" : `row: ${(await row.innerText()).replace(/\s+/g, " ").slice(0, 120)} · toasts: ${JSON.stringify(toasts)} · console: ${JSON.stringify(consoleB.slice(-3))}`;
   ok("turning notifications on registers this device with a real push service", on, why);
   if (!on) throw new Error("push subscription not available in this browser build; stopping");
+  // The list reloads once the device is on.
+  await b.page.locator(".settings-devices li").first().waitFor({ timeout: 10000 }).catch(() => undefined);
   const listed = await b.page.locator(".settings-devices li").count();
   ok("the device appears in the device list", listed === 1, String(listed));
 

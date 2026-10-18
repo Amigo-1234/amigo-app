@@ -199,7 +199,14 @@ try {
     const conv = await appA.openConversation(A.id, B.id);
     const pixels = randomBytes(3000);
     await appA.send(A.id, conv, { text: "live photo", image: { kind: "image", blob: new Blob([pixels], { type: "image/png" }), width: 8, height: 8 } });
-    const view = await new Promise((res, rej) => appB.subscribeConversation(conv, B.id, { onData: res, onError: rej }));
+    // The photo decrypts in the background: the first view shows a placeholder, a later one the photo.
+    const view = await new Promise((res, rej) => {
+      const t = setTimeout(() => rej(new Error("photo never shown")), 30000);
+      appB.subscribeConversation(conv, B.id, {
+        onData: (v) => v.messages.at(-1)?.media[0]?.url && (clearTimeout(t), res(v)),
+        onError: rej,
+      });
+    });
     const msg = view.messages.at(-1);
     const got = msg?.media[0]?.url ? Buffer.from(await (await fetch(msg.media[0].url)).arrayBuffer()) : null;
     ok("encrypted DM photo: recipient decrypts the original", msg?.text === "live photo" && got?.equals(pixels));
