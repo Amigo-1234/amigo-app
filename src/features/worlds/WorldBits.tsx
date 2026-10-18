@@ -8,6 +8,7 @@ import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { countdown, statusLine, worldStatus } from "./time";
 import { worldErrorText } from "./useWorlds";
+import { MediaImg } from "../../lib/mediaLinks";
 
 const fmt = new Intl.NumberFormat();
 
@@ -35,7 +36,7 @@ export function WorldCover({ world, size }: { world: World; size: "card" | "hero
   for (const c of world.slug) h = (h * 31 + c.charCodeAt(0)) % 360;
   return (
     <div className={`world-cover world-cover--${size}`} style={{ "--world-hue": h } as React.CSSProperties} aria-hidden="true">
-      {world.coverUrl && !failed && <img src={world.coverUrl} alt="" loading={size === "card" ? "lazy" : "eager"} decoding="async" onError={() => setFailed(true)} />}
+      {world.coverUrl && !failed && <MediaImg src={world.coverUrl} size={size === "card" ? "sm" : "full"} alt="" loading={size === "card" ? "lazy" : "eager"} decoding="async" onError={() => setFailed(true)} />}
     </div>
   );
 }

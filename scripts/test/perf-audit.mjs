@@ -114,6 +114,7 @@ function kind(url) {
   if (u.pathname.startsWith("/neon/rest/v1/")) return `table ${u.pathname.split("/")[4]}`;
   if (u.pathname.startsWith("/neon/auth/")) return `auth ${u.pathname.slice(11)}`;
   if (u.pathname.startsWith("/api/media/")) return "media read";
+  if (u.pathname === "/api/media-sign") return "media sign";
   if (u.pathname.startsWith("/api/")) return u.pathname;
   if (u.pathname.endsWith(".wasm")) return "crypto wasm";
   if (u.pathname.startsWith("/assets/")) return `asset .${u.pathname.split(".").pop()}`;

@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import "./Avatar.css";
+import { MediaImg } from "../lib/mediaLinks";
 
 type Size = "xs" | "sm" | "md" | "lg" | "xl";
 
@@ -25,7 +26,7 @@ export function Avatar({ name, src, seed, size = "md" }: { name: string; src?: s
       aria-hidden="true"
     >
       {showImage ? (
-        <img src={src} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+        <MediaImg src={src} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
       ) : (
         <span className="avatar__initials">{initials(name)}</span>
       )}

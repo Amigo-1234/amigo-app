@@ -190,6 +190,16 @@
   transition: opacity var(--dur-med) ease;
 }
 
+/* The tiny blurred preview under the image while it loads. */
+.media-tile__preview {
+  position: absolute;
+  inset: -12px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(14px);
+  pointer-events: none;
+}
+
 .media-tile.is-loaded img,
 .media-tile.is-loaded video {
   opacity: 1;

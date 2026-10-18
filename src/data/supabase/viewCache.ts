@@ -6,6 +6,8 @@
  * nothing here decides what anyone may see. Cleared whenever the signed-in
  * person changes or signs out.
  */
+import { forgetMediaLinks } from "../../lib/mediaLinks";
+
 const MAX_ENTRIES = 60;
 const values = new Map<string, unknown>();
 let owner: string | null | undefined;
@@ -13,6 +15,7 @@ let owner: string | null | undefined;
 /** The signed-in person (null when signed out); a change forgets everything. */
 export function setCacheOwner(userId: string | null) {
   if (userId === owner) return;
+  forgetMediaLinks();
   values.clear();
   inflight.clear();
   owner = userId;
@@ -50,6 +53,7 @@ export function remember(key: string, value: unknown) {
 }
 
 export const forgetAll = () => {
+  forgetMediaLinks();
   values.clear();
   inflight.clear();
 };

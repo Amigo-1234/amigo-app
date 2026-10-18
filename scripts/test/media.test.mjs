@@ -32,6 +32,7 @@ const jwt = (sub) => {
 const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
 const upload = (await vite.ssrLoadModule("/api/media-upload.ts")).default;
 const media = (await vite.ssrLoadModule("/api/media.ts")).default;
+const signFn = (await vite.ssrLoadModule("/api/media-sign.ts")).default;
 const db = new pg.Client({ connectionString: DATABASE_URL });
 await db.connect();
 
@@ -91,6 +92,43 @@ try {
   ok("signed-out read refused", r.status === 401);
   r = await read(B, "../etc/passwd");
   ok("malformed keys rejected", r.status === 404);
+
+  // the smaller copy: same owner only, readable exactly when the original is
+  const sign = (token, keys) => signFn(new Request("http://app.test/api/media-sign", { method: "POST", headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), "content-type": "application/json" }, body: JSON.stringify({ keys }) }));
+  const smallBytes = Buffer.from("small-webp-".repeat(16));
+  r = await ask(C, { variantOf: up.key, mime: "image/webp", size: smallBytes.length });
+  ok("someone else can't add a smaller copy to your photo", r.status === 403);
+  r = await ask(A, { variantOf: up.key, mime: "image/webp", size: smallBytes.length });
+  const sm = await r.json();
+  ok("owner gets an upload link for the smaller copy", r.status === 200 && sm.key === up.key.replace(/\.jpg$/, "-sm.webp"), sm.key);
+  await fetch(sm.url, { method: "PUT", headers: { "content-type": "image/webp" }, body: smallBytes });
+  r = await ask(A, { variantOf: up.key, mime: "image/webp", size: smallBytes.length });
+  ok("only one smaller copy per photo", r.status === 403);
+  r = await ask(A, { variantOf: up.key, mime: "image/webp", size: 3 * 1024 * 1024 });
+  ok("oversized smaller copy refused", r.status === 403);
+  r = await media(new Request(`http://app.test/api/media?path=${encodeURIComponent(up.key)}&size=sm`, { headers: { authorization: `Bearer ${B}` } }));
+  ok("?size=sm redirects a follower to the smaller copy", r.status === 302 && r.headers.get("location")?.includes("-sm.webp"));
+  r = await read(B, sm.key);
+  ok("the smaller copy is readable by a follower", r.status === 302);
+  r = await read(C, sm.key);
+  ok("…and hidden from a non-follower like the original", r.status === 404);
+  r = await media(new Request(`http://app.test/api/media?path=${encodeURIComponent(up.key)}&size=sm`, { headers: { authorization: `Bearer ${C}` } }));
+  ok("?size=sm hidden from a non-follower", r.status === 404);
+
+  // signing many at once
+  r = await sign(B, [up.key, `${ids.a}/post/${"0".repeat(32)}.jpg`]);
+  let signed = await r.json();
+  ok("batch signing returns links for visible files with their smaller copy", r.status === 200 && signed.links[up.key]?.url?.includes("X-Amz-Signature") && signed.links[up.key]?.small?.includes("-sm.webp") && signed.ttl > 3000);
+  ok("files that don't exist are left out", Object.keys(signed.links).length === 1);
+  const viaLink = await fetch(signed.links[up.key].small);
+  ok("the signed small link returns the smaller copy", Buffer.compare(Buffer.from(await viaLink.arrayBuffer()), smallBytes) === 0);
+  r = await sign(C, [up.key]);
+  signed = await r.json();
+  ok("batch signing leaves out files you may not see", r.status === 200 && Object.keys(signed.links).length === 0);
+  ok("batch signing needs a sign-in", (await sign(null, [up.key])).status === 401);
+  ok("batch signing rejects malformed keys", (await sign(B, ["../x", 5])).status === 400);
+  r = await sign(A, Array.from({ length: 80 }, () => `${ids.a}/post/${randomUUID().replace(/-/g, "")}.jpg`).concat(up.key));
+  ok("batch signing handles a long list (capped)", r.status === 200);
 
   // encrypted DM attachment
   const conv = randomUUID();

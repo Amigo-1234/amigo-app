@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { MediaItem } from "../../data";
+import { MediaImg } from "../../lib/mediaLinks";
 
 const MIN_RATIO = 4 / 5; // tallest single-image crop (portrait)
 const MAX_RATIO = 1.91; // widest single-image crop (landscape)
@@ -10,7 +11,7 @@ function ratioOf(m: Pick<MediaItem, "width" | "height">): number | null {
   return Math.min(MAX_RATIO, Math.max(MIN_RATIO, m.width / m.height));
 }
 
-export type LayoutItem = Pick<MediaItem, "type" | "url" | "width" | "height" | "alt" | "posterUrl">;
+export type LayoutItem = Pick<MediaItem, "type" | "url" | "width" | "height" | "alt" | "posterUrl" | "preview">;
 
 /**
  * The one media layout used everywhere posts appear (feed, profile, search,
@@ -94,11 +95,12 @@ function MediaTile({
   ) : item.type === "video" ? (
     <video src={item.url} poster={item.posterUrl} muted playsInline preload="metadata" onLoadedData={() => setLoaded(true)} />
   ) : (
-    <img src={item.url} alt={item.alt ?? ""} loading="lazy" decoding="async" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
+    <MediaImg src={item.url} size="sm" alt={item.alt ?? ""} loading="lazy" decoding="async" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
   );
 
   return (
     <div className={`media-tile${loaded ? " is-loaded" : ""}`}>
+      {item.preview && !loaded && !failed && <span className="media-tile__preview" style={{ backgroundImage: `url("${item.preview}")` }} aria-hidden="true" />}
       {onOpen ? (
         <button
           type="button"

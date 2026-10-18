@@ -2,6 +2,7 @@ import { Link } from "react-router";
 import { Layers } from "lucide-react";
 import type { Post } from "../../data";
 import "./MediaGrid.css";
+import { MediaImg } from "../../lib/mediaLinks";
 
 /** Square-cropped grid of a profile's media posts; each tile opens the post. */
 export function MediaGrid({ posts }: { posts: Post[] }) {
@@ -16,7 +17,7 @@ export function MediaGrid({ posts }: { posts: Post[] }) {
               {first.type === "video" ? (
                 <video src={first.url} muted playsInline preload="metadata" />
               ) : (
-                <img src={first.url} alt={first.alt ?? ""} loading="lazy" decoding="async" />
+                <MediaImg src={first.url} size="sm" alt={first.alt ?? ""} loading="lazy" decoding="async" />
               )}
               {p.media.length > 1 && <Layers className="media-grid__multi" size={18} aria-hidden="true" />}
             </Link>

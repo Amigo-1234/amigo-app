@@ -62,7 +62,7 @@ function kind(url) {
   const u = new URL(url);
   if (u.hostname.endsWith("r2.cloudflarestorage.com")) return "r2";
   if (u.hostname !== host) return "other";
-  if (u.pathname.startsWith("/api/media/sign")) return "sign";
+  if (u.pathname === "/api/media-sign") return "sign";
   if (u.pathname.startsWith("/api/media/")) return "media-fn";
   return "other";
 }
@@ -92,6 +92,7 @@ async function phone(who, profile) {
           post: !!el.closest(".post-media, .media-grid"),
           visible: r.bottom > 0 && r.top < innerHeight,
           naturalW: el.naturalWidth,
+          small: /-sm\.[a-z]+(\?|$)/.test(new URL(el.currentSrc, location.href).pathname + "?"),
           shownW: Math.round(r.width * devicePixelRatio),
         });
       },
@@ -155,6 +156,7 @@ async function images(page) {
     firstPostImageMs: firstPost && Math.round(firstPost),
     lastVisiblePostImageMs: visiblePosts.length ? Math.round(Math.max(...visiblePosts.map((i) => i.t))) : null,
     postImages: posts.length,
+    smallCopies: posts.filter((i) => i.small).length,
     avatars: list.filter((i) => i.avatar).length,
     // How much larger than its displayed size each post image was (1 = exact).
     oversize: pct(posts.filter((i) => i.shownW > 0).map((i) => (i.naturalW / i.shownW) * 100), 50) / 100,
@@ -218,8 +220,13 @@ try {
       p.reset();
       const t0 = Date.now();
       await dialog.getByRole("button", { name: "Post", exact: true }).first().click();
-      await p.page.locator(`article:has-text("Media perf ${tag} #${i}") .post-media img`).first().waitFor({ timeout: 90000 });
-      results.upload[`#${i}`] = { pickedKb: sizes[i - 1], postedMs: Date.now() - t0, r2PutKb: Math.round(p.net.hops.filter((h) => h.kind === "r2").reduce((s, h) => s + h.bytes, 0) / 1024) };
+      // Posted = the post shows its uploaded image (not the local preview of the composer).
+      await p.page.waitForFunction(
+        (t) => [...document.querySelectorAll("main article")].some((a) => a.textContent.includes(t) && [...a.querySelectorAll(".post-media img")].some((img) => img.complete && img.naturalWidth > 0 && !img.currentSrc.startsWith("blob:"))),
+        `Media perf ${tag} #${i}`,
+        { timeout: 120000, polling: 100 },
+      );
+      results.upload[`#${i}`] = { pickedKb: sizes[i - 1], postedMs: Date.now() - t0 };
       await sleep(500);
     }
     await p.ctx.close();

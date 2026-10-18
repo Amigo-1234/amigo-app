@@ -14,6 +14,7 @@ import { Button } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
 import "./NotificationsScreen.css";
+import { MediaImg } from "../lib/mediaLinks";
 
 const MAX_AVATARS = 6;
 
@@ -133,7 +134,7 @@ function NotificationRow({ group: g, onOpen }: { group: NotificationGroup; onOpe
           )}
         </span>
         {thumb && (
-          <img className="notification__thumb" src={thumb.url} alt="" loading="lazy" decoding="async" aria-hidden="true" />
+          <MediaImg className="notification__thumb" size="sm" src={thumb.url} alt="" loading="lazy" decoding="async" aria-hidden="true" />
         )}
         {g.unread && (
           <span className="notification__unread">

@@ -27,8 +27,8 @@ export function r2(): R2 | null {
   };
 }
 
-/** Keys are made by media_begin_upload: "<uuid>/<purpose>/[<uuid>/]<hex>.<ext>". */
-export const KEY = /^[0-9a-f-]{36}\/(avatar|post|moment|dm)\/(?:[0-9a-f-]{36}\/)?[0-9a-f]{32}\.(jpg|png|webp|gif|mp4|webm|mov|bin)$/;
+/** Keys are made by media_begin_upload: "<uuid>/<purpose>/[<uuid>/]<hex>.<ext>" (smaller copies: "<hex>-sm.<ext>", media_begin_variant). */
+export const KEY = /^[0-9a-f-]{36}\/(avatar|post|moment|dm)\/(?:[0-9a-f-]{36}\/)?[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif|mp4|webm|mov|bin)$/;
 
 const objectUrl = (s: R2, key: string) => `${s.base}/${key.split("/").map(encodeURIComponent).join("/")}`;
 

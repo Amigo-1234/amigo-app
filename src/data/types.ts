@@ -34,6 +34,8 @@ export type MediaItem = {
   width?: number;
   height?: number;
   alt?: string;
+  /** A tiny blurred version shown while the image loads (data: URL, a few hundred bytes). */
+  preview?: string;
   /** Video only (future): poster image and duration. */
   posterUrl?: string;
   durationMs?: number;

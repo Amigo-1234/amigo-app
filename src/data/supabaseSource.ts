@@ -17,6 +17,8 @@ import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { createMediaStore } from "./supabase/mediaStore";
+import { setMediaSigner } from "../lib/mediaLinks";
+import { makePreview } from "../lib/image";
 import { createPlatform } from "./supabase/platform";
 import { cached, dropPrefetches, prefetch, remember, setCacheOwner, takePrefetch } from "./supabase/viewCache";
 import * as q from "./supabase/queries";
@@ -258,7 +260,10 @@ supabase.auth.onAuthStateChange((event, session) => {
 const media = isNeon && import.meta.env.VITE_MEDIA_STORAGE === "r2"
   ? createMediaStore(async () => (await supabase.auth.getSession()).data.session?.access_token ?? null)
   : null;
-if (media) q.useMediaService(media.url);
+if (media) {
+  q.useMediaService(media.url);
+  setMediaSigner(media.sign);
+}
 const moments = createSupabaseMoments(supabase, liveQuery, invalidate, { photos: !isNeon || !!media, media });
 const platform = createPlatform(supabase);
 // Post tools + moderation need migration 20261017130000 (applied on Neon only).
@@ -450,9 +455,12 @@ export const supabaseSource: DataSource = {
         if (media) {
           // Neon: Postgres picks the key; unused uploads are swept after a day.
           // A retry reuses a photo that already reached the bucket (not attached to anything yet).
-          const key = uploadedPostMedia.get(m.blob) ?? (await media.upload("post", m.blob));
+          const [key, preview] = await Promise.all([
+            uploadedPostMedia.get(m.blob) ?? media.upload("post", m.blob),
+            makePreview(m.blob).catch(() => null),
+          ]);
           uploadedPostMedia.set(m.blob, key);
-          return { kind: "image" as const, storage_path: key, mime_type: m.blob.type, width: m.width, height: m.height, byte_size: m.blob.size };
+          return { kind: "image" as const, storage_path: key, mime_type: m.blob.type, width: m.width, height: m.height, byte_size: m.blob.size, preview };
         }
         const ext = m.blob.type === "image/png" ? "png" : m.blob.type === "image/webp" ? "webp" : m.blob.type === "image/gif" ? "gif" : "jpg";
         const path = `${viewer.id}/${crypto.randomUUID()}.${ext}`;

@@ -1,5 +1,6 @@
 import type { MediaItem, MomentBackground } from "../../data";
 import "./Moments.css";
+import { MediaImg } from "../../lib/mediaLinks";
 
 /**
  * What a Moment looks like: a photo, text on a background, or text over a
@@ -19,10 +20,11 @@ export function MomentVisual({
   return (
     <div className={`moment-visual moment-bg--${background} moment-visual--${size}${media ? " has-photo" : ""}`}>
       {media && (
-        <img
+        <MediaImg
           key={media.url}
           className="moment-visual__photo"
           src={media.url}
+          size={size === "thumb" ? "sm" : "full"}
           alt={media.alt ?? ""}
           draggable={false}
           // If the photo can't load, the background still shows (no broken-image icon).

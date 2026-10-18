@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import type { MediaItem } from "../../data";
 import "./MediaViewer.css";
+import { MediaImg } from "../../lib/mediaLinks";
 
 type Open = (items: MediaItem[], index?: number) => void;
 const ViewerContext = createContext<Open>(() => {});
@@ -75,7 +76,7 @@ export function MediaViewerProvider({ children }: { children: ReactNode }) {
             {item.type === "video" ? (
               <video key={item.url} src={item.url} poster={item.posterUrl} controls autoPlay playsInline />
             ) : (
-              <img key={item.url} src={item.url} alt={item.alt ?? ""} />
+              <MediaImg key={item.url} src={item.url} alt={item.alt ?? ""} />
             )}
           </figure>
         )}

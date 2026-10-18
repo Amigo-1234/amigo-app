@@ -17,7 +17,10 @@ type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "id" | "
 /** A person as embedded anywhere: public fields + whether they're verified (never the admin note). */
 export const VERIFICATION_EMBED = "verification:profile_verifications!profile_verifications_user_id_fkey(verification_type)";
 const PERSON = `id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`;
-type MediaRow = Pick<Database["public"]["Tables"]["post_media"]["Row"], "kind" | "bucket" | "storage_path" | "width" | "height" | "alt" | "position">;
+type MediaRow = Pick<Database["public"]["Tables"]["post_media"]["Row"], "kind" | "bucket" | "storage_path" | "width" | "height" | "alt" | "position"> & {
+  /** Tiny blurred preview (migration 20261019091000). */
+  preview?: string | null;
+};
 export type PostRow = {
   id: string;
   body: string;
@@ -46,10 +49,11 @@ let MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!in
 
 /**
  * Backends with migration 20261017130000 (Neon): posts also carry edited_at and
- * whether you bookmarked them (an embed RLS limits to your own row).
+ * whether you bookmarked them (an embed RLS limits to your own row), and each
+ * photo's tiny preview (20261019091000).
  */
 export function enablePostTools() {
-  POST_SELECT = `${POST_SELECT_BASE}, edited_at, saved:post_bookmarks(user_id), liked`;
+  POST_SELECT = `${POST_SELECT_BASE.replace("alt, position)", "alt, position, preview)")}, edited_at, saved:post_bookmarks(user_id), liked`;
   inlineLikes = true;
   MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 }
@@ -77,6 +81,7 @@ function toMedia(db: Db, rows: MediaRow[]): MediaItem[] {
       width: m.width ?? undefined,
       height: m.height ?? undefined,
       alt: m.alt ?? undefined,
+      preview: m.preview ?? undefined,
     }));
 }
 

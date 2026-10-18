@@ -114,6 +114,64 @@ export async function processImage(file: File): Promise<ProcessedImage> {
   }
 }
 
+/** Feeds and grids show this copy: sharp across a phone screen (1080 px ≈ 360 pt × 3), a fraction of the bytes. */
+export const SMALL_EDGE = 1080;
+const SMALL_TARGET = 160 * 1024;
+
+/**
+ * The smaller copy of an already-processed photo, or null when the photo is
+ * small enough already (or animated). Same encoder rules as processImage.
+ */
+export async function makeSmallCopy(blob: Blob): Promise<Blob | null> {
+  if (!/^image\/(jpeg|png|webp)$/.test(blob.type)) return null;
+  const bitmap = await decode(blob);
+  try {
+    const scale = SMALL_EDGE / Math.max(bitmap.width, bitmap.height);
+    if (scale > 0.85) return null; // within ~15 %: not worth a second file
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    let quality = 0.8;
+    for (;;) {
+      let out = await canvasToBlob(canvas, "image/webp", quality);
+      if (out.type !== "image/webp") out = await canvasToBlob(canvas, "image/jpeg", quality);
+      if (out.size <= SMALL_TARGET || quality <= 0.6) return out.size < blob.size ? out : null;
+      quality -= 0.1;
+    }
+  } finally {
+    bitmap.close();
+  }
+}
+
+/**
+ * A ~24 px version of a processed photo as a data: URL (a few hundred bytes),
+ * stored with the post and shown blurred while the real image loads.
+ */
+export async function makePreview(blob: Blob): Promise<string | null> {
+  if (!/^image\/(jpeg|png|webp|gif)$/.test(blob.type)) return null;
+  const bitmap = await decode(blob);
+  try {
+    const scale = 24 / Math.max(bitmap.width, bitmap.height);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const webp = canvas.toDataURL("image/webp", 0.5);
+    const url = webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", 0.5);
+    return url.length <= 2000 ? url : null;
+  } finally {
+    bitmap.close();
+  }
+}
+
 /**
  * LEGACY (Firebase rollback path only): the old schema stores one image inline
  * as a data URL in a 1 MiB Firestore document. Not used by Supabase.
@@ -163,5 +221,7 @@ export async function prepareAvatar(file: File): Promise<PreparedImage> {
   ctx.fillRect(0, 0, size, size);
   ctx.drawImage(bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side, 0, 0, size, size);
   bitmap.close();
-  return { dataUrl: canvas.toDataURL("image/jpeg", 0.85), width: size, height: size };
+  // WebP where the browser can encode it (about a third smaller); older Safari hands back PNG, so JPEG there.
+  const webp = canvas.toDataURL("image/webp", 0.85);
+  return { dataUrl: webp.startsWith("data:image/webp") ? webp : canvas.toDataURL("image/jpeg", 0.85), width: size, height: size };
 }

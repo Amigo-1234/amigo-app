@@ -197,7 +197,7 @@ try {
     await compose(`Live photo post ${tag}`, "photo.png");
     await check("upload in progress is shown (Posting…)", await page.getByText("Posting…").first().isVisible().catch(() => false));
     await network({});
-    await check("photo post appears and its image loads from R2", await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img[src*="/api/media/"]`).first(), 45000));
+    await check("photo post appears and its image loads from R2", await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img:is([src*="/api/media/"],[src*=".r2.cloudflarestorage.com/"])`).first(), 45000));
     await check("no horizontal scroll with a photo post", await noOverflow());
   });
 
@@ -213,7 +213,7 @@ try {
     await page.waitForTimeout(1500);
     const retry = posts.getByRole("button", { name: "Retry" }).first();
     if (await retry.isVisible().catch(() => false)) await retry.click().catch(() => undefined);
-    await check("back online: the post goes through and its image loads from R2", await waitImg(posts.locator('img[src*="/api/media/"]').first(), 30000));
+    await check("back online: the post goes through and its image loads from R2", await waitImg(posts.locator('img:is([src*="/api/media/"],[src*=".r2.cloudflarestorage.com/"])').first(), 30000));
     await page.waitForTimeout(9000); // the optimistic copy steps aside once the feed has the real post
     await check("posted exactly once (no duplicate from resending)", (await posts.count()) === 1);
   });
@@ -227,7 +227,7 @@ try {
     await form.getByRole("button", { name: "Save" }).click();
     await form.waitFor({ state: "detached", timeout: 30000 });
     await page.reload({ waitUntil: "networkidle" });
-    const avatar = page.locator('.profile img[src*="/api/media/"]').first();
+    const avatar = page.locator('.profile img:is([src*="/api/media/"],[src*=".r2.cloudflarestorage.com/"])').first();
     await check("profile picture saved and loads from R2 after reload", await waitImg(avatar));
   });
 
@@ -243,7 +243,7 @@ try {
     await check("photo Moment shared", await shared.isVisible().catch(() => false));
     await page.waitForTimeout(1500);
     await page.getByRole("button", { name: /Your Moments/ }).first().click();
-    await check("photo Moment opens and its image loads from R2", await waitImg(page.locator('img[src*="/api/media/"]').last()));
+    await check("photo Moment opens and its image loads from R2", await waitImg(page.locator('img:is([src*="/api/media/"],[src*=".r2.cloudflarestorage.com/"])').last()));
   });
 
   await step("encrypted photo message", async () => {
