@@ -1,6 +1,7 @@
 import { createClient, SupabaseAuthAdapter } from "@neondatabase/neon-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "./database.types";
+import { dataFetch } from "./freshToken";
 
 /**
  * Neon Auth (Managed Better Auth) + Neon Data API, behind the same
@@ -25,7 +26,7 @@ const dataApiUrl = directDataApi && directOrigins.includes(location.origin) ? di
 
 const client = createClient<Database>({
   auth: { adapter: SupabaseAuthAdapter(), url: `${base}/auth` },
-  dataApi: { url: dataApiUrl },
+  dataApi: { url: dataApiUrl, options: { global: { fetch: dataFetch } } },
 });
 
 // The parts used here (.auth, .from, .rpc) are Supabase-compatible; Realtime

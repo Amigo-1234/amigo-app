@@ -57,6 +57,9 @@ if (typeof window !== "undefined") {
   for (const type of ["pointerdown", "keydown", "touchstart", "wheel"]) window.addEventListener(type, touched, { passive: true, capture: true });
 }
 const userIdle = () => Date.now() - lastInput > IDLE_AFTER_MS;
+// Reads sent with a sign-in token the database hadn't honoured yet came back as signed out
+// (no own likes); read the open views again (see neonClient.ts).
+if (typeof window !== "undefined") window.addEventListener("amigo:fresh-token-reread", () => invalidate());
 
 /**
  * Debounced live query: fetch now, refetch on realtime events / local writes.

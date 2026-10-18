@@ -267,8 +267,41 @@ try {
       const again = page.getByRole("region", { name: "Replies" }).locator('button[aria-label^="Unlike reply"]').first();
       ok("UI: the reply like survives a reload", await again.waitFor({ timeout: 10000 }).then(() => true, () => false));
     }
+    // Straight after opening (a new page load gets a new sign-in token): reply at once.
+    await page.goto(`${BASE}/post/${textPost}`, { waitUntil: "commit" });
+    await input.waitFor({ timeout: 20000 });
+    const quickText = `Quick reply ${tag}`;
+    await input.fill(quickText);
+    timeline.length = 0;
+    t0 = Date.now();
+    await page.locator("form.reply-composer button[type=submit]").click();
+    const quick = await page.getByRole("region", { name: "Replies" }).getByText(quickText).first().waitFor({ timeout: 30000 }).then(() => true, () => false);
+    const quickMs = Date.now() - t0;
+    const quickErr = await page.locator(".reply-composer__error").textContent().catch(() => null);
+    ok("UI: a reply sent the moment the post opens goes through", quick, quick ? "" : `${quickErr ?? "no error shown"} · ${recent()}`);
+    ok("UI: …and appears within 5 s", quick && quickMs <= 5000, `${(quickMs / 1000).toFixed(1)} s`);
+    info("requests after the quick reply", timeline.slice(0, 16).join(", "));
     const parent = await readPost(A, textPost);
-    ok("the post counts both replies", parent?.reply_count === 2, String(parent?.reply_count));
+    ok("the post counts all three replies", parent?.reply_count === 3, String(parent?.reply_count));
+  }
+
+  // A like the moment the app opens (new sign-in token), then a reload.
+  for (let round = 1; round <= 3; round++) {
+    await page.goto(`${BASE}/`, { waitUntil: "commit" });
+    const card = page.locator("#feed-panel article", { hasText: `Like test text ${tag}` }).first();
+    if (!(await card.waitFor({ timeout: 20000 }).then(() => true, () => false))) {
+      ok(`UI: quick like ${round}: the post is in the feed`, false, recent());
+      continue;
+    }
+    const btn = likeButton(card);
+    const before = await btn.getAttribute("aria-pressed");
+    await btn.click();
+    await page.waitForTimeout(3000);
+    const want = before === "true" ? "false" : "true";
+    const p = await readPost(B, textPost);
+    const dbOk = want === "true" ? p?.liked === true && p?.like_count === 1 : p?.liked === false && p?.like_count === 0;
+    ok(`UI: quick ${want === "true" ? "like" : "unlike"} ${round} right after opening reaches the database`, dbOk, `${JSON.stringify({ count: p?.like_count, liked: p?.liked })} · ${recent()}`);
+    ok(`UI: …and the heart shows it`, (await btn.getAttribute("aria-pressed")) === want, JSON.stringify(await state(btn)));
   }
   const left = problems.splice(0);
   if (left.length) info("errors seen in the app", left.slice(-8).join(" | "));

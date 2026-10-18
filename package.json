@@ -31,7 +31,8 @@
     "migrate:diff": "node scripts/migration/diff.ts",
     "firebase:rules": "node scripts/firebase/rules.ts",
     "test:neon-live": "node scripts/test/neon-live-dm.test.mjs",
-    "perf:neon": "node scripts/test/neon-perf.mjs"
+    "perf:neon": "node scripts/test/neon-perf.mjs",
+    "test:fresh-token": "node scripts/test/fresh-token.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",
