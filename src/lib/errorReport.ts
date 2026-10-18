@@ -31,3 +31,15 @@ export function installErrorReporting() {
   window.addEventListener("error", (ev) => reportError("error", ev.error ?? ev.message));
   window.addEventListener("unhandledrejection", (ev) => reportError("unhandledrejection", ev.reason));
 }
+
+/**
+ * A like, reply or other action that failed and was shown to the person as a
+ * toast (so never reaches the global handlers). Sent a moment later, so a
+ * failure caused by a not-yet-honoured sign-in can still be recorded.
+ */
+export function reportActionFailure(action: string, error: unknown) {
+  const e = error as { code?: string; pgCode?: string; message?: string } | null;
+  const codes = [e?.code, e?.pgCode].filter(Boolean).join("/");
+  const failure = { name: `${action} failed`, message: `${codes ? `[${codes}] ` : ""}${e?.message ?? String(error)}` };
+  setTimeout(() => reportError("error", failure), 1500);
+}

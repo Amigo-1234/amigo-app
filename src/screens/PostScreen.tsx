@@ -20,6 +20,7 @@ import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
 import "./PostScreen.css";
 import { VerifiedBadge } from "../ui/VerifiedBadge";
+import { reportActionFailure } from "../lib/errorReport";
 
 type Load<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; error: unknown };
 
@@ -201,6 +202,7 @@ function ReplyComposer({ postId, replyingTo }: { postId: string; replyingTo: str
       setText("");
     } catch (err) {
       console.error(err);
+      reportActionFailure("reply", err);
       setError("Your reply didn't send. Try again.");
     } finally {
       setSending(false);

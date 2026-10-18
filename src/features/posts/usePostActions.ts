@@ -3,6 +3,7 @@ import { dataSource, type Post } from "../../data";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { limitText } from "../feed/errors";
+import { reportActionFailure } from "../../lib/errorReport";
 
 /** Optimistic like toggle that reconciles with the live post snapshot. */
 export function useLike(post: Post) {
@@ -28,6 +29,7 @@ export function useLike(post: Post) {
       await dataSource.setLiked(post.id, viewer.id, next);
     } catch (e) {
       console.error(e);
+      reportActionFailure(next ? "like" : "unlike", e);
       setOptimistic(null);
       toast(limitText(e) ?? (next ? "Couldn't like that post. Try again." : "Couldn't remove your like. Try again."), "error");
     }
