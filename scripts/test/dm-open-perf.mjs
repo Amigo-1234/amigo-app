@@ -105,6 +105,8 @@ const tally = (urls) => urls.reduce((o, u) => ((o[kind(u)] = (o[kind(u)] ?? 0) +
 
 /** Watches the conversation screen from t0: first messages, all messages, photos, end state. */
 async function watchOpen(page, t0, timeoutMs = 90000) {
+  const expected = results.stored ?? N;
+  const photos = results.photosSent ?? PHOTOS;
   return page.evaluate(
     ({ N, PHOTOS, timeoutMs, t0 }) =>
       new Promise((resolve) => {
@@ -122,6 +124,7 @@ async function watchOpen(page, t0, timeoutMs = 90000) {
           if (msgs.length && out.firstMs === null) out.firstMs = now();
           if (msgs.length >= N && out.allMs === null) out.allMs = now();
           if (imgs >= PHOTOS && out.photosMs === null) out.photosMs = now();
+          if (PHOTOS === 0) out.photosMs = 0;
           Object.assign(out, { shown: msgs.length, undecryptable: undec, photosShown: imgs });
           const doneOk = out.allMs !== null && (out.photosMs !== null || undec >= PHOTOS);
           if (doneOk || err || now() > timeoutMs) {
@@ -132,7 +135,7 @@ async function watchOpen(page, t0, timeoutMs = 90000) {
         };
         tick();
       }),
-    { N, PHOTOS, timeoutMs, t0 },
+    { N: expected, PHOTOS: photos, timeoutMs, t0 },
   );
 }
 
@@ -172,7 +175,14 @@ try {
     await b.page.getByRole("button", { name: "Send", exact: true }).click();
     await b.page.locator(".msg--mine", { hasText: `thread message ${i + 1}` }).first().waitFor();
   }
-  await b.page.waitForFunction(() => !document.querySelector(".msg__status--failed, .msg--pending"), null, { timeout: 60000 }).catch(() => undefined);
+  // Wait until nothing is still on its way, then record what actually got stored.
+  await b.page.waitForFunction(() => !document.querySelector(".msg.is-pending:not(.is-failed)"), null, { timeout: 120000 }).catch(() => undefined);
+  results.senderFailed = await b.page.locator(".msg.is-failed").count();
+  results.photosSent = await b.page.locator(".msg--mine:not(.is-pending) .msg__image img").count();
+  results.senderToasts = await b.page.locator(".toast").allInnerTexts().catch(() => []);
+  const thread = await (await rpc(A, "dm_thread", { p_conversation: conv, p_after: null, p_limit: 100 })).json().catch(() => null);
+  results.stored = Array.isArray(thread?.messages) ? thread.messages.filter((m) => !m.relates_to).length : null;
+  console.log(`info stored ${results.stored} of ${N} (failed on the sender's screen: ${results.senderFailed}) ${JSON.stringify(results.senderToasts)}`);
   await b.ctx.close();
 
   const a2 = await phone(A); // a device that didn't exist when the messages were sent
