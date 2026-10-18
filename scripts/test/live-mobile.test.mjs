@@ -215,6 +215,8 @@ try {
     const shownPhoto = await waitImg(page.locator(`article:has-text("Live photo post ${tag}") img:is([src*="/api/media/"],[src*=".r2.cloudflarestorage.com/"])`).first(), 45000);
     if (!shownPhoto) console.log(`info photo post state: ${await postState(`Live photo post ${tag}`)}`);
     await check("photo post appears and its image loads from R2", shownPhoto);
+    const position = await page.evaluate((t) => [...document.querySelectorAll("#feed-panel article")].findIndex((a) => a.textContent.includes(t)), `Live photo post ${tag}`);
+    await check(`the new post is at the top of the feed (position ${position + 1})`, position === 0);
     await check("no horizontal scroll with a photo post", await noOverflow());
   });
 

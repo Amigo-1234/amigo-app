@@ -137,6 +137,21 @@ try {
   const followersPost = await rpc(A, "create_post", { p_body: "followers-only photo", p_media: [{ kind: "image", storage_path: postKey, mime_type: "image/jpeg", width: 8, height: 8, byte_size: jpeg.length }], p_visibility: "followers" });
   ok("photo post created", followersPost.status === 200, String(followersPost.status));
   ok("followers-only photo hidden from non-followers", (await read(B, postKey)).status === 404);
+
+  // --- feed order: the app's request (with embeds) must come back newest first
+  const fresh = await rpc(A, "create_post", { p_body: "feed order check" });
+  const freshId = typeof fresh.data === "string" ? fresh.data : fresh.data?.id;
+  const feedSelect = "id,created_at,author:profiles!posts_author_id_fkey(id,username),media:post_media(kind,position)";
+  const feed = async (order) => {
+    const qs = new URLSearchParams({ select: feedSelect, ...(order ? { order: "created_at.desc,id.desc" } : {}) });
+    const res = await fetch(`${BASE}/neon/rest/v1/rpc/feed_posts?${qs}`, { method: "POST", headers: { ...BYPASS, authorization: `Bearer ${C.token}`, "content-type": "application/json" }, body: JSON.stringify({ p_scope: "latest", p_limit: 16 }) });
+    return res.ok ? res.json() : [];
+  };
+  const newestFirst = (rows) => rows.length > 1 && rows.every((p, i) => i === 0 || rows[i - 1].created_at >= p.created_at);
+  const ordered = await feed(true);
+  ok("feed (as the app asks for it) is newest first", newestFirst(ordered), `${ordered.length} posts`);
+  ok("…a post made just now is at the top", ordered.slice(0, 3).some((p) => p.id === freshId), String(ordered.findIndex((p) => p.id === freshId) + 1));
+  console.log(`info feed without an explicit order is ${newestFirst(await feed(false)) ? "newest first" : "NOT newest first (why the app now asks for the order)"}`);
   await fetch(`${BASE}/neon/rest/v1/follows`, { method: "POST", headers: { ...BYPASS, authorization: `Bearer ${B.token}`, "content-type": "application/json" }, body: JSON.stringify({ follower_id: B.id, followee_id: A.id }) });
   r = await read(B, postKey, { cookie: true });
   ok("visible once following, via session cookie (<img> path)", r.status === 302 && r.bytes?.equals(jpeg));
