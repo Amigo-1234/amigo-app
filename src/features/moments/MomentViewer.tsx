@@ -11,7 +11,8 @@ import { Avatar } from "../../ui/Avatar";
 import { Button, IconButton } from "../../ui/Button";
 import { Sheet } from "../../ui/Sheet";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
-import { MomentVisual } from "./MomentVisual";
+import { MomentVisual, type PhotoState } from "./MomentVisual";
+import { mediaSrc, primeMedia } from "../../lib/mediaLinks";
 import "./Moments.css";
 
 /** How long each Moment shows before moving on. */
@@ -47,7 +48,10 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
   // Live data (reactions, view counts) when we have it; the snapshot keeps playback stable.
   const moment: Moment | null = snapshot ? (live?.find((g) => g.author.id === group!.author.id)?.moments.find((m) => m.id === snapshot.id) ?? snapshot) : null;
   const own = !!group?.isViewer;
-  const paused = held || typing || !!sheet;
+  // A photo Moment's clock starts once its photo is on screen; a failed photo waits for Retry.
+  const [photo, setPhoto] = useState<PhotoState>("ready");
+  const [attempt, setAttempt] = useState(0);
+  const paused = held || typing || !!sheet || photo !== "ready";
 
   const close = useCallback(() => setPos(null), []);
 
@@ -112,8 +116,33 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
   useEffect(() => {
     elapsed.current = 0;
     setProgress(0);
+    setAttempt(0);
     if (momentId && !own) api.markSeen(viewer.id, momentId).catch(() => undefined);
   }, [momentId, own, api, viewer.id]);
+
+  // Sign every photo in the queue in one go, then fetch the next Moment's photo
+  // ahead of time so tapping on shows it at once.
+  useEffect(() => primeMedia(queue.flatMap((g) => g.moments.map((m) => m.media?.url))), [queue]);
+  const upcoming = (() => {
+    if (!pos) return null;
+    const g = queue[pos.gi];
+    if (pos.mi < g.moments.length - 1) return g.moments[pos.mi + 1];
+    const ng = queue[pos.gi + 1];
+    return ng ? ng.moments[firstUnseen(ng)] : null;
+  })();
+  const [, bump] = useState(0);
+  const upcomingUrl = upcoming?.media ? mediaSrc(upcoming.media.url) : undefined;
+  useEffect(() => {
+    if (!upcoming?.media) return;
+    if (!upcomingUrl) {
+      // Still being signed: look again shortly.
+      const t = setTimeout(() => bump((n) => n + 1), 250);
+      return () => clearTimeout(t);
+    }
+    const img = new Image();
+    img.decoding = "async";
+    img.src = upcomingUrl;
+  }, [upcoming, upcomingUrl]);
 
   // The clock (paused while holding, typing a reply, or a sheet is open).
   useEffect(() => {
@@ -234,7 +263,23 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
             setDrag(0);
           }}
         >
-          <MomentVisual text={moment.text} background={moment.background} media={moment.media} />
+          <MomentVisual
+            key={`${moment.id}:${attempt}`}
+            text={moment.text}
+            background={moment.background}
+            media={moment.media}
+            layout={moment.layout}
+            onPhotoState={setPhoto}
+          />
+          {photo === "loading" && <span className="moment-viewer__loading" role="status" aria-label="Loading photo" />}
+          {photo === "failed" && (
+            <div className="moment-viewer__failed" role="alert">
+              <p>This photo couldn't load.</p>
+              <Button size="sm" variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+                Retry
+              </Button>
+            </div>
+          )}
 
           <div className="moment-viewer__top">
             <div className="moment-viewer__bars" aria-hidden="true">

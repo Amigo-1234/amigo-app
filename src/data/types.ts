@@ -1073,6 +1073,21 @@ export const MOMENT_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👏
 export const MOMENT_TEXT_MAX_LENGTH = 200;
 export const MOMENT_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * How the author framed a photo Moment and placed its caption
+ * (src/features/moments/framing.ts). textY also places text on a background.
+ */
+export interface MomentLayout {
+  fit: "cover" | "contain";
+  /** 1–4, on top of the fit. */
+  zoom: number;
+  /** The point of the photo kept at the centre (0–1 of its width/height). */
+  x: number;
+  y: number;
+  /** The caption's vertical centre, 0–1 of the screen height. */
+  textY: number;
+}
+
 /** A temporary post: a photo, text on a background, or text over a photo. Gone after 24 hours. */
 export interface Moment {
   id: string;
@@ -1090,6 +1105,8 @@ export interface Moment {
   viewerReaction: string | null;
   /** Your own Moments only: how many people have seen it. */
   viewCount?: number;
+  /** Absent on older Moments: the defaults apply. */
+  layout?: MomentLayout;
 }
 
 /** One person's active Moments, oldest first (the viewer plays them in order). */
@@ -1113,6 +1130,7 @@ export interface NewMomentInput {
   background: MomentBackground;
   image?: NewMediaInput | null;
   audience: MomentAudience;
+  layout?: MomentLayout;
 }
 
 export type MomentErrorCode = "empty" | "too-long" | "not-found" | "not-allowed" | "unknown";

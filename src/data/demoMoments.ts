@@ -14,6 +14,7 @@ import type {
   Moment,
   MomentAudience,
   MomentBackground,
+  MomentLayout,
   MomentGroup,
   MomentReport,
   MomentsAdminApi,
@@ -48,6 +49,7 @@ interface MomentRecord {
   audience: MomentAudience;
   createdAt: Date;
   removedAt: Date | null;
+  layout?: MomentLayout;
 }
 
 interface ReportRecord {
@@ -99,6 +101,7 @@ export function createDemoMoments(ctx: MomentsContext) {
       author: ctx.author(m.authorId),
       text: m.text,
       background: m.background,
+      layout: m.layout,
       media: m.media,
       audience: m.audience,
       createdAt: m.createdAt,
@@ -157,6 +160,7 @@ export function createDemoMoments(ctx: MomentsContext) {
           audience: input.audience,
           createdAt: new Date(),
           removedAt: null,
+          layout: input.layout,
         };
         mine = [...mine, m];
         ctx.emit();

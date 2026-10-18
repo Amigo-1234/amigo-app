@@ -49,7 +49,8 @@ const READ_VALID_S = 90 * 60;
  * A read link for an object that never changes (keys are random and never
  * reused). Signed at the start of the current 30-minute window and valid 90
  * minutes from then, so it has 60–90 minutes left; R2 is asked to let the
- * browser keep the bytes privately for that long. Returns the link and how many
+ * browser keep the bytes privately for 90 minutes. Every part of the link is
+ * fixed for the window, so all signings in it produce the same URL. Returns the link and how many
  * seconds of it remain.
  */
 export async function presignRead(s: R2, key: string, now = Date.now()) {
@@ -57,7 +58,9 @@ export async function presignRead(s: R2, key: string, now = Date.now()) {
   const remaining = start + READ_VALID_S - Math.floor(now / 1000);
   const url = new URL(objectUrl(s, key));
   url.searchParams.set("X-Amz-Expires", String(READ_VALID_S));
-  url.searchParams.set("response-cache-control", `private, max-age=${remaining - 120}, immutable`);
+  // The same for the whole window (not the seconds left), so the link — and the browser's cache key — stays identical.
+  // The bytes never change and this browser was allowed to fetch them, so keeping them a little past the link's own expiry is fine.
+  url.searchParams.set("response-cache-control", `private, max-age=${READ_VALID_S}, immutable`);
   const datetime = new Date(start * 1000).toISOString().replace(/[:-]|\.\d{3}/g, "");
   const signed = await s.client.sign(url.toString(), { method: "GET", aws: { signQuery: true, datetime } });
   return { url: signed.url, remaining };

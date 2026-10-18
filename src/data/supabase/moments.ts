@@ -22,6 +22,7 @@ import {
 } from "../types";
 import { fetchAuthors, toAuthor, type Db } from "./queries";
 import type { MediaStore } from "./mediaStore";
+import { makePreview } from "../../lib/image";
 
 type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel) => () => void;
 
@@ -48,6 +49,13 @@ interface FeedRow {
   seen: boolean;
   my_reaction: string | null;
   view_count: number | null;
+  // Migration 20261019100000 (absent on older databases).
+  photo_fit?: "cover" | "contain";
+  photo_zoom?: number;
+  photo_x?: number;
+  photo_y?: number;
+  text_y?: number;
+  media_preview?: string | null;
 }
 
 export function createSupabaseMoments(
@@ -79,6 +87,8 @@ export function createSupabaseMoments(
   const media = (path: string | null, w: number | null, h: number | null, signedUrls: Map<string, string>): MediaItem | null =>
     path && signedUrls.has(path) ? { type: "image", url: signedUrls.get(path)!, width: w ?? undefined, height: h ?? undefined } : null;
 
+  const withPreview = (m: MediaItem | null, preview: string | null | undefined): MediaItem | null => (m && preview ? { ...m, preview } : m);
+
   async function feed(viewerId: string): Promise<MomentGroup[]> {
     const rows = await rpc<FeedRow[]>("moments_feed");
     const [people, signedUrls] = await Promise.all([
@@ -91,13 +101,17 @@ export function createSupabaseMoments(
         author: people.get(r.author_id) ?? toAuthor(null),
         text: r.body,
         background: r.background as MomentBackground,
-        media: media(r.media_path, r.media_width, r.media_height, signedUrls),
+        media: withPreview(media(r.media_path, r.media_width, r.media_height, signedUrls), r.media_preview),
         audience: r.audience as MomentAudience,
         createdAt: new Date(r.created_at),
         expiresAt: new Date(r.expires_at),
         seen: r.seen,
         viewerReaction: r.my_reaction,
         viewCount: r.view_count ?? undefined,
+        layout:
+          r.photo_fit !== undefined
+            ? { fit: r.photo_fit, zoom: r.photo_zoom ?? 1, x: r.photo_x ?? 0.5, y: r.photo_y ?? 0.5, textY: r.text_y ?? 0.5 }
+            : undefined,
       }),
     );
     return groupMoments(moments, viewerId);
@@ -114,10 +128,11 @@ export function createSupabaseMoments(
 
     async create(viewer, input) {
       let path: string | null = null;
+      let preview: string | null = null;
       if (input.image && !photos) throw new MomentError("unknown", "Photo Moments aren't available yet");
       if (input.image && store) {
         // Keep the media error (its code says quota / too large) for the composer's message.
-        path = await store.upload("moment", input.image.blob);
+        [path, preview] = await Promise.all([store.upload("moment", input.image.blob), makePreview(input.image.blob).catch(() => null)]);
       } else if (input.image) {
         // Same processed photo as posts (src/lib/image.ts), into your own folder of the private bucket.
         const ext = input.image.blob.type === "image/png" ? "png" : input.image.blob.type === "image/gif" ? "gif" : input.image.blob.type === "image/webp" ? "webp" : "jpg";
@@ -133,6 +148,9 @@ export function createSupabaseMoments(
           p_media_width: input.image?.width ?? null,
           p_media_height: input.image?.height ?? null,
           p_audience: input.audience,
+          // Framing and preview (migration 20261019100000); left out when not set, for older databases.
+          ...(input.layout ? { p_layout: input.layout } : {}),
+          ...(preview ? { p_preview: preview } : {}),
         });
         invalidate();
         return { id };

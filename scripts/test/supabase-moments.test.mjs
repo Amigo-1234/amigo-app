@@ -113,6 +113,22 @@ try {
   await db.query("update public.moments set expires_at = now() + interval '1 hour' where id = $1", [fol.id]);
   await m.ama.api.delete(ids.ama, fol.id);
   ok("author deletes their own Moment", !(await feed("ama")).some((g) => g.isViewer));
+
+  // Framing and caption position (migration 20261019100000)
+  const layout = { fit: "contain", zoom: 2, x: 0.3, y: 0.7, textY: 0.25 };
+  const framed = await m.leo.api.create(me("leo"), { text: `framed ${tag}`, background: "coral", audience: "everyone", layout });
+  const plain = await m.leo.api.create(me("leo"), { text: `plain ${tag}`, background: "coral", audience: "everyone" });
+  const leoAtZoe = (await feed("zoe")).find((g) => g.author.id === ids.leo)?.moments ?? [];
+  const f = leoAtZoe.find((x) => x.id === framed.id)?.layout;
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  ok("framing and caption position are saved and shown to others", f?.fit === "contain" && near(f.zoom, 2) && near(f.x, 0.3) && near(f.y, 0.7) && near(f.textY, 0.25), JSON.stringify(f));
+  const d = leoAtZoe.find((x) => x.id === plain.id)?.layout;
+  ok("without framing, the defaults apply", d?.fit === "cover" && near(d.zoom, 1) && near(d.textY, 0.5));
+  const bad = (l) => code(() => m.leo.api.create(me("leo"), { text: "x", background: "coral", audience: "everyone", layout: l }));
+  ok("zoom outside 1–4 rejected", (await bad({ ...layout, zoom: 9 })) === "empty");
+  ok("unknown fit rejected", (await bad({ ...layout, fit: "stretch" })) === "empty");
+  ok("caption off the screen rejected", (await bad({ ...layout, textY: 1.5 })) === "empty");
+  ok("non-numeric framing rejected", (await bad({ ...layout, x: "left" })) === "empty");
 } catch (e) {
   failures++;
   console.error("FAIL (exception)", e);

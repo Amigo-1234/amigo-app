@@ -23,19 +23,47 @@
   -webkit-user-select: none;
 }
 
+/* Photo Moments sit on black: no background colour bleeds around the blurred backdrop. */
+.moment-visual.has-photo {
+  background: #0c0b0a;
+}
+
 .moment-visual__photo {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  max-width: none;
   -webkit-user-drag: none;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.moment-visual.is-ready .moment-visual__photo {
+  opacity: 1;
+}
+
+/* Behind a photo that doesn't fill the frame, and while it loads: a blurred, dimmed copy. */
+.moment-visual__backdrop {
+  position: absolute;
+  inset: -32px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) brightness(0.72) saturate(1.1);
+  pointer-events: none;
+}
+
+.moment-visual__backdrop--img {
+  width: calc(100% + 64px);
+  height: calc(100% + 64px);
+  object-fit: cover;
 }
 
 .moment-visual__text {
-  position: relative;
+  position: absolute;
+  left: 50%;
+  z-index: 1;
+  width: max-content;
   max-width: 86%;
   margin: 0;
+  transform: translate(-50%, -50%);
   font-family: var(--font-display);
   font-size: clamp(1.4rem, 5.2vw, 2rem);
   font-weight: 700;
@@ -44,13 +72,18 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   text-wrap: balance;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.25);
 }
 
+/* Over a photo: a soft dark band keeps any caption readable on bright or busy photos. */
 .moment-visual__text--over {
-  padding: 6px 12px;
+  padding: 8px 14px;
   border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.42);
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   font-size: clamp(1.1rem, 4.4vw, 1.5rem);
+  text-shadow: none;
 }
 
 .moment-visual--thumb .moment-visual__text {
@@ -437,7 +470,7 @@
 .moment-composer {
   display: grid;
   gap: var(--space-3);
-  padding: var(--space-4);
+  padding: max(var(--space-4), env(safe-area-inset-top)) var(--space-4) max(var(--space-4), env(safe-area-inset-bottom));
 }
 
 .moment-composer__head {
@@ -447,19 +480,85 @@
   gap: var(--space-2);
 }
 
-.moment-composer__preview {
-  width: min(100%, 260px);
+.moment-composer__stage {
+  display: grid;
+  justify-items: center;
+}
+
+/* The Moment as it will appear (9:16), editable in place. */
+.moment-composer__frame {
+  position: relative;
+  width: min(100%, calc(58dvh * 9 / 16), 340px);
   aspect-ratio: 9 / 16;
-  justify-self: center;
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-@media (max-height: 760px) {
-  .moment-composer__preview {
-    width: min(100%, 190px);
-  }
+.moment-composer__frame.is-editable {
+  cursor: grab;
+}
+
+.moment-composer__frame.is-editable:active {
+  cursor: grabbing;
+}
+
+.moment-composer__frame:focus-visible {
+  outline: 3px solid var(--coral-500);
+  outline-offset: 2px;
+}
+
+.moment-composer__frame .moment-visual__text.is-draggable {
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.moment-composer__hint {
+  position: absolute;
+  inset: auto 8px 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill, 999px);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: var(--text-xs, 0.75rem);
+  text-align: center;
+  pointer-events: none;
+  animation: moment-hint 2.6s ease forwards;
+}
+
+@keyframes moment-hint {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-composer__hint { animation: none; }
+}
+
+.moment-composer__tools {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.moment-composer__tools-label {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+.moment-composer__zoom {
+  flex: 1;
+  max-width: 220px;
+}
+
+.moment-composer__zoom input {
+  width: 100%;
+  min-height: 44px;
+  accent-color: var(--coral-500);
 }
 
 .moment-composer__bgs {
@@ -528,4 +627,49 @@
   color: var(--text-3);
   font-size: var(--text-sm);
   text-align: center;
+}
+
+/* ---------- Viewer: photo loading / failed ---------- */
+
+.moment-viewer__loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px;
+  border: 3px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: moment-spin 0.9s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes moment-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-viewer__loading { animation-duration: 2.4s; }
+}
+
+.moment-viewer__failed {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 3;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  width: min(80%, 260px);
+  padding: var(--space-4);
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-lg);
+  background: rgba(0, 0, 0, 0.6);
+  text-align: center;
+}
+
+.moment-viewer__failed p {
+  margin: 0;
 }

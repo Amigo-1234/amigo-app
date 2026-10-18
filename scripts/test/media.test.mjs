@@ -120,6 +120,9 @@ try {
   let signed = await r.json();
   ok("batch signing returns links for visible files with their smaller copy", r.status === 200 && signed.links[up.key]?.url?.includes("X-Amz-Signature") && signed.links[up.key]?.small?.includes("-sm.webp") && signed.ttl > 3000);
   ok("files that don't exist are left out", Object.keys(signed.links).length === 1);
+  const again = await (await sign(B, [up.key])).json();
+  ok("signing again in the same window gives the identical link (browser cache hit)", again.links[up.key]?.url === signed.links[up.key].url && again.links[up.key]?.small === signed.links[up.key].small);
+  ok("links ask the browser to keep the bytes privately", new URL(signed.links[up.key].url).searchParams.get("response-cache-control") === "private, max-age=5400, immutable");
   const viaLink = await fetch(signed.links[up.key].small);
   ok("the signed small link returns the smaller copy", Buffer.compare(Buffer.from(await viaLink.arrayBuffer()), smallBytes) === 0);
   r = await sign(C, [up.key]);
