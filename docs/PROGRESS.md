@@ -40,8 +40,23 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
     blocking/prefs/rate limit respected, expired devices removed. Settings: enable per device (iPhone needs Home
     Screen), test notification, device list. Vercel env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT,
     PUSH_SERVER_SECRET (sensitive). Migration 20261019110000 (live). Locked-screen delivery on a real phone: **not yet
-    verified on a device** (automated: local crypto test; live Firefox test via Mozilla push).
-  - Next: Worlds end-to-end, full feature audit, Preview journeys, production deploy.
+    verified on a device** (automated: local crypto + delivery tests; live test in Google Chrome via Google's push
+    service — Playwright's Firefox build hides PushManager, its Chromium has no push keys).
+  - **Worlds**: admins create, edit and cancel Worlds in the app (fairness locks once started: start time, link
+    and scoring fixed); state from the server clock (countdowns corrected by `server_now`); members get a "live"
+    notice and push when it opens, via `worlds_tick`, which any signed-in app calls every 5 min (no admin tab
+    needed); cancelled Worlds refuse joins, posts and chat; Amigo picks; chat moderation; all audit-logged.
+    Live journey on Preview (two phones, `.github/workflows/live-worlds.yml`): countdown → join → live without a
+    reload → notice → post/entry/like/leaderboard → chat in ~4 s → ended, chat closed, late posts refused.
+    Migration 20261019120000 (live). Test World removed afterwards.
+  - **Audit (22 findings) — fixed**: legal gate failed open on a network error (now fails closed with retry);
+    blocking now hides posts/replies/likes both ways, refuses replies/likes across a block and suppresses
+    notifications (migration 20261019130000, live; `test:blocking`); profiles show Unblock; replies have like +
+    options; admin message reports enabled on Neon; admin overview loads counts independently and counts reported
+    posts; real error states in Admin Worlds and Monetization; specific publish-failure reasons; viewer profile
+    retry; corrected privacy text; unknown admin sections. **Open**: legal `[OWNER]` placeholders; World chat
+    messages can't be reported yet; no email-verification nudge outside Settings.
+  - Next: Preview journeys, production deploy, report (QUALITY.md).
 - **Performance & stability (2026-10-18, on production as `dpl_9xexuvhTA3HASvJ5wd5QRE6cg9Hs`, commit `0efd9e8`)**: first paint on 3G 9.5 → 4.0 s, warm feed on 4G 3.0 → 1.3 s, screen revisits ~0.1 s, idle traffic −60 %, message delivery p50 ~0.85 s; resilient posting/messaging offline; privacy-safe perf monitoring. Load test: 100 simulated users, p95 85 ms, 0 errors. Details: [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Blockers / owner decisions
