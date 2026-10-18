@@ -58,6 +58,14 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
     messages can't be reported yet; no email-verification nudge outside Settings.
   - Next: Preview journeys, production deploy, report (QUALITY.md).
 - **Performance & stability (2026-10-18, on production as `dpl_9xexuvhTA3HASvJ5wd5QRE6cg9Hs`, commit `0efd9e8`)**: first paint on 3G 9.5 → 4.0 s, warm feed on 4G 3.0 → 1.3 s, screen revisits ~0.1 s, idle traffic −60 %, message delivery p50 ~0.85 s; resilient posting/messaging offline; privacy-safe perf monitoring. Load test: 100 simulated users, p95 85 ms, 0 errors. Details: [PERFORMANCE.md](PERFORMANCE.md).
+- **iPhone QA findings + image viewer / photo caching (2026-10-18)**: conversations open from one batch
+  decrypt (key lookups 50 → 2; a device without old keys 15.9 s → 4.4 s on 4G), never stay on the skeleton
+  (content, empty state or Retry within 20 s), and a missed-new-message race is fixed; iPhone composer pinned
+  above the keyboard; push for likes, replies, reply likes, follows and Support Hub support (grouped, rate
+  limited, block- and preference-aware, no post text); Worlds "How to enter" card and empty states (scoring
+  unchanged); full-screen photo viewer with locked background, pinch/pan/swipe and exact position restore;
+  bounded service-worker cache for feed photos (never message attachments), cleared on sign-out and account
+  switch. Migrations 20261019130000 and 20261019140000 (live). Details and measurements: [QUALITY.md](QUALITY.md).
 
 ## Blockers / owner decisions
 - **Production (2026-10-17, owner-authorized)**: `https://amigo-app-one.vercel.app` serves the redesigned app on Neon + R2 (deployment `dpl_2be8nDqcHjFxZYt3qujfNkYorUYo`, commit `e223f1a`, deployed from this branch; `main` not merged). Legacy rollback: Vercel instant rollback to `dpl_BLQeNsTyyeeSUgpZSyvnAR62AuaS` (`main` @ `d344bac`); Firebase untouched. A push to `main` would redeploy the legacy app to production. The owner added the production domain to the R2 CORS rule; the production smoke test (`.github/workflows/prod-smoke.yml`) passes in full, including photo uploads and encrypted chat photos. Current production: `dpl_6apEagqiaQVaSALbmubj4crsMCS4` (commit `e629bb6`, 2026-10-18); previous `dpl_9xexuvhTA3HASvJ5wd5QRE6cg9Hs` (commit `0efd9e8`); the legacy rollback above is unchanged.
