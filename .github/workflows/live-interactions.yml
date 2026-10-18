@@ -16,8 +16,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
-      - name: Likes and replies
+      - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
+      - name: Likes and replies (Chromium)
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: BASE=$(head -1 .github/live-interactions.run) node scripts/test/live-interactions.test.mjs
+        run: BASE=$(head -1 .github/live-interactions.run) ENGINE=chromium node scripts/test/live-interactions.test.mjs
+      - name: Likes and replies (WebKit, as in iPhone Safari)
+        if: always()
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: BASE=$(head -1 .github/live-interactions.run) ENGINE=webkit node scripts/test/live-interactions.test.mjs

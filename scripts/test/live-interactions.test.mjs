@@ -9,9 +9,9 @@
  * likes and files go with them). Prints no secrets, tokens or signed URLs.
  */
 import { randomBytes } from "node:crypto";
-import { chromium, devices } from "playwright";
+import { chromium, webkit, devices } from "playwright";
 
-const { BASE, VERCEL_BYPASS } = process.env;
+const { BASE, VERCEL_BYPASS, ENGINE = "chromium" } = process.env;
 if (!BASE || !VERCEL_BYPASS) throw new Error("Set BASE and VERCEL_BYPASS");
 const BYPASS = { "x-vercel-protection-bypass": VERCEL_BYPASS };
 
@@ -70,7 +70,8 @@ const readPost = async (who, id) => (await api(who, `posts?select=${encodeURICom
 
 const tag = randomBytes(4).toString("hex");
 const people = [];
-const browser = await chromium.launch();
+const browser = await (ENGINE === "webkit" ? webkit : chromium).launch();
+console.log(`info browser engine: ${ENGINE}`);
 const deadline = setTimeout(() => {
   console.log("FAIL took over 8 minutes; stopping");
   failures++;
@@ -144,6 +145,18 @@ try {
       problems.push(`${res.request().method()} ${u.pathname.replace(/[0-9a-f-]{32,}/g, "…")} ${res.status()}`);
   });
   const recent = () => problems.splice(0).slice(-6).join(" | ") || "no errors seen";
+  // When each request to the database started and finished (path only, no ids or values).
+  const timeline = [];
+  let t0 = Date.now();
+  const mark = (what) => timeline.push(`${what} +${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  page.on("request", (rq) => {
+    const u = new URL(rq.url());
+    if (u.pathname.startsWith("/neon/rest/")) mark(`→ ${rq.method()} ${u.pathname.replace("/neon/rest/v1/", "").replace(/[0-9a-f-]{32,}/g, "…")}`);
+  });
+  page.on("requestfinished", async (rq) => {
+    const u = new URL(rq.url());
+    if (u.pathname.startsWith("/neon/rest/")) mark(`← ${(await rq.response())?.status() ?? "?"} ${u.pathname.replace("/neon/rest/v1/", "").replace(/[0-9a-f-]{32,}/g, "…")}`);
+  });
   const open = async (path) => {
     await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
     const agree = page.getByRole("button", { name: "I agree" });
@@ -201,12 +214,18 @@ try {
   ok("UI: the post page shows the reply box", hasComposer, hasComposer ? "" : recent());
   if (hasComposer) {
     const replyText = `UI reply ${tag}`;
+    await page.waitForTimeout(3000); // the page has settled
     await input.fill(replyText);
+    timeline.length = 0;
+    t0 = Date.now();
     await page.locator("form.reply-composer button[type=submit]").click();
     const replies = page.getByRole("region", { name: "Replies" });
-    const appeared = await replies.getByText(replyText).first().waitFor({ timeout: 15000 }).then(() => true, () => false);
+    const appeared = await replies.getByText(replyText).first().waitFor({ timeout: 30000 }).then(() => true, () => false);
+    const replyMs = Date.now() - t0;
     const err = await page.locator(".reply-composer__error").textContent().catch(() => null);
-    ok("UI: a new reply appears at once", appeared, appeared ? "" : `${err ?? "no error shown"} · ${recent()}`);
+    ok("UI: a new reply appears", appeared, appeared ? "" : `${err ?? "no error shown"} · ${recent()}`);
+    ok("UI: …within 5 s of tapping Reply", appeared && replyMs <= 5000, `${(replyMs / 1000).toFixed(1)} s`);
+    info("requests after tapping Reply", timeline.slice(0, 14).join(", "));
     ok("UI: the reply box is cleared after sending", (await input.inputValue()) === "");
     await page.reload({ waitUntil: "networkidle" });
     const kept = await page.getByRole("region", { name: "Replies" }).getByText(replyText).first().waitFor({ timeout: 15000 }).then(() => true, () => false);
