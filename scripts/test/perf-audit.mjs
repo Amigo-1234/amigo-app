@@ -192,6 +192,9 @@ async function navigate(page, path) {
 const tag = randomBytes(4).toString("hex");
 const people = [];
 const failures = [];
+// Where a failure happened, and what the page showed then (for the report).
+let step = "accounts";
+let shownPage = null;
 try {
   const A = await account(tag, "a");
   people.push(A);
@@ -219,7 +222,9 @@ try {
     const out = {};
     // Signed out, cold.
     {
+      step = `${name}: signed-out cold`;
       const p = await phone(null, profile);
+      shownPage = p.page;
       const t0 = Date.now();
       await p.page.goto(BASE, { waitUntil: "commit" });
       await p.page.locator('input[type="email"], form').first().waitFor();
@@ -230,7 +235,9 @@ try {
     }
     // Signed in, cold (empty cache), then warm (same browser, reload).
     {
+      step = `${name}: signed-in cold`;
       const p = await phone(A, profile);
+      shownPage = p.page;
       const t0 = Date.now();
       await p.page.goto(BASE, { waitUntil: "commit" });
       await p.page.locator(".bottom-create").waitFor();
@@ -250,6 +257,7 @@ try {
         byKind: summarize(p.net.requests),
       };
       p.reset();
+      step = `${name}: signed-in warm`;
       const t1 = Date.now();
       await p.page.reload({ waitUntil: "commit" });
       await p.page.locator(".bottom-create").waitFor();
@@ -398,7 +406,14 @@ try {
     console.log("api:", JSON.stringify(results.api));
   }
 } catch (e) {
-  failures.push(String(e.message).split("\n")[0]);
+  // Landmarks only, never page text (production pages show real people's posts).
+  const seen = {};
+  if (shownPage) {
+    seen.path = await shownPage.evaluate(() => location.pathname).catch(() => "?");
+    for (const [k, sel] of Object.entries({ shell: ".bottom-create", article: "main article", signIn: 'input[type="email"]', legal: 'button:has-text("I agree")', error: '[role="alert"]' }))
+      seen[k] = await shownPage.locator(sel).count().catch(() => -1);
+  }
+  failures.push(`${step}: ${String(e.message).split("\n")[0]} ${JSON.stringify(seen)}`);
   console.error("error:", String(e.message).split("\n")[0]);
 } finally {
   await browser.close();
