@@ -1,0 +1,26 @@
+# Image loading measurement in a real browser against a deployed environment.
+# Runs when .github/media-perf.run changes; its first line is the target URL.
+# Two temporary accounts are created and deleted by the script.
+name: media-perf
+on:
+  push:
+    branches: [claude/amigo-world-restart-7mrbrf]
+    paths: [.github/media-perf.run]
+jobs:
+  media-perf:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Audit
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: BASE=$(head -1 .github/media-perf.run) OUT=media.json node scripts/test/media-perf.mjs
+      - name: Results
+        if: always()
+        run: cat media.json || true
