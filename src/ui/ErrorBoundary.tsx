@@ -31,12 +31,27 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { failed: 
   }
 }
 
+const RELOAD_KEY = "amigo:update-reload-at";
+
 /** Router-level errors (a screen failed to render or a lazy chunk failed to load). */
 export function RouteError() {
   const error = useRouteError();
   useEffect(() => reportError("render", error), [error]);
   // A new deployment replaced the chunk this tab expected: a reload fixes it.
   const stale = /dynamically imported module|Importing a module script failed|Failed to fetch/i.test(String((error as Error)?.message ?? ""));
+  // Reload by itself (once a minute at most, and only online — offline it's a network problem,
+  // not an update). Drafts survive reloads.
+  useEffect(() => {
+    if (!stale || !navigator.onLine) return;
+    try {
+      const last = Number(sessionStorage.getItem(RELOAD_KEY) ?? 0);
+      if (Date.now() - last < 60_000) return;
+      sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+    } catch {
+      return;
+    }
+    location.reload();
+  }, [stale]);
   return (
     <main className="crash" role="alert">
       <h1>{stale ? "Amigo was updated" : "Something went wrong"}</h1>
