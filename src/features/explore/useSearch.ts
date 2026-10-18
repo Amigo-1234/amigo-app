@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { cached, remember } from "../../data/supabase/viewCache";
 import { dataSource, type ExploreFeed, type PersonSummary, type Post, type SearchTab } from "../../data";
 import { useViewer } from "../../state/session";
 
@@ -93,17 +94,27 @@ export function useSearch(query: string, tab: SearchTab) {
 
 export function useExploreFeed() {
   const viewer = useViewer();
-  const [state, setState] = useState<{ status: "loading" } | { status: "ready"; feed: ExploreFeed } | { status: "error"; error: unknown }>({ status: "loading" });
+  const cacheKey = `${viewer.id}:explore`;
+  type State = { status: "loading" } | { status: "ready"; feed: ExploreFeed } | { status: "error"; error: unknown };
+  const fromCache = (): State => {
+    const last = cached<ExploreFeed>(cacheKey);
+    return last ? { status: "ready", feed: last } : { status: "loading" };
+  };
+  // What Explore showed last time (this tab's memory), then refreshed.
+  const [state, setState] = useState<State>(fromCache);
   const [key, setKey] = useState(0);
 
   useEffect(() => {
     const api = dataSource.discovery;
     if (!api) return;
     let cancelled = false;
-    setState({ status: "loading" });
+    setState(fromCache());
     api
       .explore(viewer.id)
-      .then((feed) => !cancelled && setState({ status: "ready", feed }))
+      .then((feed) => {
+        remember(cacheKey, feed);
+        if (!cancelled) setState({ status: "ready", feed });
+      })
       .catch((error) => !cancelled && setState({ status: "error", error }));
     return () => {
       cancelled = true;

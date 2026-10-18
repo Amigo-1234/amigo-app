@@ -1,22 +1,32 @@
 import { useCallback, useEffect, useState } from "react";
 import { dataSource, type Post, type Profile, type ProfileTab } from "../../data";
+import { cached, remember } from "../../data/supabase/viewCache";
 import { useViewer } from "../../state/session";
 
 type Load<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; error: unknown };
 
 export function useProfile(handle: string) {
   const viewer = useViewer();
-  const [state, setState] = useState<Load<Profile | null>>({ status: "loading" });
+  const cacheKey = `${viewer.id}:profile:${handle.toLowerCase()}`;
+  // What this profile showed last time (this tab's memory), then refreshed.
+  const [state, setState] = useState<Load<Profile | null>>(() => {
+    const last = cached<Profile | null>(cacheKey);
+    return last !== undefined ? { status: "ready", data: last } : { status: "loading" };
+  });
   const [key, setKey] = useState(0);
 
   useEffect(() => {
     const api = dataSource.profiles;
     if (!api) return;
     let cancelled = false;
-    setState({ status: "loading" });
+    const last = cached<Profile | null>(cacheKey);
+    setState(last !== undefined ? { status: "ready", data: last } : { status: "loading" });
     api
       .getProfile(handle, viewer.id)
-      .then((data) => !cancelled && setState({ status: "ready", data }))
+      .then((data) => {
+        remember(cacheKey, data);
+        if (!cancelled) setState({ status: "ready", data });
+      })
       .catch((error) => !cancelled && setState({ status: "error", error }));
     return () => {
       cancelled = true;
