@@ -149,6 +149,17 @@ try {
       return { name: pair.slice(0, i), value: pair.slice(i + 1), domain: host, path: "/", secure: true, httpOnly: /httponly/i.test(raw), sameSite: "Lax" };
     }),
   );
+  // Vercel adds its feedback toolbar to preview deployments (never to production); at phone
+  // size it covers the Reply button. Hide it so the test sees the app as production serves it.
+  await ctx.addInitScript(() => {
+    const hide = () => {
+      const st = document.createElement("style");
+      st.textContent = "vercel-live-feedback{display:none!important}";
+      document.documentElement.appendChild(st);
+    };
+    if (document.documentElement) hide();
+    else document.addEventListener("DOMContentLoaded", hide);
+  });
   const page = await ctx.newPage();
   page.setDefaultTimeout(15000);
   const problems = [];
@@ -357,6 +368,23 @@ try {
     const dbOk = want === "true" ? p?.liked === true && p?.like_count === 1 : p?.liked === false && p?.like_count === 0;
     ok(`UI: quick ${want === "true" ? "like" : "unlike"} ${round} right after opening reaches the database`, dbOk, `${JSON.stringify({ count: p?.like_count, liked: p?.liked })} · ${recent()}`);
     ok(`UI: …and the heart shows it`, (await btn.getAttribute("aria-pressed")) === want, JSON.stringify(await state(btn)));
+  }
+  // A like the server refuses (the author blocked the liker after the feed loaded): the app
+  // must undo the heart, say so, and record the failure in the error log.
+  {
+    const doomed = idOf(await rpc(A, "create_post", { p_body: `Refused like ${tag}`, p_media: [] }));
+    await open("/");
+    const card = page.locator("#feed-panel article", { hasText: `Refused like ${tag}` }).first();
+    if (doomed && (await card.waitFor({ timeout: 20000 }).then(() => true, () => false))) {
+      await rpc(A, "dm_block", { p_user: B.id });
+      const startedAt = new Date().toISOString();
+      await likeButton(card).click();
+      const toast = await page.locator(".toast").filter({ hasText: /Couldn.t like/ }).first().waitFor({ timeout: 8000 }).then(() => true, () => false);
+      await page.waitForTimeout(3000); // the report goes out 1.5 s after the failure
+      ok("UI: a refused like says so", toast);
+      ok("UI: …and the heart is undone", (await likeButton(card).getAttribute("aria-pressed").catch(() => "false")) === "false");
+      info("refused like at (for the error-log check)", startedAt);
+    } else ok("UI: refused-like setup", false, recent());
   }
   info("sign-in tokens used by the app in this session", `${tokenHashes.size} different, over ${dataRequests} database requests and ${pageLoads} page loads`);
   ok("the app reuses its sign-in token (about one per page load, not one per request)", tokenHashes.size <= pageLoads + 2, `${tokenHashes.size} tokens / ${pageLoads} page loads / ${dataRequests} requests`);
