@@ -265,10 +265,37 @@ try {
       info("reply button before tapping (D=disabled e=enabled, y position, typed length)", samples.join(" "));
       info("database requests in those 5 s", String(requests));
       ok("the page is quiet before tapping Reply (no request storm)", requests <= 10, String(requests));
+      // Is the page still drawing frames, and what is under the button's centre?
+      const frames = await page.evaluate(() => new Promise((res) => {
+        let n = 0;
+        const tick = () => (n++, requestAnimationFrame(tick));
+        requestAnimationFrame(tick);
+        setTimeout(() => res(n), 1000);
+      })).catch((e) => `error ${String(e).slice(0, 80)}`);
+      info("animation frames drawn in 1 s", String(frames));
+      const box = await submit.boundingBox().catch(() => null);
+      if (box) {
+        const top = await page.evaluate(({ x, y }) => {
+          const el = document.elementFromPoint(x, y);
+          if (!el) return "nothing";
+          const d = (e) => `${e.tagName.toLowerCase()}${e.id ? `#${e.id}` : ""}${typeof e.className === "string" && e.className ? `.${e.className.trim().split(/\s+/).slice(0, 3).join(".")}` : ""}`;
+          return el.closest("form.reply-composer") ? `the reply form (${d(el)})` : `${d(el)} inside ${el.parentElement ? d(el.parentElement) : "?"}`;
+        }, { x: box.x + box.width / 2, y: box.y + box.height / 2 });
+        info("element under the Reply button's centre", top);
+      }
+      const vercelUi = await page.evaluate(() => [...document.querySelectorAll("vercel-live-feedback, [data-vercel-toolbar], iframe[src*='vercel.live']")].length);
+      info("Vercel toolbar elements on the page", String(vercelUi));
     }
     timeline.length = 0;
     t0 = Date.now();
-    await page.locator("form.reply-composer button[type=submit]").click();
+    const submitBtn = page.locator("form.reply-composer button[type=submit]");
+    const normalClick = await submitBtn.click({ timeout: 5000 }).then(() => true, () => false);
+    ok("UI: the Reply button can be tapped normally", normalClick);
+    if (!normalClick) {
+      // See whether the app itself works when the tap is delivered regardless.
+      await submitBtn.dispatchEvent("click");
+      info("tapped Reply directly (bypassing the stability check)");
+    }
     const replies = page.getByRole("region", { name: "Replies" });
     const appeared = await replies.getByText(replyText).first().waitFor({ timeout: 30000 }).then(() => true, () => false);
     const replyMs = Date.now() - t0;
