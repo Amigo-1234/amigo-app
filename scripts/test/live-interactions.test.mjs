@@ -238,6 +238,23 @@ try {
     const replyText = `UI reply ${tag}`;
     await page.waitForTimeout(3000); // the page has settled
     await input.fill(replyText);
+    // What the reply box and the page are doing just before the tap (5 s, every 250 ms).
+    {
+      const submit = page.locator("form.reply-composer button[type=submit]");
+      const samples = [];
+      let requests = 0;
+      const count = (rq) => isData(new URL(rq.url())) && requests++;
+      page.on("request", count);
+      for (let i = 0; i < 20; i++) {
+        const box = await submit.boundingBox().catch(() => null);
+        samples.push(`${(await submit.isDisabled().catch(() => null)) ? "D" : "e"}${box ? Math.round(box.y) : "-"}:${(await input.inputValue().catch(() => "?")).length}`);
+        await page.waitForTimeout(250);
+      }
+      page.off("request", count);
+      info("reply button before tapping (D=disabled e=enabled, y position, typed length)", samples.join(" "));
+      info("database requests in those 5 s", String(requests));
+      ok("the page is quiet before tapping Reply (no request storm)", requests <= 10, String(requests));
+    }
     timeline.length = 0;
     t0 = Date.now();
     await page.locator("form.reply-composer button[type=submit]").click();
