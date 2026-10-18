@@ -8,7 +8,7 @@
  * Signs up two temporary accounts and deletes them at the end (their posts,
  * likes and files go with them). Prints no secrets, tokens or signed URLs.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { chromium, webkit, devices } from "playwright";
 
 const { BASE, VERCEL_BYPASS, ENGINE = "chromium" } = process.env;
@@ -171,6 +171,15 @@ try {
     const u = new URL(rq.url());
     if (isData(u)) mark(`→ ${rq.method()} ${dataPath(u)}`);
   });
+  // How many different sign-in tokens the app uses (hashed here, never printed).
+  const tokenHashes = new Set();
+  let dataRequests = 0;
+  page.on("request", (rq) => {
+    if (!isData(new URL(rq.url()))) return;
+    dataRequests++;
+    const auth = rq.headers()["authorization"];
+    if (auth) tokenHashes.add(createHash("sha256").update(auth).digest("hex").slice(0, 12));
+  });
   page.on("requestfinished", async (rq) => {
     const u = new URL(rq.url());
     if (isData(u)) mark(`← ${(await rq.response())?.status() ?? "?"} ${dataPath(u)}`);
@@ -320,6 +329,8 @@ try {
     ok(`UI: quick ${want === "true" ? "like" : "unlike"} ${round} right after opening reaches the database`, dbOk, `${JSON.stringify({ count: p?.like_count, liked: p?.liked })} · ${recent()}`);
     ok(`UI: …and the heart shows it`, (await btn.getAttribute("aria-pressed")) === want, JSON.stringify(await state(btn)));
   }
+  info("sign-in tokens used by the app in this session", `${tokenHashes.size} different, over ${dataRequests} database requests`);
+  ok("the app reuses its sign-in token (no new token per request)", tokenHashes.size <= 6, `${tokenHashes.size} tokens / ${dataRequests} requests`);
   const left = problems.splice(0);
   if (left.length) info("errors seen in the app", left.slice(-8).join(" | "));
 } catch (e) {

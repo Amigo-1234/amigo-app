@@ -26,6 +26,9 @@ const READ_RPCS = new Set([
 ]);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 let rereadTimer: ReturnType<typeof setTimeout> | undefined;
+let lastReread = 0;
+/** However often tokens change, the views are re-read at most this often. */
+const REREAD_MIN_INTERVAL_MS = 10_000;
 /** Fired (once per new token) when reads went out before the token was honoured. */
 export const FRESH_TOKEN_REREAD_EVENT = "amigo:fresh-token-reread";
 
@@ -44,9 +47,10 @@ export async function dataFetch(input: RequestInfo | URL, init?: RequestInit): P
   const age = () => Date.now() - seenAt;
 
   if (isRead) {
-    if (age() < FRESH_TOKEN_GRACE_MS && !rereadTimer) {
+    if (age() < FRESH_TOKEN_GRACE_MS && !rereadTimer && Date.now() - lastReread > REREAD_MIN_INTERVAL_MS) {
       rereadTimer = setTimeout(() => {
         rereadTimer = undefined;
+        lastReread = Date.now();
         window.dispatchEvent(new Event(FRESH_TOKEN_REREAD_EVENT));
       }, FRESH_TOKEN_GRACE_MS + 500);
     }
