@@ -17,7 +17,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
+      - name: Fresh sign-in token probe
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: BASE=$(head -1 .github/live-interactions.run) node scripts/test/live-token-probe.mjs
       - name: Likes and replies (Chromium)
+        if: always()
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: BASE=$(head -1 .github/live-interactions.run) ENGINE=chromium node scripts/test/live-interactions.test.mjs
