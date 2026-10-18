@@ -219,14 +219,19 @@ async function syncSession() {
 }
 
 /**
- * Right after the session is known, start what the first screens will ask for
- * (the legal check and the first page of the feed) alongside loading the
- * profile, instead of one after another (each round trip is 0.2–0.5 s on
- * mobile networks).
+ * Right after the session is known, start the first page of the feed alongside
+ * loading the profile, instead of one after another (each round trip is
+ * 0.2–0.5 s on mobile networks). Only once the session's token is there: a
+ * request sent without it would be answered as a signed-out visitor. The legal
+ * check is never fetched early — the gate always asks the server itself, so it
+ * can't be skipped by an early answer.
  */
 function prefetchStart(userId: string) {
-  prefetch("legal:pending", () => platform.legal.pending());
-  prefetch("feed:latest", () => q.fetchFeed(supabase, "latest", FIRST_FEED_PAGE, userId));
+  prefetch("feed:latest", async () => {
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user?.id !== userId || !data.session.access_token) throw new Error("no token yet");
+    return q.fetchFeed(supabase, "latest", FIRST_FEED_PAGE, userId);
+  });
 }
 /** Matches the feed's first page (src/features/feed/useFeed.ts). */
 const FIRST_FEED_PAGE = 15;
@@ -268,8 +273,6 @@ export const supabaseSource: DataSource = {
 
   legal: {
     ...platform.legal,
-    // The check started at sign-in, if it's still fresh.
-    pending: async () => (await takePrefetch<Awaited<ReturnType<typeof platform.legal.pending>>>("legal:pending")) ?? platform.legal.pending(),
     async accept(docs) {
       dropPrefetches();
       return platform.legal.accept(docs);
