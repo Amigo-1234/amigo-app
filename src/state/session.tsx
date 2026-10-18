@@ -23,6 +23,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => dataSource.onPasswordRecovery?.(() => setRecovering(true)), []);
 
+  // Signed in: keep this device's notifications registered to this account (never prompts), once the app has settled.
+  const viewerId = state.status === "signedIn" ? state.viewer.id : null;
+  useEffect(() => {
+    if (!viewerId || !dataSource.push) return;
+    const t = setTimeout(() => void import("../lib/push").then((m) => m.refreshPush(dataSource.push!)).catch(() => undefined), 5000);
+    return () => clearTimeout(t);
+  }, [viewerId]);
+
   const value: SessionState = recovering && state.status === "signedIn" ? { status: "recovery" } : state;
   return (
     <SessionContext.Provider value={value}>

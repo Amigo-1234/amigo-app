@@ -17,6 +17,7 @@ import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { createMediaStore } from "./supabase/mediaStore";
+import { createPushApi } from "./supabase/push";
 import { setMediaSigner } from "../lib/mediaLinks";
 import { makePreview } from "../lib/image";
 import { createPlatform } from "./supabase/platform";
@@ -266,6 +267,29 @@ if (media) {
 }
 const moments = createSupabaseMoments(supabase, liveQuery, invalidate, { photos: !isNeon || !!media, media });
 const platform = createPlatform(supabase);
+const push = createPushApi(supabase);
+
+/** Asks the server to notify the recipient's phones about a new message (it decides who and whether). */
+function pushNewMessage(conversationId: string) {
+  void supabase.auth.getSession().then(({ data }) => {
+    const token = data.session?.access_token;
+    if (!token) return;
+    return fetch("/api/push-notify", {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ conversationId }),
+      keepalive: true,
+    }).catch(() => undefined);
+  });
+}
+
+async function forgetPushDevice() {
+  if (!isNeon || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
+  const sub = await (await navigator.serviceWorker.getRegistration())?.pushManager?.getSubscription();
+  if (!sub) return;
+  await push.unsubscribe(sub.endpoint).catch(() => undefined);
+  await sub.unsubscribe();
+}
 // Post tools + moderation need migration 20261017130000 (applied on Neon only).
 if (isNeon) q.enablePostTools();
 const moderation = isNeon ? createModeration(supabase, invalidate) : null;
@@ -415,6 +439,8 @@ export const supabaseSource: DataSource = {
   },
 
   async signOut() {
+    // This device stops getting the account's notifications (while the session can still say so).
+    await forgetPushDevice().catch(() => undefined);
     setCacheOwner(null);
     await supabase.auth.signOut();
     if (isNeon) {
@@ -681,7 +707,8 @@ export const supabaseSource: DataSource = {
   moments: moments?.api,
 
   // End-to-end encrypted; the crypto library loads on first use.
-  messages: createSupabaseMessages(supabase, liveQuery, invalidate, { realtime: !isNeon, media }),
+  messages: createSupabaseMessages(supabase, liveQuery, invalidate, { realtime: !isNeon, media, onSent: isNeon ? pushNewMessage : undefined }),
+  push: isNeon ? push : undefined,
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {

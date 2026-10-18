@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import {
   Ban,
@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   Bell,
   BellOff,
+  BellRing,
+  Smartphone,
   ChevronRight,
   Eye,
   FileText,
@@ -39,6 +41,9 @@ import { Avatar } from "../ui/Avatar";
 import { Button, IconButton } from "../ui/Button";
 import { LoadingScreen } from "../ui/Loader";
 import { canPromptInstall, isIOS, isStandalone, promptInstall } from "../lib/install";
+import { disablePush, enablePush, pushStatus, type PushStatus } from "../lib/push";
+import { timeAgoLong } from "../lib/time";
+import type { NotificationPrefs, PushDevice } from "../data";
 import "./SettingsScreen.css";
 
 const THEMES: { id: ThemePreference; label: string; icon: typeof Sun }[] = [
@@ -484,7 +489,140 @@ function NotificationsSection() {
         }}
         trailing={marking ? <span className="btn__spinner settings-row__spin" aria-hidden="true" /> : null}
       />
+      {dataSource.push && <PushSettings />}
     </Section>
+  );
+}
+
+const PUSH_DETAIL: Record<PushStatus, string> = {
+  on: "On. You'll be told about new messages even when Amigo is closed or your phone is locked.",
+  off: "Get told about new messages even when Amigo is closed or your phone is locked.",
+  "ios-home-screen": "On iPhone and iPad, notifications work once Amigo is on your Home Screen: in Safari tap Share → Add to Home Screen, open Amigo from there, then turn them on here.",
+  denied: "Notifications are blocked for Amigo. Allow them in your browser's site settings (or your phone's Settings → Notifications), then come back here.",
+  unsupported: "This browser can't show notifications from websites. Try Chrome, Edge, Firefox or Safari.",
+  "not-configured": "Notifications aren't available on this version of Amigo yet.",
+};
+
+/** Locked-screen notifications for this device, what to be notified about, and your other devices. */
+function PushSettings() {
+  const api = dataSource.push!;
+  const viewer = useViewer();
+  const toast = useToast();
+  const [status, setStatus] = useState<PushStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [prefs, setPrefs] = useState<NotificationPrefs | null>(null);
+  const [devices, setDevices] = useState<PushDevice[] | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    pushStatus(api).then((s) => live && setStatus(s), () => live && setStatus("unsupported"));
+    api.prefs(viewer.id).then((p) => live && setPrefs(p), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, [api, viewer.id]);
+  const loadDevices = () => api.devices(viewer.id).then(setDevices, () => setDevices([]));
+  useEffect(() => void loadDevices(), [status]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function toggle() {
+    if (busy || !status) return;
+    setBusy(true);
+    try {
+      if (status === "on") {
+        await disablePush(api);
+        setStatus("off");
+        toast("Notifications turned off on this device");
+      } else {
+        const next = await enablePush(api);
+        setStatus(next);
+        if (next === "on") toast("Notifications are on for this device");
+        else if (next === "denied") toast("Notifications are blocked — allow them in your settings", "error");
+      }
+    } catch {
+      toast("Couldn't change notifications. Try again.", "error");
+      setStatus(await pushStatus(api).catch(() => "unsupported" as const));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendTest() {
+    const r = await api.sendTest();
+    if (r === "sent") toast("Test sent — it should arrive in a few seconds");
+    else if (r === "wait") toast("Wait a few seconds before sending another test");
+    else toast("Couldn't send a test. Try again.", "error");
+  }
+
+  async function setPref(key: keyof NotificationPrefs, value: boolean) {
+    setPrefs((p) => (p ? { ...p, [key]: value } : p));
+    await api.setPrefs({ [key]: value }).catch(() => {
+      setPrefs((p) => (p ? { ...p, [key]: !value } : p));
+      toast("Couldn't save that. Try again.", "error");
+    });
+  }
+
+  const canToggle = status === "on" || status === "off";
+  return (
+    <>
+      <ButtonRow
+        icon={<BellRing size={20} />}
+        title="Notifications on this device"
+        detail={status ? PUSH_DETAIL[status] : "Checking…"}
+        onClick={canToggle ? toggle : () => undefined}
+        trailing={
+          busy ? (
+            <span className="btn__spinner settings-row__spin" aria-hidden="true" />
+          ) : canToggle ? (
+            <span className={`settings-switch${status === "on" ? " is-on" : ""}`} role="switch" aria-checked={status === "on"} aria-label="Notifications on this device" />
+          ) : null
+        }
+      />
+      {status === "on" && (
+        <div className="settings-panel">
+          <div className="settings-panel__actions">
+            <Button size="sm" variant="secondary" onClick={sendTest}>
+              Send a test notification
+            </Button>
+          </div>
+        </div>
+      )}
+      {prefs && (
+        <label className="settings-row">
+          <Row
+            icon={<Mail size={20} />}
+            title="New messages"
+            detail="Notifications never include the message itself — only that you have a new one."
+            trailing={<input type="checkbox" className="settings-check" checked={prefs.messages} onChange={(e) => setPref("messages", e.target.checked)} />}
+          />
+        </label>
+      )}
+      {devices && devices.length > 0 && (
+        <div className="settings-panel">
+          <p className="settings-panel__text">Devices that get your notifications</p>
+          <ul className="settings-devices">
+            {devices.map((d) => (
+              <li key={d.id}>
+                <Smartphone size={18} aria-hidden="true" />
+                <span>
+                  <span className="settings-devices__name">{d.label || "Device"}</span>
+                  <span className="settings-devices__when">Active {timeAgoLong(d.lastSeenAt)}</span>
+                </span>
+                <IconButton
+                  label={`Stop notifications on ${d.label || "this device"}`}
+                  onClick={async () => {
+                    await api.removeDevice(d.id).catch(() => toast("Couldn't remove it. Try again.", "error"));
+                    await loadDevices();
+                    setStatus(await pushStatus(api));
+                  }}
+                >
+                  <Trash2 size={18} />
+                </IconButton>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
   );
 }
 

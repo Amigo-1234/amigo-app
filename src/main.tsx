@@ -30,4 +30,13 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
   // The data layer's top-level await can delay this module past the load event.
   if (document.readyState === "complete") register();
   else window.addEventListener("load", register);
+  // A tapped notification in a browser that can't navigate an open tab itself: go there in the app.
+  navigator.serviceWorker.addEventListener("message", (e) => {
+    const data = e.data as { type?: string; url?: string } | null;
+    if (data?.type !== "amigo:navigate" || !data.url) return;
+    const url = new URL(data.url, location.origin);
+    if (url.origin !== location.origin) return;
+    history.pushState({}, "", url.pathname + url.search);
+    dispatchEvent(new PopStateEvent("popstate"));
+  });
 }

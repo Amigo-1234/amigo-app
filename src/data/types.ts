@@ -1165,6 +1165,38 @@ export interface MomentsApi {
   report(viewerId: string, momentId: string, input: { reason: MessageReportReason; note: string }): Promise<void>;
 }
 
+// ------------------------------------------------------------------ push
+
+/** A browser/device that receives notifications for this account. */
+export interface PushDevice {
+  id: string;
+  label: string;
+  createdAt: Date;
+  lastSeenAt: Date;
+  lastSuccessAt: Date | null;
+}
+
+export interface NotificationPrefs {
+  messages: boolean;
+  worlds: boolean;
+  social: boolean;
+}
+
+export interface PushApi {
+  /** The server's public key for subscribing; null when push isn't set up on this deployment. */
+  publicKey(): Promise<string | null>;
+  subscribe(device: { endpoint: string; p256dh: string; auth: string; label: string }): Promise<void>;
+  /** Still registered? (Moves it to the signed-in account; never re-adds a removed device.) */
+  touch(endpoint: string): Promise<boolean>;
+  /** A "notifications work" push to your own devices. "wait": sent one moments ago. */
+  sendTest(): Promise<"sent" | "wait" | "failed">;
+  unsubscribe(endpoint: string): Promise<void>;
+  devices(viewerId: string): Promise<PushDevice[]>;
+  removeDevice(id: string): Promise<void>;
+  prefs(viewerId: string): Promise<NotificationPrefs>;
+  setPrefs(prefs: Partial<NotificationPrefs>): Promise<void>;
+}
+
 /** A reported Moment, as admins see it. Admins see the Moment, never Moment replies (those are Messages). */
 export interface MomentReport {
   id: string;
@@ -1217,6 +1249,8 @@ export interface DataSource {
   deleteAccount?(password: string): Promise<void>;
   /** Versioned legal documents and acceptance records. */
   legal?: LegalApi;
+  /** Notifications on a locked phone (Web Push). */
+  push?: PushApi;
   /** Creator monetization overview (coming soon; nothing financial). */
   monetization?: MonetizationApi;
   /** Password reset by emailed code instead of a link (Neon). Without it, sendPasswordReset emails a link. */

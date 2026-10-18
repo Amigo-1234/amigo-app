@@ -17,6 +17,7 @@
     "test:moments": "node scripts/test/supabase-moments.test.mjs",
     "test:dm-actions": "node scripts/test/neon-dm-actions.test.mjs",
     "test:media": "node scripts/test/media.test.mjs",
+    "test:push": "node scripts/test/push.test.mjs",
     "migrate:extract": "node scripts/migration/extract.ts",
     "migrate:audit": "node scripts/migration/audit.ts",
     "migrate:plan": "node scripts/migration/migrate.ts --plan-only",

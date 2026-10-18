@@ -76,7 +76,13 @@ export function createSupabaseMessages(
   db: Db,
   liveQuery: LiveQuery,
   invalidate: () => void,
-  opts: { memoryStore?: boolean; realtime?: boolean; media?: MediaStore | null } = {},
+  opts: {
+    memoryStore?: boolean;
+    realtime?: boolean;
+    media?: MediaStore | null;
+    /** After a new message is stored (not a reaction or edit): e.g. ask the server to push it to the recipient's phones. */
+    onSent?: (conversationId: string) => void;
+  } = {},
 ): MessagesApi {
   // Neon: no Realtime channels (polling instead, no typing indicator) and no Storage (text only for now).
   const realtime = opts.realtime ?? true;
@@ -921,6 +927,7 @@ export function createSupabaseMessages(
       const id = (sent as unknown as { id: string }[] | null)?.[0]?.id ?? messageId;
       decrypted.set(id, { ok: true, payload, senderMismatch: false, unverifiedDevice: false });
       changed();
+      opts.onSent?.(conversationId);
       return { id };
     },
 
