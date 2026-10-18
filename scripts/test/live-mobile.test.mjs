@@ -248,6 +248,27 @@ try {
     await check("profile picture saved and loads from R2 after reload", await waitImg(avatar));
   });
 
+  await step("photo viewer", async () => {
+    await page.goto(BASE, { waitUntil: "networkidle" });
+    const tile = page.locator(".media-tile__open").first();
+    await tile.waitFor({ timeout: 30000 });
+    await tile.scrollIntoViewIfNeeded();
+    await page.evaluate(() => window.scrollBy(0, 40));
+    const before = await page.evaluate(() => window.scrollY);
+    await tile.click();
+    await page.locator(".media-viewer[open]").waitFor();
+    const full = await page.locator(".media-viewer__img.is-loaded").first().waitFor({ timeout: 30000 }).then(() => true, () => false);
+    await check("the viewer shows the full photo", full);
+    await page.mouse.wheel(0, 800);
+    await page.waitForTimeout(300);
+    const pinned = await page.evaluate(() => ({ top: document.body.style.top, position: document.body.style.position }));
+    await check("the feed behind the viewer can't scroll", pinned.position === "fixed" && pinned.top === `-${before}px`, JSON.stringify({ before, ...pinned }));
+    await page.getByRole("button", { name: "Close" }).click();
+    await page.waitForTimeout(300);
+    const after = await page.evaluate(() => window.scrollY);
+    await check("closing returns to the same place in the feed", after === before, `${before} → ${after}`);
+  });
+
   await step("photo Moment", async () => {
     await page.goto(BASE, { waitUntil: "networkidle" });
     await page.getByRole("button", { name: "Add a Moment" }).first().click();
