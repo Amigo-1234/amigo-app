@@ -81,9 +81,19 @@ Live on Preview (GitHub Actions, real Neon + R2, temporary accounts deleted afte
   photo Moment, encrypted photo message (sender and recipient), no horizontal scroll.
 - Worlds journey on two phones: countdown, join, goes live on time without a reload, "live" notice,
   post, competition entry, like, leaderboard, chat, ended state, closed chat, late posts refused.
-- Push in Google Chrome through Google's real push service: see the latest run below.
+- Push in Google Chrome through Google's real push service: see "Live runs" below.
 
-LIVE_RESULTS_PLACEHOLDER
+### Live runs (2026-10-18)
+
+| Suite | Commit | Result |
+|---|---|---|
+| Media API (real R2 + Neon) | e7de076, 080dc0b | passed |
+| iPhone 13 browser journeys | e7de076, 080dc0b | all passed, including the encrypted photo message (recipient decrypted it; R2 holds ciphertext only) |
+| Worlds, two phones | e7de076 | all passed: live on time without a reload or an admin, notice, post/entry/like/leaderboard, chat in 0.8 s, winner, chat closed, late posts refused |
+| Push, Google Chrome | 080dc0b | Settings offers it; subscription refused because Playwright's browser contexts behave like incognito windows, where Chrome doesn't support push ("Registration failed - permission denied"). Re-run with a normal Chrome profile: PUSH_RESULT |
+
+Found by the live push test: a push service that never answers left the switch spinning (now times out
+after 30 s), and people in a private/incognito window got a generic error (now told why).
 
 ## 5. Still needs real-device testing
 
