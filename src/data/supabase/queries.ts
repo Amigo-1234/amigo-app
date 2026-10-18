@@ -124,7 +124,14 @@ export async function likedSet(db: Db, viewerId: string | null, postIds: string[
 }
 
 export async function fetchFeed(db: Db, scope: FeedScope, limit: number, viewerId: string | null) {
-  const { data, error } = await db.rpc("feed_posts", { p_scope: scope, p_limit: limit + 1 }).select(POST_SELECT).returns<PostRow[]>();
+  // Ordered here too: with embeds the function's own ORDER BY isn't guaranteed to survive
+  // (Neon's Data API returned the feed grouped by author).
+  const { data, error } = await db
+    .rpc("feed_posts", { p_scope: scope, p_limit: limit + 1 })
+    .select(POST_SELECT)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .returns<PostRow[]>();
   if (error) throw dataError(error);
   const rows = data.slice(0, limit);
   const liked = await likedSet(db, viewerId, rows.map((r) => r.id));
