@@ -438,17 +438,23 @@ type NotificationRow = {
   read_at: string | null;
   actor: ProfileRow | null;
   post: { id: string; body: string; parent_id: string | null; media: MediaRow[] } | null;
+  request?: { id: string; title: string } | null;
 };
 
-const NOTIFICATION_SELECT =
+/** Support notifications link to the request (Neon schema, migration 20261019140000). */
+let notificationRequests = false;
+export const enableNotificationRequests = () => void (notificationRequests = true);
+
+const notificationSelect = () =>
   "id, kind, created_at, read_at, " +
   `actor:profiles!notifications_actor_id_fkey(${PERSON}), ` +
-  "post:posts!notifications_post_id_fkey(id, body, parent_id, media:post_media(kind, bucket, storage_path, width, height, alt, position))";
+  "post:posts!notifications_post_id_fkey(id, body, parent_id, media:post_media(kind, bucket, storage_path, width, height, alt, position))" +
+  (notificationRequests ? ", request:support_requests!notifications_request_id_fkey(id, title)" : "");
 
 export async function fetchNotifications(db: Db, limit: number): Promise<NotificationPage> {
   const { data, error } = await db
     .from("notifications")
-    .select(NOTIFICATION_SELECT)
+    .select(notificationSelect())
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(limit + 1)
@@ -474,6 +480,8 @@ export async function fetchNotifications(db: Db, limit: number): Promise<Notific
       read: r.read_at !== null,
       post: r.post ? { id: r.post.id, text: r.post.body, media: toMedia(db, r.post.media ?? []) } : null,
       inReplyToReply: r.kind === "reply" ? parentIsReply.has(r.post?.parent_id ?? "") : undefined,
+      onReply: r.kind === "like" ? !!r.post?.parent_id : undefined,
+      request: r.request ? { id: r.request.id, title: r.request.title } : null,
     })),
     hasMore: data.length > limit,
   };

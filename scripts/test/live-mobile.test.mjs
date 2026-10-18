@@ -298,6 +298,23 @@ try {
     const sent = page.locator(".msg--mine", { hasText: `Encrypted photo ${tag}` }).locator(".msg__image img").first();
     await check("sender's chat shows the sent photo", await waitImg(sent, 45000));
     await check("no send error in the chat", !(await page.locator(".msg__status--failed").count()));
+    // Composer anchoring (a real on-screen keyboard can't be shown here; see the iPhone check list).
+    const layout = async () =>
+      page.evaluate(() => {
+        const form = document.querySelector(".msg-composer")?.getBoundingClientRect();
+        const head = document.querySelector(".convo__head")?.getBoundingClientRect();
+        const vv = window.visualViewport;
+        return { gap: form && vv ? Math.round(vv.height + vv.offsetTop - form.bottom) : null, headTop: head ? Math.round(head.top) : null, pageScroll: Math.round(window.scrollY) };
+      });
+    await page.locator("#msg-input").focus();
+    await page.locator("#msg-input").fill("typing a reply");
+    const typing = await layout();
+    await check("composer sits at the bottom of the visible area while typing (no gap, no overlap)", typing.gap !== null && Math.abs(typing.gap) <= 2, JSON.stringify(typing));
+    await check("conversation header stays in place while typing", typing.headTop === 0 && typing.pageScroll === 0, JSON.stringify(typing));
+    await page.getByRole("button", { name: "Send", exact: true }).click();
+    await page.locator(".msg--mine", { hasText: "typing a reply" }).first().waitFor();
+    const afterSend = await layout();
+    await check("…and after sending", afterSend.gap !== null && Math.abs(afterSend.gap) <= 2 && afterSend.headTop === 0, JSON.stringify(afterSend));
 
     await pageB.goto(`${BASE}${conversation}`, { waitUntil: "networkidle" });
     const got = pageB.locator(".msg--theirs", { hasText: `Encrypted photo ${tag}` }).locator(".msg__image img").first();

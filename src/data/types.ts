@@ -294,7 +294,7 @@ export interface DiscoveryApi {
  * What happened. Only kinds the product actually has: reposts, messages,
  * Moments and system notices get their own kinds when those features exist.
  */
-export type NotificationKind = "follow" | "like" | "reply" | "mention";
+export type NotificationKind = "follow" | "like" | "reply" | "mention" | "support";
 
 /** The post a notification is about, trimmed to what a preview needs. */
 export interface NotificationPost {
@@ -318,6 +318,10 @@ export interface AppNotification {
   post: NotificationPost | null;
   /** reply only: the reply answers one of your replies rather than a top-level post. */
   inReplyToReply?: boolean;
+  /** like only: the liked post is one of your replies. */
+  onReply?: boolean;
+  /** support only: your Support Hub request they supported. */
+  request?: { id: string; title: string } | null;
 }
 
 export interface NotificationPage {

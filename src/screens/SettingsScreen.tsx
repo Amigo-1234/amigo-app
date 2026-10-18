@@ -26,6 +26,8 @@ import {
   Trash2,
   UserRound,
   Users,
+  Heart,
+  Orbit,
 } from "lucide-react";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { CodeField, PasswordField, authMessage } from "../features/auth";
@@ -602,6 +604,26 @@ function PushSettings() {
             title="New messages"
             detail="Notifications never include the message itself — only that you have a new one."
             trailing={<input type="checkbox" className="settings-check" checked={prefs.messages} onChange={(e) => setPref("messages", e.target.checked)} />}
+          />
+        </label>
+      )}
+      {prefs && (
+        <label className="settings-row">
+          <Row
+            icon={<Heart size={20} />}
+            title="Likes, replies and follows"
+            detail="Also mentions and support on your Support Hub requests. Grouped when lots happen at once."
+            trailing={<input type="checkbox" className="settings-check" checked={prefs.social} onChange={(e) => setPref("social", e.target.checked)} />}
+          />
+        </label>
+      )}
+      {prefs && dataSource.worlds && (
+        <label className="settings-row">
+          <Row
+            icon={<Orbit size={20} />}
+            title="Worlds"
+            detail="When a World you joined goes live, or is cancelled."
+            trailing={<input type="checkbox" className="settings-check" checked={prefs.worlds} onChange={(e) => setPref("worlds", e.target.checked)} />}
           />
         </label>
       )}

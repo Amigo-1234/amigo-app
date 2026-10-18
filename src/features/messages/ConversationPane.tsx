@@ -12,6 +12,7 @@ import { Avatar } from "../../ui/Avatar";
 import { Button, IconButton } from "../../ui/Button";
 import { Sheet } from "../../ui/Sheet";
 import { Skeleton } from "../../ui/Skeleton";
+import { useVisualViewportFit } from "../../lib/visualViewport";
 import { StateMessage } from "../../ui/StateMessage";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
 import { describeError, limitText } from "../feed/errors";
@@ -69,6 +70,17 @@ export function ConversationPane({ conversationId }: { conversationId: string })
     const el = scrollRef.current;
     if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
   };
+
+  // Phones: fit the visible area above the keyboard, and keep the newest message in view as it opens.
+  const [narrow] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 899px)").matches);
+  useVisualViewportFit(
+    narrow,
+    () => {
+      const el = scrollRef.current;
+      if (el && stick.current) el.scrollTop = el.scrollHeight;
+    },
+    { lock: true },
+  );
 
   useEffect(() => {
     setReplyTo(null);
@@ -517,11 +529,25 @@ function MessageBubble({
             </p>
           ) : (
             <>
-              {m.media.map((media, i) => (
-                <button key={i} type="button" className="msg__image" onClick={() => openMedia(m.media, i)} aria-label="Open photo">
-                  <img src={media.url} alt={media.alt ?? ""} width={media.width} height={media.height} loading="lazy" />
-                </button>
-              ))}
+              {m.media.map((media, i) =>
+                media.url ? (
+                  <button key={i} type="button" className="msg__image" onClick={() => {
+                      const loaded = m.media.filter((x) => x.url);
+                      openMedia(loaded, loaded.indexOf(media));
+                    }} aria-label="Open photo">
+                    <img src={media.url} alt={media.alt ?? ""} width={media.width} height={media.height} loading="lazy" />
+                  </button>
+                ) : (
+                  // Still downloading and decrypting on this phone.
+                  <span
+                    key={i}
+                    className="msg__image msg__image--loading"
+                    role="img"
+                    aria-label="Photo loading"
+                    style={{ aspectRatio: media.width && media.height ? `${media.width} / ${media.height}` : undefined }}
+                  />
+                ),
+              )}
               {m.text && <p className="msg__text">{m.text}</p>}
             </>
           )}

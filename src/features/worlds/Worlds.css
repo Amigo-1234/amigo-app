@@ -379,6 +379,114 @@
   color: var(--text);
 }
 
+/* ---------- competition: how to take part (Live tab) ---------- */
+
+.world-howto {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+.world-howto__title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px var(--space-2);
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.world-howto__title > svg {
+  color: var(--accent-text);
+}
+
+.world-howto__when {
+  flex-basis: 100%;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.world-howto__steps {
+  display: grid;
+  gap: 6px;
+  margin: var(--space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: howto;
+}
+
+.world-howto__steps li {
+  position: relative;
+  padding-left: 30px;
+  color: var(--text-2);
+  counter-increment: howto;
+}
+
+.world-howto__steps li strong {
+  color: var(--text);
+}
+
+.world-howto__steps li::before {
+  content: counter(howto);
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.world-howto__steps li.is-done::before {
+  content: "✓";
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+}
+
+.world-howto__note,
+.world-howto__prize {
+  margin: 0;
+  color: var(--text-3);
+}
+
+.world-howto__prize {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.world-howto__prize svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.world-howto__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.world-howto__cta:empty {
+  display: none;
+}
+
+.world-note svg {
+  vertical-align: -2px;
+  color: var(--accent-text);
+}
+
 .world-note--nudge {
   font-size: var(--text-sm);
   font-weight: 600;
@@ -626,6 +734,24 @@
 @media (min-width: 768px) {
   .world-chat__form {
     bottom: 0;
+  }
+}
+
+/* Phones: one scroll (the page), not a scrolling box inside a scrolling page. */
+@media (max-width: 767px) {
+  .world-chat__list {
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* Typing: the keyboard covers the bottom bar; the composer sits on the keyboard. */
+  .kb-open .bottom-nav {
+    display: none;
+  }
+
+  .kb-open .world-chat__form {
+    bottom: 0;
+    padding-bottom: var(--space-2);
   }
 }
 

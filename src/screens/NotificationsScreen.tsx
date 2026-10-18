@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { useEffect, useState } from "react";
-import { AtSign, Bell, CheckCheck, CircleAlert, Heart, MessageCircle, Orbit, UserPlus } from "lucide-react";
+import { AtSign, Bell, CheckCheck, CircleAlert, HandHeart, Heart, MessageCircle, Orbit, UserPlus } from "lucide-react";
 import { dataSource, type WorldNotice } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
@@ -112,7 +112,7 @@ export default function NotificationsScreen() {
         <StateMessage
           icon={<Bell size={24} />}
           title="No notifications yet"
-          body="When people follow you, like or reply to your posts, or mention you, you'll see it here."
+          body="When people follow you, like or reply to your posts, mention you, or support your requests, you'll see it here."
         />
       )}
 
@@ -141,13 +141,13 @@ export default function NotificationsScreen() {
   );
 }
 
-const KIND_ICON = { like: Heart, follow: UserPlus, reply: MessageCircle, mention: AtSign } as const;
+const KIND_ICON = { like: Heart, follow: UserPlus, reply: MessageCircle, mention: AtSign, support: HandHeart } as const;
 
 function NotificationRow({ group: g, onOpen }: { group: NotificationGroup; onOpen: () => void }) {
   const viewer = useViewer();
   const Icon = KIND_ICON[g.kind];
   const { first, second, others } = actorNames(g.actors);
-  const preview = g.post ? previewOf(g) : null;
+  const preview = g.post ? previewOf(g) : g.request ? g.request.title : null;
   const thumb = g.post?.media.find((m) => m.type === "image");
   const when = timeAgoLong(g.latestAt);
   // Screen readers get one sentence; the visual row carries the same words, plus the "Unread" text.

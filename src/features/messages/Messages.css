@@ -20,6 +20,29 @@
   height: 100dvh;
 }
 
+/* Phones: the open chat is pinned to the visible area (see lib/visualViewport.ts),
+   so the composer sits right on top of the keyboard and the header stays put. */
+@media (max-width: 899px) {
+  html.vv-lock,
+  html.vv-lock body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .vv-fit .messages--open .convo {
+    position: fixed;
+    inset: var(--vvt, 0px) 0 auto 0;
+    z-index: 20;
+    height: var(--vvh, 100dvh);
+    background: var(--bg);
+  }
+
+  /* The home-indicator gap is under the keyboard while it's open. */
+  .kb-open .msg-composer {
+    padding-bottom: var(--space-2);
+  }
+}
+
 @media (min-width: 900px) {
   .messages {
     display: grid;
@@ -412,6 +435,27 @@
   max-height: 340px;
   height: auto;
   object-fit: cover;
+}
+
+.msg__image--loading {
+  width: min(280px, 60vw);
+  max-height: 340px;
+  aspect-ratio: 4 / 3;
+  background: var(--surface-2, var(--border));
+  cursor: default;
+  animation: msg-photo-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes msg-photo-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg__image--loading {
+    animation: none;
+  }
 }
 
 .msg__quote {

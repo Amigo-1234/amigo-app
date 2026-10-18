@@ -41,6 +41,8 @@ type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<
 // the tab is visible — every second with a conversation open, slower for the
 // inbox and the badge — and views refetch only when it reports a change.
 const PULSE_MS = { conversation: 1_000, inbox: 3_000, badge: 15_000 } as const;
+/** A first load that takes longer than this shows a recoverable error instead of a skeleton. */
+const FIRST_LOAD_LIMIT_MS = 20_000;
 type LiveKind = keyof typeof PULSE_MS;
 
 const PERSON = `id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`;
@@ -222,12 +224,50 @@ export function createSupabaseMessages(
   const peersWithDevices = new Set<string>();
   const images = new Map<string, Promise<string | null>>();
 
-  async function open(userId: string, m: StoredMessage): Promise<DecryptResult> {
-    const hit = decrypted.get(m.id);
-    if (hit?.ok) return hit;
-    const result = await (await device(userId)).decrypt(m);
-    decrypted.set(m.id, result);
-    return result;
+  /** When a message last failed for a missing key: the device's key epoch then. */
+  const failedAt = new Map<string, number>();
+
+  /**
+   * Decrypts many messages in one device job. Known results are reused: a
+   * decrypted message never needs decrypting again, and one that lacked its key
+   * is only retried once new keys may have arrived (mail, backup). Never throws:
+   * anything that can't be read comes back as undecryptable.
+   */
+  async function openAll(userId: string, rows: StoredMessage[]): Promise<DecryptResult[]> {
+    const missingKey: DecryptResult = { ok: false, reason: "missing-key" };
+    let d: E2EDevice;
+    try {
+      d = await device(userId);
+    } catch {
+      return rows.map((m) => decrypted.get(m.id) ?? missingKey);
+    }
+    const fresh = (m: StoredMessage) => {
+      const hit = decrypted.get(m.id);
+      if (!hit) return false;
+      if (hit.ok || hit.reason !== "missing-key") return true;
+      return failedAt.get(m.id) === d.keyEpoch;
+    };
+    const todo = rows.filter((m) => !fresh(m));
+    if (todo.length) {
+      const results = await d.decryptMany(todo).catch(() => todo.map(() => missingKey));
+      todo.forEach((m, i) => {
+        decrypted.set(m.id, results[i]);
+        if (!results[i].ok) failedAt.set(m.id, d.keyEpoch);
+        else failedAt.delete(m.id);
+      });
+    }
+    return rows.map((m) => decrypted.get(m.id) ?? missingKey);
+  }
+
+  /** Decrypted photos by path (null: couldn't be loaded; retried on the next refresh). */
+  const imageReady = new Map<string, string | null>();
+  let rebuildTimer: ReturnType<typeof setTimeout> | undefined;
+  /** Re-render open conversations from memory (batched: several photos finishing together = one render). */
+  function rebuildViews() {
+    clearTimeout(rebuildTimer);
+    rebuildTimer = setTimeout(() => {
+      for (const l of lives) if (l.kind === "conversation") l.run();
+    }, 50);
   }
 
   function imageUrl(userId: string, img: NonNullable<MessagePayload["amigo.image"]>): Promise<string | null> {
@@ -271,18 +311,16 @@ export function createSupabaseMessages(
     const rows = data ?? [];
     // .then() is what sends it (builders are lazy).
     if (rows.some((r) => r.unread_count > 0)) db.rpc("dm_mark_delivered").then(() => undefined, () => undefined);
-    await authors(rows.map((r) => r.peer_id));
+    const lastRows = rows
+      .filter((r) => r.last_message_id && r.last_sender_id)
+      .map((r) => ({ id: r.last_message_id!, conversation_id: r.conversation_id, sender_id: r.last_sender_id!, content: r.last_content, created_at: r.last_message_at }) as StoredMessage);
+    const [, lastResults] = await Promise.all([authors(rows.map((r) => r.peer_id)), openAll(viewerId, lastRows)]);
+    const lastById = new Map(lastRows.map((m, i) => [m.id, lastResults[i]]));
     return Promise.all(
       rows.map(async (r): Promise<Conversation> => {
         let last: Conversation["lastMessage"] = null;
         if (r.last_message_id && r.last_sender_id) {
-          const res = await open(viewerId, {
-            id: r.last_message_id,
-            conversation_id: r.conversation_id,
-            sender_id: r.last_sender_id,
-            content: r.last_content,
-            created_at: r.last_message_at,
-          }).catch((): DecryptResult => ({ ok: false, reason: "missing-key" }));
+          const res = lastById.get(r.last_message_id)!;
           const fromViewer = r.last_sender_id === viewerId;
           last = {
             text: res.ok ? res.payload.body : "",
@@ -406,8 +444,16 @@ export function createSupabaseMessages(
     return [...groups.values()];
   }
 
+  /** Conversations whose view should be rebuilt from what's loaded (a photo finished), without a refetch. */
+  const rebuildOnly = new Set<string>();
+
   async function conversation(conversationId: string, viewerId: string): Promise<ConversationView | null> {
-    const thread = await loadThread(conversationId);
+    // The thread and this device (encryption library + key sync) load side by side.
+    void device(viewerId).catch(() => undefined);
+    const fromMemory = rebuildOnly.delete(conversationId) && threads.has(conversationId);
+    // A real refresh gives photos that failed to load another try.
+    if (!fromMemory) for (const [path, url] of imageReady) if (url === null) imageReady.delete(path);
+    const thread = fromMemory ? threads.get(conversationId)! : await loadThread(conversationId);
     if (!thread) return null;
     const me = thread.members.find((m) => m.user_id === viewerId);
     const peer = thread.members.find((m) => m.user_id !== viewerId);
@@ -418,7 +464,7 @@ export function createSupabaseMessages(
     const blockedEither = thread.blockedEither;
 
     const all = thread.rows;
-    const decryptedAll = await Promise.all(all.map((m) => open(viewerId, m).catch((): DecryptResult => ({ ok: false, reason: "missing-key" }))));
+    const decryptedAll = await openAll(viewerId, all);
     const byId = new Map(all.map((m, i) => [m.id, decryptedAll[i]]));
     const notes = annotations(all, byId);
     const isMessage = (r: DecryptResult | undefined) => !r?.ok || r.payload.msgtype === "m.text" || r.payload.msgtype === "m.image";
@@ -444,8 +490,20 @@ export function createSupabaseMessages(
         const p = res.payload;
         const media: MediaItem[] = [];
         if (p["amigo.image"]) {
-          const url = await imageUrl(viewerId, p["amigo.image"]);
-          if (url) media.push({ type: "image", url, width: p["amigo.image"].width, height: p["amigo.image"].height });
+          // Photos download and decrypt in the background: the conversation shows at once
+          // with a placeholder, and the view is rebuilt as each photo is ready.
+          const img = p["amigo.image"];
+          const ready = imageReady.get(img.path);
+          if (ready !== undefined) {
+            if (ready) media.push({ type: "image", url: ready, width: img.width, height: img.height });
+          } else {
+            media.push({ type: "image", url: "", width: img.width, height: img.height });
+            void imageUrl(viewerId, img).then((url) => {
+              imageReady.set(img.path, url);
+              rebuildOnly.add(conversationId);
+              rebuildViews();
+            });
+          }
         }
         const quotedId = p["amigo.reply_to"];
         const quoted = quotedId ? byId.get(quotedId) : null;
@@ -590,12 +648,14 @@ export function createSupabaseMessages(
     let active = true;
     let running = false;
     let again = false;
+    let delivered = false;
     const run = async () => {
       if (running) return void (again = true);
       running = true;
       try {
         const value = await fetcher();
         remember(cacheKey, value);
+        delivered = true;
         if (active) sub.onData(value);
       } catch (e) {
         if (active) sub.onError(e as Error);
@@ -614,9 +674,16 @@ export function createSupabaseMessages(
     const cacheKey = `${viewerId}:${name}`;
     const last = cached<T>(cacheKey);
     if (last !== undefined) sub.onData(last, { cached: true });
+    // A screen must never wait forever on a stalled connection: after a while,
+    // say so (with Try again). If the load still finishes, its data replaces that.
+    const watchdog =
+      last === undefined
+        ? setTimeout(() => active && !delivered && sub.onError(Object.assign(new Error("Taking too long to load"), { code: "unavailable" })), FIRST_LOAD_LIMIT_MS)
+        : undefined;
     void run();
     schedulePulse();
     return () => {
+      clearTimeout(watchdog);
       active = false;
       lives.delete(entry);
       schedulePulse();

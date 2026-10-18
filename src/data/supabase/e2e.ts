@@ -185,9 +185,19 @@ export class E2EDevice {
       await d.machine.updateTrackedUsers([d.me()]);
       await d.sync();
       await d.ensureIdentity();
-      await d.touch(true);
-      await d.refreshBackupLocked();
     });
+    // Not needed to read or send: done a moment later, so the first screen's
+    // decryption isn't queued behind them.
+    setTimeout(
+      () =>
+        void d
+          .serial(async () => {
+            await d.touch(true);
+            await d.refreshBackupLocked();
+          })
+          .catch(() => undefined),
+      3000,
+    );
     return d;
   }
 
@@ -288,6 +298,8 @@ export class E2EDevice {
       new Map([["signed_curve25519", counts.signed_curve25519]]),
       new Set(counts.unused_fallback ? ["signed_curve25519"] : []),
     );
+    // New mail may carry room keys: messages that couldn't be decrypted are worth another try.
+    if (mail.length) this.keyEpoch++;
     if (changes.length) this.changesSince = changes.map((c) => c.changed_at).sort().at(-1)!;
     if (mail.length) await this.rpc("e2e_ack_to_device", { p_device: this.deviceId, p_up_to: mail[mail.length - 1].id });
     await this.flush();
@@ -697,6 +709,7 @@ export class E2EDevice {
       if (sessions.size) byRoom.set(new this.c.RoomId(roomId), sessions);
     }
     const result = await this.machine.importBackedUpRoomKeys(byRoom, () => undefined, version);
+    if (result.importedCount > 0) this.keyEpoch++;
     return { imported: result.importedCount, total };
   }
 
@@ -750,6 +763,33 @@ export class E2EDevice {
    * then in the key backup (if this device holds the backup key — e.g. it was
    * just approved by another of your devices, or you entered the recovery key).
    */
+  /**
+   * Bumped whenever new keys may have arrived (mail, backup import). A message
+   * that failed with a missing key is only worth retrying once this changes.
+   */
+  keyEpoch = 0;
+
+  /**
+   * Decrypts a batch (a conversation's messages) as one job: missing keys are
+   * looked for once for the whole batch — one sync, then the backup at most
+   * once — instead of once per message.
+   */
+  decryptMany(ms: StoredMessage[]): Promise<DecryptResult[]> {
+    return this.serial(async () => {
+      const out: DecryptResult[] = [];
+      for (const m of ms) out.push(await this.tryDecrypt(m));
+      const missing = () => out.map((r, i) => (!r.ok && r.reason === "missing-key" ? i : -1)).filter((i) => i >= 0);
+      const retry = async (idx: number[]) => {
+        for (const i of idx) out[i] = await this.tryDecrypt(ms[i]);
+      };
+      if (!missing().length) return out;
+      await this.sync();
+      await retry(missing());
+      if (missing().length && (await this.importHeldBackup())) await retry(missing());
+      return out;
+    });
+  }
+
   decrypt(m: StoredMessage): Promise<DecryptResult> {
     return this.serial(async () => {
       const first = await this.tryDecrypt(m);

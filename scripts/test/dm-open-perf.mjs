@@ -141,10 +141,6 @@ async function watchOpen(page, t0, timeoutMs = 90000) {
 
 const tag = randomBytes(4).toString("hex");
 const people = [];
-const png = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAQElEQVR42u3OMQEAAAgDoK1/aI3hHFQgLz1ErVu3bt26devWrVu3bt26devWrVu3bt26devWrVu3bt26dev+bQAx0QHB1V3h1wAAAABJRU5ErkJggg==",
-  "base64",
-);
 let step = "accounts";
 try {
   const A = await account(tag, "a");
@@ -165,6 +161,8 @@ try {
   step = "B sends the thread";
   await b.page.goto(`${BASE}/messages/${conv}`, { waitUntil: "load" });
   const input = b.page.locator("#msg-input:not([disabled])");
+  // A real image (a piece of the screen), as a phone would attach.
+  const png = await b.page.screenshot({ clip: { x: 0, y: 0, width: 320, height: 240 } });
   await input.waitFor({ timeout: 60000 });
   for (let i = 0; i < N; i++) {
     if (i % Math.floor(N / PHOTOS) === 0 && i / Math.floor(N / PHOTOS) < PHOTOS) {

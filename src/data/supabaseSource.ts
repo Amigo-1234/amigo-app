@@ -301,6 +301,30 @@ function pushNewMessage(conversationId: string) {
   });
 }
 
+/**
+ * After a like, reply, mention, follow or support: asks the server to push the
+ * new notification to the other person's phones (it decides who and whether,
+ * groups bursts, and pushes each notification once). Debounced, so a run of
+ * likes is one request.
+ */
+let activityTimer: ReturnType<typeof setTimeout> | undefined;
+function pushActivity() {
+  if (!isNeon) return;
+  clearTimeout(activityTimer);
+  activityTimer = setTimeout(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      const token = data.session?.access_token;
+      if (!token) return;
+      return fetch("/api/push-notify", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ activity: true }),
+        keepalive: true,
+      }).catch(() => undefined);
+    });
+  }, 1500);
+}
+
 async function forgetPushDevice() {
   if (!isNeon || typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
   const sub = await (await navigator.serviceWorker.getRegistration())?.pushManager?.getSubscription();
@@ -309,7 +333,10 @@ async function forgetPushDevice() {
   await sub.unsubscribe();
 }
 // Post tools + moderation need migration 20261017130000 (applied on Neon only).
-if (isNeon) q.enablePostTools();
+if (isNeon) {
+  q.enablePostTools();
+  q.enableNotificationRequests();
+}
 const moderation = isNeon ? createModeration(supabase, invalidate) : null;
 
 export const supabaseSource: DataSource = {
@@ -531,12 +558,14 @@ export const supabaseSource: DataSource = {
       throw e;
     }
     invalidate();
+    if (/@\w/.test(input.text)) pushActivity(); // mentions
     return { id: created.id };
   },
 
   async setLiked(postId, _viewerId, liked) {
     await q.setLike(supabase, postId, liked);
     invalidate();
+    if (liked) pushActivity();
   },
 
   subscribeReplies(postId, sub) {
@@ -551,6 +580,7 @@ export const supabaseSource: DataSource = {
   async addReply(postId, _viewer, text) {
     await q.createPost(supabase, text, { parentId: postId });
     invalidate();
+    pushActivity();
   },
 
   getFollowingIds: (viewerId) => q.fetchFollowingIds(supabase, viewerId),
@@ -559,6 +589,7 @@ export const supabaseSource: DataSource = {
   async follow(viewerId, targetId) {
     await q.follow(supabase, viewerId, targetId);
     invalidate();
+    pushActivity();
   },
 
   async unfollow(viewerId, targetId) {
@@ -684,6 +715,7 @@ export const supabaseSource: DataSource = {
     async confirmSupport(requestId) {
       const res = await q.confirmSupport(supabase, requestId);
       invalidate();
+      pushActivity();
       return res;
     },
     async leaveFeedback(requestId, _viewerId, { reaction, text }) {

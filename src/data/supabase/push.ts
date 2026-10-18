@@ -6,7 +6,7 @@
 import type { NotificationPrefs, PushApi, PushDevice } from "../types";
 import type { Db } from "./queries";
 
-const DEFAULT_PREFS: NotificationPrefs = { messages: true, worlds: true, social: false };
+const DEFAULT_PREFS: NotificationPrefs = { messages: true, worlds: true, social: true };
 
 export function createPushApi(db: Db): PushApi {
   async function rpc(fn: string, args: Record<string, unknown>) {

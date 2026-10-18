@@ -5,10 +5,12 @@
  * idempotent), then this server pushes every fresh World notice once
  * (live or cancelled) to members who allow World notifications. So Worlds go
  * live and members hear about it without an admin or a scheduler online; the
- * delay is at most the time until the next app asks.
+ * delay is at most the time until the next app asks. It also pushes any
+ * activity (likes, replies, follows, support) still waiting to be pushed.
  */
 import { json, rpc } from "./_media";
 import { sendPush, type PushOutcome } from "./_webpush";
+import { sendActivityPushes } from "./_activity";
 
 export const config = { runtime: "edge" };
 
@@ -26,11 +28,15 @@ export default async function handler(req: Request): Promise<Response> {
   const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, PUSH_SERVER_SECRET } = ENV;
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT || !PUSH_SERVER_SECRET) return json(200, { started: started.data.length, pushed: 0 });
 
+  const vapidKeys = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY, subject: VAPID_SUBJECT };
+  // Activity pushes the acting person's app didn't get to send (closed right after, offline).
+  const activity = await sendActivityPushes(token, vapidKeys, PUSH_SERVER_SECRET).catch(() => 0);
+
   type Target = { world_id: string; slug: string; title: string; kind: "live" | "cancelled"; id: string; endpoint: string; p256dh: string; auth_secret: string };
   const targets = await rpc<Target[]>(token, "world_push_targets", { p_key: PUSH_SERVER_SECRET });
-  if (!targets.ok || !targets.data.length) return json(200, { started: started.data.length, pushed: 0 });
+  if (!targets.ok || !targets.data.length) return json(200, { started: started.data.length, pushed: 0, activity });
 
-  const vapid = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY, subject: VAPID_SUBJECT };
+  const vapid = vapidKeys;
   const outcomes = await Promise.all(
     targets.data.map(async (t) => ({
       id: t.id,
@@ -46,5 +52,5 @@ export default async function handler(req: Request): Promise<Response> {
     p_key: PUSH_SERVER_SECRET,
     p_results: outcomes.map((o) => ({ id: o.id, ok: o.outcome === "ok", gone: o.outcome === "gone" })),
   });
-  return json(200, { started: started.data.length, pushed: outcomes.filter((o) => o.outcome === "ok").length });
+  return json(200, { started: started.data.length, pushed: outcomes.filter((o) => o.outcome === "ok").length, activity });
 }

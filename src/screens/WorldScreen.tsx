@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, ChevronDown, CircleAlert, Flag, Gift, Orbit, PenLine, Settings2, Star, Timer, Trophy } from "lucide-react";
+import { ArrowLeft, CircleAlert, Flag, Gift, Orbit, PenLine, Settings2, Star, Trophy } from "lucide-react";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { CancelWorld, WorldEditor } from "../features/worlds/WorldEditor";
 import { useToast } from "../state/toast";
@@ -93,12 +93,11 @@ function WorldView({ world }: { world: World }) {
 
   // Switching tabs brings the tab content into view instead of leaving it under the hero.
   const tabsRef = useRef<HTMLElement>(null);
-  const firstTab = useRef(true);
+  // Only on an actual switch (not on arrival), so the hero and its countdown are seen first.
+  const shownTab = useRef(tab);
   useEffect(() => {
-    if (firstTab.current) {
-      firstTab.current = false;
-      return;
-    }
+    if (shownTab.current === tab) return;
+    shownTab.current = tab;
     const el = tabsRef.current;
     if (el && el.getBoundingClientRect().top > window.innerHeight * 0.4) {
       window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - el.offsetHeight - 8, behavior: "smooth" });
@@ -119,10 +118,10 @@ function WorldView({ world }: { world: World }) {
           <h2 id="world-title" className="world-hero__title">
             {world.title}
           </h2>
-          <p className="world-hero__tagline">{world.tagline}</p>
           {/* Details only on the Live tab, so Chat/Entries/Leaderboard start near the top on phones. */}
           {tab === "live" && (
             <>
+              <p className="world-hero__tagline">{world.tagline}</p>
               {world.description && <Description text={world.description} />}
               <p className="world-hero__when">{formatSpan(world.startsAt, world.endsAt)}</p>
             </>
@@ -131,51 +130,8 @@ function WorldView({ world }: { world: World }) {
             <Participants world={world} />
             <JoinButton world={world} now={now} />
           </div>
-          {comp && (
-            <details className="world-comp">
-              <summary>
-                <Trophy size={16} aria-hidden="true" />
-                <span className="world-comp__summary">
-                  <strong>Competition</strong>
-                  {" · "}
-                  {status === "upcoming"
-                    ? "entries open at the start"
-                    : entriesOpen(world, now)
-                      ? <span aria-label={`entries close in ${countdownLong(comp.entriesCloseAt.getTime() - now)}`}>entries close in {countdown(comp.entriesCloseAt.getTime() - now)}</span>
-                      : status === "live" ? "entries closed" : "finished"}
-                </span>
-                <span className="world-comp__more">How it works <ChevronDown size={16} aria-hidden="true" /></span>
-              </summary>
-            <dl>
-              <div>
-                <dt>
-                  <Timer size={15} aria-hidden="true" /> Entries
-                </dt>
-                <dd>
-                  {status === "upcoming"
-                    ? `Open at the start, close ${formatWhen(comp.entriesCloseAt)}`
-                    : entriesOpen(world, now)
-                      ? <span aria-label={`Entries close in ${countdownLong(comp.entriesCloseAt.getTime() - now)}`}>Close in {countdown(comp.entriesCloseAt.getTime() - now)}</span>
-                      : "Closed"}
-                  {` · ${comp.entryLimit} per person`}
-                </dd>
-              </div>
-              <div>
-                <dt>
-                  <Trophy size={15} aria-hidden="true" /> Scoring
-                </dt>
-                <dd>{scoringText(world)}</dd>
-              </div>
-              {comp.prize && (
-                <div>
-                  <dt>
-                    <Gift size={15} aria-hidden="true" /> Prize
-                  </dt>
-                  <dd>{comp.prize}</dd>
-                </div>
-              )}
-            </dl>
-            </details>
+          {comp && tab === "live" && status !== "finished" && status !== "cancelled" && (
+            <CompetitionCard world={world} now={now} entriesUsed={mine?.entries ?? 0} />
           )}
         </div>
       </section>
@@ -204,7 +160,25 @@ function WorldView({ world }: { world: World }) {
             {status === "finished" ? "Final results." : status === "live" ? "Live standings — updates as people react." : "Standings appear once entries come in."}{" "}
             {scoringText(world)}.
           </p>
-          <Leaderboard rows={rows} finished={status === "finished"} state={board.state.status} onRetry={board.retry} />
+          <Leaderboard
+            rows={rows}
+            finished={status === "finished"}
+            state={board.state.status}
+            onRetry={board.retry}
+            emptyAction={
+              status === "upcoming" ? (
+                <p className="world-note">Entries open when the World starts, in {countdown(world.startsAt.getTime() - now)}.</p>
+              ) : entriesOpen(world, now) ? (
+                world.viewerJoined ? (
+                  <Link className="btn btn--primary btn--md" to="?tab=entries" replace>
+                    Submit an entry
+                  </Link>
+                ) : (
+                  <p className="world-note">Join the World (button above) to enter.</p>
+                )
+              ) : undefined
+            }
+          />
         </>
       )}
       {tab === "chat" && <ChatTab world={world} live={status === "live"} />}
@@ -289,14 +263,6 @@ function LiveTab({ world, now }: { world: World; now: number }) {
   const live = worldStatus(world, now) === "live";
   return (
     <>
-      {live && world.viewerJoined && entriesOpen(world, now) && (
-        <p className="world-note world-note--nudge">
-          Entries close in {countdown(world.competition!.entriesCloseAt.getTime() - now)} —{" "}
-          <Link to="?tab=entries" replace>
-            submit yours
-          </Link>
-        </p>
-      )}
       {live && world.viewerJoined ? (
         <div className="world-composer">
           <Composer variant="inline" world={{ id: world.id, entry: false, placeholder: `Say something in ${world.title}…`, submitLabel: "Post" }} />
@@ -317,6 +283,11 @@ function EntriesTab({ world, now, entriesUsed }: { world: World; now: number; en
   const left = comp.entryLimit - entriesUsed;
   return (
     <>
+      <p className="world-note">
+        <Trophy size={14} aria-hidden="true" /> Entries compete for points: {pts(comp.scoring.reaction)} per like and {pts(comp.scoring.reply)} per reply
+        {comp.scoring.hostPick > 0 ? `, +${comp.scoring.hostPick} for an Amigo pick` : ""}. {comp.entryLimit === 1 ? "One entry" : `${comp.entryLimit} entries`} per person. Posts on Live
+        and chat messages don't count.
+      </p>
       {open && world.viewerJoined && left > 0 && (
         <div className="world-composer">
           <Composer
@@ -472,3 +443,68 @@ function WorldReportButton({ worldId, title }: { worldId: string; title: string 
     </>
   );
 }
+
+/**
+ * Live tab of a competition: how to take part, in three steps, and the one
+ * thing to do next. Explains the existing scoring; never changes it.
+ */
+function CompetitionCard({ world, now, entriesUsed }: { world: World; now: number; entriesUsed: number }) {
+  const comp = world.competition!;
+  const status = worldStatus(world, now);
+  const open = entriesOpen(world, now);
+  const joined = world.viewerJoined;
+  const entered = entriesUsed > 0;
+  const left = comp.entryLimit - entriesUsed;
+  const s = comp.scoring;
+  const when =
+    status === "upcoming" ? (
+      `Entries open when it starts · close ${formatWhen(comp.entriesCloseAt)}`
+    ) : open ? (
+      <span aria-label={`Entries close in ${countdownLong(comp.entriesCloseAt.getTime() - now)}`}>Entries close in {countdown(comp.entriesCloseAt.getTime() - now)}</span>
+    ) : (
+      "Entries are closed — likes and replies still count until the end"
+    );
+  return (
+    <section className="world-howto" aria-labelledby="world-howto-title">
+      <h3 id="world-howto-title" className="world-howto__title">
+        <Trophy size={18} aria-hidden="true" /> Competition
+        <span className="world-howto__when">{when}</span>
+      </h3>
+      <ol className="world-howto__steps">
+        <li className={joined ? "is-done" : undefined}>
+          <strong>Join</strong> the World{joined && <span className="visually-hidden"> (done)</span>}
+        </li>
+        <li className={entered ? "is-done" : undefined}>
+          <strong>Submit your entry</strong> in the Entries tab — {comp.entryLimit === 1 ? "one" : comp.entryLimit} per person
+          {entered && <span className="visually-hidden"> (done)</span>}
+        </li>
+        <li>
+          <strong>Get reactions:</strong> {pts(s.reaction)} per like, {pts(s.reply)} per reply
+          {s.hostPick > 0 && <>, +{s.hostPick} for an Amigo pick</>}
+        </li>
+      </ol>
+      <p className="world-howto__note">
+        {!joined && status !== "finished" ? "Tap Join above to take part. " : ""}Posts here on Live and chat messages aren't entries.
+      </p>
+      {comp.prize && (
+        <p className="world-howto__prize">
+          <Gift size={15} aria-hidden="true" /> {comp.prize}
+        </p>
+      )}
+      <div className="world-howto__cta">
+        {status === "live" && open && joined && left > 0 && (
+          <Link className="btn btn--primary btn--md" to="?tab=entries" replace>
+            <PenLine size={17} aria-hidden="true" /> {entered ? "Submit another entry" : "Submit your entry"}
+          </Link>
+        )}
+        {status === "live" && joined && entered && (
+          <Link className="btn btn--secondary btn--md" to="?tab=leaderboard" replace>
+            See the leaderboard
+          </Link>
+        )}
+      </div>
+    </section>
+  );
+}
+
+const pts = (n: number) => `${n} ${n === 1 ? "pt" : "pts"}`;

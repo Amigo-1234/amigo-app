@@ -17,16 +17,19 @@ export interface NotificationGroup {
   latestAt: Date;
   unread: boolean;
   inReplyToReply: boolean;
+  /** like: on one of your replies. */
+  onReply: boolean;
+  request: { id: string; title: string } | null;
 }
 
-const groupable = (n: AppNotification) => n.kind === "like" || n.kind === "follow";
+const groupable = (n: AppNotification) => n.kind === "like" || n.kind === "follow" || n.kind === "support";
 
 /** items must be newest first (as backends return them). */
 export function groupNotifications(items: AppNotification[]): NotificationGroup[] {
   const groups: NotificationGroup[] = [];
   const open = new Map<string, NotificationGroup>();
   for (const n of items) {
-    const key = groupable(n) ? `${n.kind}:${n.post?.id ?? ""}` : null;
+    const key = groupable(n) ? `${n.kind}:${n.post?.id ?? n.request?.id ?? ""}` : null;
     const existing = key ? open.get(key) : undefined;
     if (existing && existing.latestAt.getTime() - n.createdAt.getTime() <= GROUP_WINDOW_MS) {
       existing.items.push(n);
@@ -43,6 +46,8 @@ export function groupNotifications(items: AppNotification[]): NotificationGroup[
       latestAt: n.createdAt,
       unread: !n.read,
       inReplyToReply: Boolean(n.inReplyToReply),
+      onReply: Boolean(n.onReply),
+      request: n.request ?? null,
     };
     groups.push(group);
     if (key) open.set(key, group);
@@ -56,16 +61,18 @@ export function actorNames(actors: Author[]): { first: string; second?: string; 
   return { first: actors[0]?.name ?? "Someone", others: Math.max(actors.length - 1, 0) };
 }
 
-export function actionText(g: Pick<NotificationGroup, "kind" | "inReplyToReply">): string {
+export function actionText(g: Pick<NotificationGroup, "kind" | "inReplyToReply" | "onReply">): string {
   switch (g.kind) {
     case "like":
-      return "liked your post";
+      return g.onReply ? "liked your reply" : "liked your post";
     case "follow":
       return "followed you";
     case "reply":
       return g.inReplyToReply ? "replied to your reply" : "replied to your post";
     case "mention":
       return "mentioned you";
+    case "support":
+      return "supported your request";
   }
 }
 
@@ -79,5 +86,6 @@ export function describeGroup(g: NotificationGroup): string {
 /** Where tapping a row goes. */
 export function groupHref(g: NotificationGroup, viewerHandle: string): string {
   if (g.kind === "follow") return g.actors.length === 1 ? `/u/${g.actors[0].handle}` : `/u/${viewerHandle}/followers`;
+  if (g.kind === "support") return g.request ? `/support/${g.request.id}` : "/support";
   return g.post ? `/post/${g.post.id}` : "/notifications";
 }

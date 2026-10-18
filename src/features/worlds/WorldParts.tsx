@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link } from "react-router";
 import { CircleAlert, MessageCircle, Send, Trash2, Trophy } from "lucide-react";
 import { dataSource, WORLD_CHAT_MAX_LENGTH, type LeaderboardEntry, type PersonSummary, type World, type WorldChatMessage } from "../../data";
@@ -15,6 +15,7 @@ import { profileHref } from "../profile/links";
 import { PersonRow } from "../profile/PersonRow";
 import { worldErrorText } from "./useWorlds";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
+import { useVisualViewportFit } from "../../lib/visualViewport";
 
 const pts = (n: number) => `${n} ${n === 1 ? "pt" : "pts"}`;
 
@@ -32,18 +33,28 @@ export function Leaderboard({
   finished,
   onRetry,
   state,
+  emptyAction,
 }: {
   rows: LeaderboardEntry[];
   finished: boolean;
   state: "loading" | "ready" | "error";
   onRetry: () => void;
+  /** What to do next when nobody has entered yet (enter, join, or when entries open). */
+  emptyAction?: ReactNode;
 }) {
   const viewer = useViewer();
   if (state === "loading") return <ListSkeleton label="Loading leaderboard" />;
   if (state === "error")
     return <StateMessage tone="error" icon={<CircleAlert size={24} />} {...describeError(null, "the leaderboard")} action={<Button variant="secondary" onClick={onRetry}>Try again</Button>} />;
   if (rows.length === 0)
-    return <StateMessage icon={<Trophy size={24} />} title="No entries yet" body={finished ? "Nobody entered this one." : "Submit an entry to get on the board."} />;
+    return (
+      <StateMessage
+        icon={<Trophy size={24} />}
+        title="No entries yet"
+        body={finished ? "Nobody entered this one." : "Entries are posted in the Entries tab. Each like and reply on an entry earns its author points."}
+        action={finished ? undefined : emptyAction}
+      />
+    );
   return (
     <ol className="leaderboard" aria-label={finished ? "Final results" : "Live standings"}>
       {rows.map((r) => {
@@ -159,14 +170,36 @@ export function WorldChat({
   const [sending, setSending] = useState(false);
   const listRef = useRef<HTMLOListElement>(null);
   const stick = useRef(true);
+  // Phones: the chat scrolls with the page (one scroll, composer pinned above the
+  // bottom bar). Wider screens: the list scrolls inside its own box.
+  const [phone] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches);
+  const toBottom = () => {
+    const el = listRef.current;
+    if (!el) return;
+    if (phone) window.scrollTo({ top: document.documentElement.scrollHeight });
+    else el.scrollTop = el.scrollHeight;
+  };
 
   // Follow new messages when the reader is at the bottom; don't yank them if they scrolled up.
+  // On opening the chat, start at the newest messages.
+  const opened = useRef(false);
   useEffect(() => {
-    const el = listRef.current;
-    if (el && stick.current) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+    if (!messages.length) return;
+    if (stick.current || !opened.current) toBottom();
+    opened.current = true;
+  }, [messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!phone) return;
+    const onScroll = () => {
+      stick.current = document.documentElement.scrollHeight - window.scrollY - window.innerHeight < 80;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [phone]);
 
   const canChat = live && world.viewerJoined;
+  // While typing on a phone: the keyboard covers the bottom bar, so the composer sits right on the keyboard.
+  useVisualViewportFit(phone && canChat, () => stick.current && toBottom());
   const send = async (e: FormEvent) => {
     e.preventDefault();
     const body = text.trim();
@@ -200,6 +233,7 @@ export function WorldChat({
           aria-live="polite"
           aria-label={`Chat in ${world.title}`}
           onScroll={(e) => {
+            if (phone) return;
             const el = e.currentTarget;
             stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
           }}

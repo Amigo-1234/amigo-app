@@ -9,11 +9,15 @@
  * sender's name or any key. Dead subscriptions are removed.
  * { test: true } sends "notifications work" to the caller's own devices
  * (Settings → Send a test notification; at most every 20 seconds).
+ * { activity: true } pushes pending likes, replies, mentions, follows and
+ * Support Hub support (see sendActivityPushes); the acting person's app calls
+ * it right after the action, and /api/worlds-tick sweeps up anything left.
  *
  * Environment: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT, PUSH_SERVER_SECRET.
  */
 import { json, rpc } from "./_media";
 import { sendPush, type PushOutcome, type Vapid } from "./_webpush";
+import { sendActivityPushes } from "./_activity";
 
 export const config = { runtime: "edge" };
 
@@ -26,7 +30,9 @@ export default async function handler(req: Request): Promise<Response> {
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT || !PUSH_SERVER_SECRET) return json(503, { error: "push-not-configured" });
   const auth = req.headers.get("authorization");
   if (!auth?.startsWith("Bearer ")) return json(401, { error: "sign-in" });
-  const body = (await req.json().catch(() => null)) as { conversationId?: string; test?: boolean } | null;
+  const body = (await req.json().catch(() => null)) as { conversationId?: string; test?: boolean; activity?: boolean } | null;
+  const vapidKeys: Vapid = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY, subject: VAPID_SUBJECT };
+  if (body?.activity === true) return json(200, { sent: await sendActivityPushes(auth.slice(7), vapidKeys, PUSH_SERVER_SECRET) });
   const test = body?.test === true;
   const conversation = body?.conversationId ?? "";
   if (!test && !UUID.test(conversation)) return json(400, { error: "bad-request" });
@@ -38,7 +44,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (!targets.ok) return json(targets.status === 401 ? 401 : 403, { error: "refused" });
   if (!targets.data.length) return json(200, { sent: 0 });
 
-  const vapid: Vapid = { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY, subject: VAPID_SUBJECT };
+  const vapid = vapidKeys;
   const payload = test ? { t: "test" } : { t: "dm", c: conversation };
   const outcomes = await Promise.all(
     targets.data.map(async (t) => ({
@@ -55,3 +61,4 @@ export default async function handler(req: Request): Promise<Response> {
   });
   return json(200, { sent: outcomes.filter((o) => o.outcome === "ok").length });
 }
+

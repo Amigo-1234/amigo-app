@@ -186,7 +186,22 @@ try {
   const dmConv = await appA.openConversation(ids.a, ids.b);
   const pixels = new Uint8Array(512).map((_, i) => i % 251);
   await appA.send(ids.a, dmConv, { text: "photo!", image: { kind: "image", blob: new Blob([pixels], { type: "image/png" }), width: 16, height: 16 } });
-  const viewB = await new Promise((res, rej) => appB.subscribeConversation(dmConv, ids.b, { onData: res, onError: rej }));
+  // The conversation shows at once (photo as a placeholder), then again once the photo is decrypted.
+  const views = [];
+  const viewB = await new Promise((res, rej) => {
+    const stop = appB.subscribeConversation(dmConv, ids.b, {
+      onData: (v) => {
+        views.push(v);
+        if (v.messages.at(-1)?.media[0]?.url) {
+          stop();
+          res(v);
+        }
+      },
+      onError: rej,
+    });
+    setTimeout(() => rej(new Error("photo never finished loading")), 30000);
+  });
+  ok("the conversation shows before its photo has loaded", views.length >= 2 && views[0].messages.at(-1)?.media[0]?.url === "", String(views.length));
   const msg = viewB.messages.at(-1);
   ok("recipient decrypts the photo message", msg?.text === "photo!" && msg.media.length === 1, JSON.stringify(msg?.media?.length));
   const blobUrl = msg?.media[0]?.url;
