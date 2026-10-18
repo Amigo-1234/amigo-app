@@ -6,6 +6,8 @@ on:
   push:
     branches: [claude/amigo-world-restart-7mrbrf]
     paths: [.github/live-interactions.run]
+  # Started by hand (no push, so the preview isn't rebuilt while the test runs).
+  workflow_dispatch:
 jobs:
   live-interactions:
     runs-on: ubuntu-latest
