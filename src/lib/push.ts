@@ -82,6 +82,9 @@ async function register(api: PushApi, sub: PushSubscription) {
   await api.subscribe({ endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth, label: deviceLabel() });
 }
 
+const withTimeout = <T>(p: Promise<T>, ms: number) =>
+  Promise.race([p, new Promise<never>((_, reject) => setTimeout(() => reject(new Error("The browser's push service didn't respond.")), ms))]);
+
 /** Asks for permission (call from a tap) and registers this device. */
 export async function enablePush(api: PushApi): Promise<PushStatus> {
   const status = await pushStatus(api);
@@ -92,9 +95,11 @@ export async function enablePush(api: PushApi): Promise<PushStatus> {
   await navigator.serviceWorker.ready;
   const key = await api.publicKey();
   if (!key) return "not-configured";
+  // The browser's push service can fail to answer at all (blocked network,
+  // no Google services); don't leave the switch spinning forever.
   const sub =
     (await reg.pushManager.getSubscription()) ??
-    (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) as BufferSource }));
+    (await withTimeout(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) as BufferSource }), 30_000));
   await register(api, sub);
   return "on";
 }

@@ -538,7 +538,9 @@ function PushSettings() {
         if (next === "on") toast("Notifications are on for this device");
         else if (next === "denied") toast("Notifications are blocked — allow them in your settings", "error");
       }
-    } catch {
+    } catch (e) {
+      // The reason only (e.g. "Registration failed - push service error"); no keys or endpoints.
+      console.warn("push:", e instanceof Error ? e.message : String(e));
       toast("Couldn't change notifications. Try again.", "error");
       setStatus(await pushStatus(api).catch(() => "unsupported" as const));
     } finally {

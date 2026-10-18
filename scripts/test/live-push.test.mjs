@@ -102,9 +102,13 @@ try {
   await b.page.waitForFunction(() => !document.body.innerText.includes("Checking…"), null, { timeout: 30000 }).catch(() => undefined);
   const detail = (await row.innerText()).replace(/\s+/g, " ");
   ok("Settings offers notifications on this device", /Get told about new messages|On\./.test(detail), detail.slice(0, 120));
+  const consoleB = [];
+  b.page.on("console", (m) => (m.type() === "error" || m.type() === "warning") && consoleB.push(m.text().slice(0, 200)));
   await row.click();
-  const on = await b.page.getByText("Notifications are on for this device").waitFor({ timeout: 30000 }).then(() => true, () => false);
-  ok("turning notifications on registers this device with a real push service", on, on ? "" : (await row.innerText()).replace(/\s+/g, " ").slice(0, 160));
+  const on = await b.page.getByText("Notifications are on for this device").waitFor({ timeout: 45000 }).then(() => true, () => false);
+  const toasts = await b.page.locator(".toast").allInnerTexts().catch(() => []);
+  const why = on ? "" : `row: ${(await row.innerText()).replace(/\s+/g, " ").slice(0, 120)} · toasts: ${JSON.stringify(toasts)} · console: ${JSON.stringify(consoleB.slice(-3))}`;
+  ok("turning notifications on registers this device with a real push service", on, why);
   if (!on) throw new Error("push subscription not available in this browser build; stopping");
   const listed = await b.page.locator(".settings-devices li").count();
   ok("the device appears in the device list", listed === 1, String(listed));
