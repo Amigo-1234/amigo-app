@@ -676,3 +676,62 @@
 .world-composer {
   border-bottom: 1px solid var(--border);
 }
+
+/* ---------- Cancelled, admin tools ---------- */
+
+.world-status--cancelled {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+
+.world-card--cancelled {
+  opacity: 0.7;
+}
+
+.world-cancelled {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--danger, #c0392b) 10%, transparent);
+  color: var(--text-1);
+  font-size: var(--text-sm);
+}
+
+.world-entry {
+  position: relative;
+}
+
+.world-entry__admin {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 var(--space-4) var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.world-editor__times,
+.world-editor__nums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-3);
+}
+
+.world-editor__comp {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.world-editor__hint {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+.admin-row__actions {
+  display: flex;
+  flex: none;
+  gap: var(--space-2);
+}

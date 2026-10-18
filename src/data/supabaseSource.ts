@@ -18,6 +18,7 @@ import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPushApi } from "./supabase/push";
+import * as worldsExtra from "./supabase/worldsExtra";
 import { setMediaSigner } from "../lib/mediaLinks";
 import { makePreview } from "../lib/image";
 import { createPlatform } from "./supabase/platform";
@@ -29,6 +30,9 @@ const REFRESH_DEBOUNCE_MS = 250;
 // Neon has no Realtime: open views refetch on this interval while the tab is
 // visible (and immediately after our own writes). Gentle on Neon Free compute.
 const NEON_POLL_MS = 30_000;
+// Worlds are live gatherings: an open World refreshes its posts and standings more often, and its chat every few seconds.
+const WORLD_POLL_MS = 10_000;
+const CHAT_POLL_MS = 4_000;
 
 // -------------------------------------------------------- local invalidation
 // After our own writes, refresh open views immediately instead of waiting for
@@ -564,6 +568,7 @@ export const supabaseSource: DataSource = {
         sub,
         // participant_count changes arrive as updates on the worlds row.
         (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "worlds", filter: `slug=eq.${slug}` }, refresh),
+        WORLD_POLL_MS,
       );
     },
 
@@ -583,6 +588,7 @@ export const supabaseSource: DataSource = {
         () => q.fetchWorldPosts(supabase, worldId, viewerId, opts),
         sub,
         (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `world_id=eq.${worldId}` }, refresh),
+        WORLD_POLL_MS,
       );
     },
 
@@ -593,6 +599,7 @@ export const supabaseSource: DataSource = {
         sub,
         // Scores move with likes/replies, which surface as counter updates on the World's posts.
         (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `world_id=eq.${worldId}` }, refresh),
+        WORLD_POLL_MS,
       );
     },
 
@@ -603,6 +610,7 @@ export const supabaseSource: DataSource = {
         sub,
         (ch, refresh) =>
           ch.on("postgres_changes", { event: "INSERT", schema: "public", table: "world_chat_messages", filter: `world_id=eq.${worldId}` }, refresh),
+        CHAT_POLL_MS,
       );
     },
 
@@ -612,6 +620,20 @@ export const supabaseSource: DataSource = {
     },
 
     listParticipants: (worldId, viewerId, limit) => q.fetchParticipants(supabase, worldId, viewerId, limit),
+    // Neon schema (migration 20261019120000).
+    ...(isNeon
+      ? {
+          serverTime: () => worldsExtra.serverTime(supabase),
+          notices: (viewerId: string) => worldsExtra.fetchWorldNotices(supabase, viewerId),
+          async markNoticesRead() {
+            const { error } = await supabase.rpc("mark_world_notices_read" as never);
+            if (error) throw new Error(error.message);
+            invalidate();
+          },
+          tick: () => worldsExtra.worldsTick(supabase),
+          admin: worldsExtra.createWorldsAdmin(supabase),
+        }
+      : {}),
   },
 
   support: {

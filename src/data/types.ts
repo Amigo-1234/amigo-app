@@ -342,11 +342,12 @@ export interface NotificationsApi {
 // ------------------------------------------------------------------- worlds
 
 /**
- * Worlds: scheduled live social events, created by Amigo admins only (there is
- * no client API to create or edit one). Status is derived from the times on
- * the client, so a World flips to live or finished without a reload.
+ * Worlds: scheduled live social events, created by Amigo admins only
+ * (WorldsAdminApi). Status is derived from the server-set times (and
+ * cancellation) on the client, corrected to the server's clock, so a World
+ * flips to live or finished on time without a reload or an admin present.
  */
-export type WorldStatus = "upcoming" | "live" | "finished";
+export type WorldStatus = "upcoming" | "live" | "finished" | "cancelled";
 
 /** Points per thing an entry earns while the World is running. */
 export interface WorldScoring {
@@ -383,6 +384,44 @@ export interface World {
   participantsPreview: Author[];
   /** null = a social World without points. */
   competition: WorldCompetition | null;
+  /** Set when an admin cancelled it: no joining, posting or chat. */
+  cancelledAt?: Date | null;
+  cancelReason?: string | null;
+}
+
+/** "A World you joined is live" / "…was cancelled" (Notifications). */
+export interface WorldNotice {
+  id: string;
+  kind: "live" | "cancelled";
+  world: { slug: string; title: string };
+  createdAt: Date;
+  read: boolean;
+}
+
+/** What an admin sets when creating or editing a World. Times are absolute. */
+export interface WorldInput {
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  coverUrl: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  /** null: a social World without points. */
+  competition: { entriesCloseAt: Date; entryLimit: number; scoring: WorldScoring; prize: string | null } | null;
+}
+
+/** Admins only (the database checks every call and logs it). */
+export interface WorldsAdminApi {
+  create(input: WorldInput): Promise<{ id: string }>;
+  /** Only what changed. Once a World has started, its start, link and competition rules are fixed. */
+  update(worldId: string, patch: Partial<WorldInput>): Promise<void>;
+  cancel(worldId: string, reason: string): Promise<void>;
+  /** The Amigo pick bonus on a competition entry. */
+  setHostPick(worldId: string, postId: string, picked: boolean): Promise<void>;
+  /** Entries Amigo picked in this World. */
+  picks(worldId: string): Promise<string[]>;
+  removeChatMessage(messageId: string): Promise<void>;
 }
 
 export interface LeaderboardEntry {
@@ -402,7 +441,7 @@ export interface WorldChatMessage {
 
 export const WORLD_CHAT_MAX_LENGTH = 300;
 
-export type WorldErrorCode = "not-joined" | "not-live" | "entries-closed" | "entry-limit" | "not-competition" | "unknown";
+export type WorldErrorCode = "not-joined" | "not-live" | "entries-closed" | "entry-limit" | "not-competition" | "cancelled" | "unknown";
 
 export class WorldError extends Error {
   code: WorldErrorCode;
@@ -432,6 +471,14 @@ export interface WorldsApi {
   sendChat(worldId: string, viewer: Viewer, text: string): Promise<void>;
   /** People who joined (excluding the viewer), people the viewer doesn't follow yet first. */
   listParticipants(worldId: string, viewerId: string, limit: number): Promise<PersonSummary[]>;
+  /** The server's clock (ms since epoch), so countdowns don't depend on the phone's clock. */
+  serverTime?(): Promise<number>;
+  /** Your World notices, newest first; and marking them read. */
+  notices?(viewerId: string): Promise<WorldNotice[]>;
+  markNoticesRead?(): Promise<void>;
+  /** Asks the server to post "it's live" notices for Worlds that have started (and push them). Idempotent. */
+  tick?(): Promise<void>;
+  admin?: WorldsAdminApi;
 }
 
 // ------------------------------------------------------------- support hub

@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { CircleAlert, MessageCircle, Send, Trophy } from "lucide-react";
+import { CircleAlert, MessageCircle, Send, Trash2, Trophy } from "lucide-react";
 import { dataSource, WORLD_CHAT_MAX_LENGTH, type LeaderboardEntry, type PersonSummary, type World, type WorldChatMessage } from "../../data";
 import { timeAgo, timeAgoLong } from "../../lib/time";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Avatar } from "../../ui/Avatar";
-import { Button } from "../../ui/Button";
+import { Button, IconButton } from "../../ui/Button";
 import { Skeleton } from "../../ui/Skeleton";
 import { StateMessage } from "../../ui/StateMessage";
 import { describeError } from "../feed/errors";
@@ -143,12 +143,15 @@ export function WorldChat({
   messages,
   state,
   onRetry,
+  onRemove,
 }: {
   world: World;
   live: boolean;
   messages: WorldChatMessage[];
   state: "loading" | "ready" | "error";
   onRetry: () => void;
+  /** Admins: remove a message. */
+  onRemove?: (messageId: string) => void;
 }) {
   const viewer = useViewer();
   const toast = useToast();
@@ -223,6 +226,11 @@ export function WorldChat({
                   </span>
                   <p className="chat-msg__text">{m.text}</p>
                 </div>
+                {onRemove && (
+                  <IconButton label={`Remove ${m.author.name}'s message`} onClick={() => window.confirm("Remove this message for everyone?") && onRemove(m.id)}>
+                    <Trash2 size={16} />
+                  </IconButton>
+                )}
               </li>
             );
           })}

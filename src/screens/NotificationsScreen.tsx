@@ -1,5 +1,7 @@
 import { Link } from "react-router";
-import { AtSign, Bell, CheckCheck, CircleAlert, Heart, MessageCircle, UserPlus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AtSign, Bell, CheckCheck, CircleAlert, Heart, MessageCircle, Orbit, UserPlus } from "lucide-react";
+import { dataSource, type WorldNotice } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
 import { actionText, actorNames, describeGroup, groupHref, type NotificationGroup } from "../features/notifications/group";
@@ -17,6 +19,54 @@ import "./NotificationsScreen.css";
 import { MediaImg } from "../lib/mediaLinks";
 
 const MAX_AVATARS = 6;
+
+/** "A World you joined is live / was cancelled" — newest first; seen once shown. */
+function WorldNoticeList() {
+  const api = dataSource.worlds;
+  const viewer = useViewer();
+  const [notices, setNotices] = useState<WorldNotice[]>([]);
+  useEffect(() => {
+    if (!api?.notices) return;
+    let live = true;
+    api.notices(viewer.id).then(
+      (n) => {
+        if (!live) return;
+        setNotices(n.filter((x) => Date.now() - x.createdAt.getTime() < 7 * 86_400_000));
+        if (n.some((x) => !x.read)) void api.markNoticesRead?.().catch(() => undefined);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [api, viewer.id]);
+  if (!notices.length) return null;
+  return (
+    <ul className="world-notices" aria-label="Worlds you joined">
+      {notices.map((n) => (
+        <li key={n.id} className={`world-notice${n.read ? "" : " is-unread"}`}>
+          <Link to={`/worlds/${n.world.slug}`} className="world-notice__link">
+            <Orbit size={20} aria-hidden="true" className="world-notice__icon" />
+            <span className="world-notice__text">
+              {n.kind === "live" ? (
+                <>
+                  <strong>{n.world.title}</strong> is live now — come join in.
+                </>
+              ) : (
+                <>
+                  <strong>{n.world.title}</strong> was cancelled.
+                </>
+              )}
+              <time dateTime={n.createdAt.toISOString()} aria-label={timeAgoLong(n.createdAt)}>
+                {timeAgo(n.createdAt)}
+              </time>
+            </span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 export default function NotificationsScreen() {
   const list = useNotifications();
@@ -44,6 +94,8 @@ export default function NotificationsScreen() {
           ) : null
         }
       />
+
+      <WorldNoticeList />
 
       {list.status === "loading" && <NotificationSkeletons />}
 

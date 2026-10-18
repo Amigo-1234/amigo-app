@@ -31,6 +31,19 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [viewerId]);
 
+  // Signed in: every few minutes (while visible) ask the server to open Worlds that have started and tell their members.
+  useEffect(() => {
+    const tick = dataSource.worlds?.tick;
+    if (!viewerId || !tick) return;
+    const run = () => document.visibilityState === "visible" && void tick().catch(() => undefined);
+    const first = setTimeout(run, 8000);
+    const every = setInterval(run, 5 * 60_000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+    };
+  }, [viewerId]);
+
   const value: SessionState = recovering && state.status === "signedIn" ? { status: "recovery" } : state;
   return (
     <SessionContext.Provider value={value}>

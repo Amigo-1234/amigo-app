@@ -51,14 +51,17 @@ self.addEventListener("push", (event) => {
   }
   const isDm = data.t === "dm" && /^[0-9a-f-]{36}$/.test(data.c || "");
   const isTest = data.t === "test";
-  const url = isDm ? `/messages/${data.c}` : isTest ? "/settings" : "/notifications";
+  const isWorld = data.t === "world" && /^[a-z0-9-]{3,60}$/.test(data.s || "");
+  const url = isDm ? `/messages/${data.c}` : isTest ? "/settings" : isWorld ? `/worlds/${data.s}` : "/notifications";
+  const worldText =
+    isWorld && data.k === "cancelled" ? `“${String(data.n || "A World")}” was cancelled.` : isWorld ? `“${String(data.n || "A World you joined")}” is live now — come join in.` : "";
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
       if (!isTest && windows.some((w) => w.visibilityState === "visible" && w.focused)) return;
       await self.registration.showNotification("Amigo", {
-        body: isDm ? "You have a new message on Amigo." : isTest ? "Notifications are working on this device." : "You have new activity on Amigo.",
-        tag: isDm ? `dm-${data.c}` : isTest ? "test" : "amigo",
+        body: isDm ? "You have a new message on Amigo." : isTest ? "Notifications are working on this device." : isWorld ? worldText : "You have new activity on Amigo.",
+        tag: isDm ? `dm-${data.c}` : isTest ? "test" : isWorld ? `world-${data.s}` : "amigo",
         renotify: true,
         icon: ICON,
         badge: BADGE,

@@ -104,6 +104,8 @@ export function worldErrorText(e: unknown): string {
         return "You've already used your entry.";
       case "not-competition":
         return "This World doesn't have a competition.";
+      case "cancelled":
+        return "This World was cancelled.";
     }
   }
   return "Something went wrong. Try again.";

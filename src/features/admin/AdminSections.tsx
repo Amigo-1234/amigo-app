@@ -3,7 +3,10 @@ import { Link } from "react-router";
 import { dataSource, type AdminAuditEntry, type World } from "../../data";
 import { timeAgo } from "../../lib/time";
 import { useViewer } from "../../state/session";
-import { worldStatus } from "../worlds/time";
+import { formatSpan, serverNow, worldStatus } from "../worlds/time";
+import { CancelWorld, WorldEditor } from "../worlds/WorldEditor";
+import { Sheet } from "../../ui/Sheet";
+import { Button } from "../../ui/Button";
 
 /** Real counts only — things that need an admin's attention, and what admins did recently. */
 export function AdminOverview() {
@@ -85,33 +88,81 @@ export function AuditList({ entries }: { entries: AdminAuditEntry[] | null }) {
   );
 }
 
-/** Worlds are created with SQL for now (docs/architecture/WORLDS.md); this lists them read-only. */
+/** Admin → Worlds: create, edit and cancel scheduled events (every change is checked and audit-logged by the database). */
 export function AdminWorlds() {
   const viewer = useViewer();
   const [worlds, setWorlds] = useState<World[] | null>(null);
-  useEffect(() => {
+  const [editing, setEditing] = useState<World | "new" | null>(null);
+  const [cancelling, setCancelling] = useState<World | null>(null);
+  const load = () => {
     if (!dataSource.worlds) return setWorlds([]);
-    void dataSource.worlds.listWorlds(viewer.id).then(setWorlds);
-  }, [viewer.id]);
-  const now = Date.now();
+    void dataSource.worlds.listWorlds(viewer.id).then(setWorlds, () => setWorlds([]));
+  };
+  useEffect(load, [viewer.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const now = serverNow();
+  const admin = dataSource.worlds?.admin;
+  const sorted = [...(worlds ?? [])].sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
   return (
     <section className="admin-card">
       <h2 className="admin-card__title">Worlds</h2>
-      <p className="admin-muted">
-        Creating and editing Worlds from here isn't built yet — admins create them with SQL (see docs/architecture/WORLDS.md). Current Worlds:
-      </p>
+      {admin ? (
+        <p>
+          <Button size="sm" onClick={() => setEditing("new")}>
+            New World
+          </Button>
+        </p>
+      ) : (
+        <p className="admin-muted">Managing Worlds isn't available on this backend.</p>
+      )}
+      {worlds && worlds.length === 0 && <p className="admin-muted">No Worlds yet.</p>}
       <ul className="admin-rows">
-        {worlds?.map((w) => (
-          <li key={w.id} className="admin-row">
-            <div className="admin-row__main">
-              <Link to={`/worlds/${w.slug}`} className="admin-row__title">{w.title}</Link>
-              <span className="admin-muted">
-                {worldStatus(w, now)} · {w.participantCount} people{w.competition ? " · competition" : ""}
-              </span>
-            </div>
-          </li>
-        ))}
+        {sorted.map((w) => {
+          const st = worldStatus(w, now);
+          const changeable = st === "upcoming" || st === "live";
+          return (
+            <li key={w.id} className="admin-row">
+              <div className="admin-row__main">
+                <Link to={`/worlds/${w.slug}`} className="admin-row__title">{w.title}</Link>
+                <span className="admin-muted">
+                  {st} · {formatSpan(w.startsAt, w.endsAt)} · {w.participantCount} people{w.competition ? " · competition" : ""}
+                </span>
+              </div>
+              {admin && changeable && (
+                <span className="admin-row__actions">
+                  <Button size="sm" variant="secondary" onClick={() => setEditing(w)}>
+                    Edit
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setCancelling(w)}>
+                    Cancel
+                  </Button>
+                </span>
+              )}
+            </li>
+          );
+        })}
       </ul>
+      <Sheet open={!!editing} onClose={() => setEditing(null)} label={editing === "new" ? "New World" : "Edit World"} fullscreenOnMobile>
+        {editing && (
+          <WorldEditor
+            world={editing === "new" ? undefined : editing}
+            onDone={(saved) => {
+              setEditing(null);
+              if (saved) load();
+            }}
+          />
+        )}
+      </Sheet>
+      <Sheet open={!!cancelling} onClose={() => setCancelling(null)} label="Cancel World">
+        {cancelling && (
+          <CancelWorld
+            world={cancelling}
+            onDone={(done) => {
+              setCancelling(null);
+              if (done) load();
+            }}
+          />
+        )}
+      </Sheet>
     </section>
   );
 }

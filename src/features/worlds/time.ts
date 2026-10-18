@@ -1,24 +1,43 @@
 import { useEffect, useState } from "react";
-import type { World, WorldStatus } from "../../data";
+import { dataSource, type World, type WorldStatus } from "../../data";
 
-/** Re-renders every `ms` so countdowns tick and Worlds flip live/finished on time. */
+/**
+ * The server's clock, as an offset from this phone's (phones are often off by
+ * minutes). Measured once per session; until then the phone's own clock.
+ */
+let offset = 0;
+let calibrating: Promise<void> | null = null;
+function calibrate() {
+  calibrating ??= (dataSource.worlds?.serverTime?.() ?? Promise.reject())
+    .then((server) => {
+      offset = server - Date.now();
+    })
+    .catch(() => {
+      calibrating = null;
+    });
+}
+export const serverNow = () => Date.now() + offset;
+
+/** Re-renders every `ms` so countdowns tick and Worlds flip live/finished on time (server time). */
 export function useNow(ms = 1000): number {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(serverNow);
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), ms);
+    calibrate();
+    const t = setInterval(() => setNow(serverNow()), ms);
     return () => clearInterval(t);
   }, [ms]);
   return now;
 }
 
-export function worldStatus(w: Pick<World, "startsAt" | "endsAt">, now = Date.now()): WorldStatus {
+export function worldStatus(w: Pick<World, "startsAt" | "endsAt" | "cancelledAt">, now = serverNow()): WorldStatus {
+  if (w.cancelledAt) return "cancelled";
   if (now < w.startsAt.getTime()) return "upcoming";
   if (now < w.endsAt.getTime()) return "live";
   return "finished";
 }
 
 /** Entries are open while the World is live and before entriesCloseAt. */
-export function entriesOpen(w: World, now = Date.now()): boolean {
+export function entriesOpen(w: World, now = serverNow()): boolean {
   return !!w.competition && worldStatus(w, now) === "live" && now < w.competition.entriesCloseAt.getTime();
 }
 
@@ -54,6 +73,7 @@ export const formatWhen = (d: Date) => when.format(d);
 /** One-line status label: "Live · ends in 1h 12m", "Starts in 3h 10m", "Ended Tue, Oct 5". */
 export function statusLine(w: World, now: number): { status: WorldStatus; text: string; spoken: string } {
   const status = worldStatus(w, now);
+  if (status === "cancelled") return { status, text: "Cancelled", spoken: "This World was cancelled" };
   if (status === "upcoming") {
     const left = w.startsAt.getTime() - now;
     return { status, text: `Starts in ${countdown(left)}`, spoken: `Starts in ${countdownLong(left)}` };

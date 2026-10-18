@@ -54,6 +54,7 @@ let MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!in
  */
 export function enablePostTools() {
   POST_SELECT = `${POST_SELECT_BASE.replace("alt, position)", "alt, position, preview)")}, edited_at, saved:post_bookmarks(user_id), liked`;
+  WORLD_COLUMNS += ", cancelled_at, cancel_reason";
   inlineLikes = true;
   MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 }
@@ -495,6 +496,7 @@ const WORLD_ERRORS: Record<string, WorldErrorCode> = {
   AW003: "entries-closed",
   AW004: "entry-limit",
   AW005: "not-competition",
+  AW006: "cancelled",
 };
 
 export function worldError(e: PostgrestError): Error {
@@ -502,7 +504,7 @@ export function worldError(e: PostgrestError): Error {
   return code ? new WorldError(code, e.message) : dataError(e);
 }
 
-const WORLD_COLUMNS =
+let WORLD_COLUMNS =
   "id, slug, title, tagline, description, cover_url, starts_at, ends_at, competition, entries_close_at, entry_limit, " +
   "points_reaction, points_reply, points_host_pick, prize, participant_count";
 
@@ -510,7 +512,11 @@ type WorldRow = Pick<
   Database["public"]["Tables"]["worlds"]["Row"],
   | "id" | "slug" | "title" | "tagline" | "description" | "cover_url" | "starts_at" | "ends_at" | "competition" | "entries_close_at"
   | "entry_limit" | "points_reaction" | "points_reply" | "points_host_pick" | "prize" | "participant_count"
->;
+> & {
+  /** Migration 20261019120000. */
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
+};
 
 function toWorld(r: WorldRow, joined: boolean, preview: World["participantsPreview"]): World {
   return {
@@ -534,6 +540,8 @@ function toWorld(r: WorldRow, joined: boolean, preview: World["participantsPrevi
             prize: r.prize,
           }
         : null,
+    cancelledAt: r.cancelled_at ? new Date(r.cancelled_at) : null,
+    cancelReason: r.cancel_reason ?? null,
   };
 }
 

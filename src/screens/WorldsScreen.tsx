@@ -21,10 +21,12 @@ export default function WorldsScreen() {
           const live = by("live").sort((a, b) => a.endsAt.getTime() - b.endsAt.getTime());
           const upcoming = by("upcoming").sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
           const finished = by("finished").sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime());
+          const cancelled = by("cancelled").filter((w) => w.endsAt.getTime() > now - 7 * 86_400_000);
           return [
             { id: "live", title: "Live now", worlds: live },
             { id: "upcoming", title: "Upcoming", worlds: upcoming },
             { id: "finished", title: "Finished", worlds: finished },
+            { id: "cancelled", title: "Cancelled", worlds: cancelled },
           ].filter((s) => s.worlds.length > 0) as { id: string; title: string; worlds: World[] }[];
         })()
       : [];

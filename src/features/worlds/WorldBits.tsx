@@ -71,7 +71,8 @@ export function JoinButton({ world, now, size = "md", onChange }: { world: World
   useEffect(() => {
     if (optimistic !== null && world.viewerJoined === optimistic) setOptimistic(null);
   }, [optimistic, world.viewerJoined]);
-  if (worldStatus(world, now) === "finished") return null;
+  const st = worldStatus(world, now);
+  if (st === "finished" || st === "cancelled") return null;
 
   const toggle = async () => {
     const next = !joined;

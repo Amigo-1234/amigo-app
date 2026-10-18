@@ -89,6 +89,8 @@ try {
   step = "open Firefox signed in as B";
   const b = await open(firefox, B, {
     launch: { firefoxUserPrefs: { "dom.push.enabled": true, "dom.serviceWorkers.enabled": true, "permissions.default.desktop-notification": 1, "dom.webnotifications.requireuserinteraction": false } },
+    // Phone-sized, so the app shows its phone layout (as the other live tests use).
+    context: { viewport: { width: 390, height: 844 } },
   });
   await b.page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.getRegistration(), null, { timeout: 30000 }).catch(() => undefined);
   step = "Settings → notifications row";
