@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { trackOnce } from "../../lib/perf";
 import { dataSource, type Post } from "../../data";
 import { useViewer } from "../../state/session";
 
@@ -53,6 +54,8 @@ export function useFeed(tab: FeedTab) {
     setError(null);
     const unsub = dataSource.subscribeLatestPosts(viewer.id, limit, {
       onData: ({ posts, hasMore }) => {
+        // How long until people first see their feed in this page load.
+        trackOnce("feed_ready", performance.now());
         setAll(posts);
         setHasMore(hasMore);
         setStatus("ready");

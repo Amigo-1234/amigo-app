@@ -1190,6 +1190,8 @@ export interface DataSource {
   acknowledgeWarning?(warningId: string): Promise<void>;
   /** Records an uncaught app error (redacted, not linked to the person). */
   reportError?(kind: "error" | "unhandledrejection" | "render", message: string, route: string): Promise<void>;
+  /** Privacy-safe performance samples (see src/lib/perf.ts). */
+  reportPerf?(samples: { m: string; v: number; r: string; n: string }[]): Promise<void>;
   blocking?: BlockingApi;
   /** Permanently deletes the signed-in account after re-checking the password (Neon/Supabase). */
   deleteAccount?(password: string): Promise<void>;

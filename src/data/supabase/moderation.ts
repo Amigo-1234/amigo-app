@@ -172,5 +172,10 @@ export function createModeration(db: Db, invalidate: () => void) {
     await call(db, "log_client_error", { p_kind: kind, p_message: message, p_route: route, p_version: __APP_VERSION__ });
   }
 
-  return { postTools, accountStatus, acknowledgeWarning, blocking, reportError, admin };
+  /** Performance samples (migration 20261018092000): metric names and numbers only, unlinked to people. */
+  async function reportPerf(samples: { m: string; v: number; r: string; n: string }[]) {
+    await call(db, "log_client_perf", { p_samples: samples, p_version: __APP_VERSION__ });
+  }
+
+  return { postTools, accountStatus, acknowledgeWarning, blocking, reportError, reportPerf, admin };
 }

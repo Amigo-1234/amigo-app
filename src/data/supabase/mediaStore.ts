@@ -1,3 +1,4 @@
+import { track } from "../../lib/perf";
 /**
  * Client side of the media service (api/media-upload.ts, api/media.ts):
  * files go straight from the browser to the private bucket with a short-lived
@@ -62,7 +63,15 @@ export function createMediaStore(token: () => Promise<string | null>): MediaStor
       if (res.status === 503) throw new MediaError("not-configured");
       if (!res.ok || !body.key || !body.url) throw new MediaError(REFUSALS[body.error ?? ""] ?? (res.status === 401 ? "sign-in" : "refused"), body.message);
       // One retry for a flaky connection; the link is valid for 10 minutes.
-      await put(body.url, blob, type, opts.onProgress).catch(() => put(body.url!, blob, type, opts.onProgress));
+      const t0 = performance.now();
+      try {
+        await put(body.url, blob, type, opts.onProgress).catch(() => put(body.url!, blob, type, opts.onProgress));
+      } catch (e) {
+        track("upload_fail", 1);
+        throw e;
+      }
+      const seconds = (performance.now() - t0) / 1000;
+      if (seconds > 0) track("upload_kbps", blob.size / 1024 / seconds);
       return body.key;
     },
     url: (key) => `/api/media/${key}`,

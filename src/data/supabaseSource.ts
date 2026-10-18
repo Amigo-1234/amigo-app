@@ -280,6 +280,7 @@ export const supabaseSource: DataSource = {
   accountStatus: moderation?.accountStatus,
   acknowledgeWarning: moderation?.acknowledgeWarning,
   reportError: moderation?.reportError,
+  reportPerf: moderation?.reportPerf,
   blocking: moderation?.blocking,
 
   async deleteAccount(password) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { track } from "../../lib/perf";
 import { dataSource, type Conversation, type ConversationView, type DirectMessage, type NewMessageInput } from "../../data";
 import { useViewer } from "../../state/session";
 
@@ -101,7 +102,10 @@ export function useConversation(conversationId: string) {
   const deliver = useCallback(
     async (p: PendingMessage) => {
       try {
+        const t0 = performance.now();
         await api.send(viewer.id, conversationId, { ...p.input, clientId: p.clientId });
+        // Encrypt + store, as the sender waits for it (no content is recorded).
+        track(p.input.image ? "msg_send_photo_ms" : "msg_send_ms", performance.now() - t0);
         setPending((list) => list.map((x) => (x.localId === p.localId ? { ...x, stored: true } : x)));
         return null;
       } catch (e) {

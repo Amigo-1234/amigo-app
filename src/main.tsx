@@ -10,6 +10,8 @@ import "./ui/forms.css";
 import App from "./App";
 import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { installErrorReporting } from "./lib/errorReport";
+import { installPerfReporting } from "./lib/perf";
+import { dataSource } from "./data";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -19,6 +21,7 @@ createRoot(document.getElementById("root")!).render(
   </StrictMode>,
 );
 installErrorReporting();
+installPerfReporting(dataSource.reportPerf);
 
 // Minimal worker: an offline page for failed page loads, nothing else cached
 // (see public/sw.js). Registering also replaces the old cache-first worker.
