@@ -208,8 +208,14 @@ try {
     await failed.waitFor({ timeout: 30000 }).catch(() => undefined);
     await check("offline: the post stays saved with a clear error and Retry", await failed.isVisible().catch(() => false));
     await ctx.setOffline(false);
-    await page.locator(`article:has-text("Retry photo post ${tag}")`).getByRole("button", { name: "Retry" }).click();
-    await check("back online: Retry posts it and the image loads from R2", await waitImg(page.locator(`article:has-text("Retry photo post ${tag}") img[src*="/api/media/"]`).first(), 30000));
+    // The app resends by itself when the connection returns; tap Retry only if it's still waiting.
+    const posts = page.locator(`article:has-text("Retry photo post ${tag}")`);
+    await page.waitForTimeout(1500);
+    const retry = posts.getByRole("button", { name: "Retry" }).first();
+    if (await retry.isVisible().catch(() => false)) await retry.click().catch(() => undefined);
+    await check("back online: the post goes through and its image loads from R2", await waitImg(posts.locator('img[src*="/api/media/"]').first(), 30000));
+    await page.waitForTimeout(9000); // the optimistic copy steps aside once the feed has the real post
+    await check("posted exactly once (no duplicate from resending)", (await posts.count()) === 1);
   });
 
   await step("profile picture", async () => {
