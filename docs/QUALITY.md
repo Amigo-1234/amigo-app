@@ -222,6 +222,10 @@ aren't stored, at most 300 kept with oldest first out, old Moment photos refetch
 - Test runs overlapped a new Preview build taking over the URL mid-run (a push to the branch rebuilds it);
   re-runs now go on an unchanged commit.
 
+- **The feed came back grouped by author on Neon** instead of newest first (the request relied on the
+  order inside `feed_posts`, which isn't guaranteed once authors and photos are embedded). A new post could
+  land far down the feed. The request now orders explicitly (efa7658); iPhone run passed twice after it.
+
 ## G. Remaining limits
 
 - **Needs a real iPhone:** keyboard behaviour across iOS versions, pinch feel, and locked-screen pushes
@@ -229,3 +233,7 @@ aren't stored, at most 300 kept with oldest first out, old Moment photos refetch
 - A device that was never approved for messages still has to be approved before old messages decrypt
   (by design of the encryption; it now reaches that screen in ~5 s instead of spinning).
 - Older photos have no small copies; World chat messages can't be reported yet; legal placeholders.
+- Live push test from GitHub's runners: Chrome's own registration with Google's push service sometimes
+  doesn't answer (twice at 17:39 and 17:46 UTC; the app times out after 30 s and says so). The same push
+  code passed every check at 17:05 UTC (test notification, message push, like push, unregister). This is
+  between the test browser and Google, before any Amigo code; phones use their own push services.
