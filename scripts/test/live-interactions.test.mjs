@@ -83,9 +83,24 @@ try {
   people.push(A);
   const B = await account(tag, "b"); // likes and replies
   people.push(B);
+  try {
+    const claims = JSON.parse(Buffer.from(B.token.split(".")[1], "base64url").toString());
+    info("sign-in token lifetime", `${Math.round((claims.exp - claims.iat) / 60)} min`);
+  } catch {
+    info("sign-in token lifetime", "unknown");
+  }
 
   // ------------------------------------------------------------- API level
-  const textPost = idOf(await rpc(A, "create_post", { p_body: `Like test text ${tag}`, p_media: [] }));
+  const first = await rpc(A, "create_post", { p_body: `Like test text ${tag}`, p_media: [] });
+  let textPost = idOf(first);
+  if (!textPost) {
+    // Record why, then see whether it was a one-off (a retry a moment later).
+    info("first write of a new account was refused", `${first.status} ${typeof first.data === "string" ? first.data : JSON.stringify(first.data).slice(0, 200)}`);
+    await new Promise((r) => setTimeout(r, 2000));
+    const again = await rpc(A, "create_post", { p_body: `Like test text ${tag}`, p_media: [] });
+    textPost = idOf(again);
+    info("…the same request 2 s later", `${again.status}${textPost ? " (accepted)" : ` ${JSON.stringify(again.data).slice(0, 200)}`}`);
+  }
   ok("author creates a text post", !!textPost);
   // A photo post needs a real upload.
   const png = Buffer.from("89504e470d0a1a0a0000000d4948445200000001000000010806000000" + "1f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082", "hex");
@@ -141,21 +156,28 @@ try {
   page.on("console", (m) => m.type() === "error" && problems.push(`console: ${m.text().slice(0, 200)}`));
   page.on("response", (res) => {
     const u = new URL(res.url());
-    if (res.status() >= 400 && (u.pathname.startsWith("/neon/") || u.pathname.startsWith("/api/")))
+    if (res.status() >= 400 && (u.pathname.startsWith("/neon/") || u.pathname.startsWith("/api/") || u.hostname.includes(".apirest.")))
       problems.push(`${res.request().method()} ${u.pathname.replace(/[0-9a-f-]{32,}/g, "…")} ${res.status()}`);
   });
   const recent = () => problems.splice(0).slice(-6).join(" | ") || "no errors seen";
   // When each request to the database started and finished (path only, no ids or values).
   const timeline = [];
+  // Database calls go to the same-origin proxy or straight to Neon's Data API.
+  const isData = (u) => u.pathname.startsWith("/neon/rest/") || (u.hostname.includes(".apirest.") && u.pathname.includes("/rest/v1/"));
+  const dataPath = (u) => u.pathname.replace(/^.*\/rest\/v1\//, "").replace(/[0-9a-f-]{32,}/g, "…");
   let t0 = Date.now();
   const mark = (what) => timeline.push(`${what} +${((Date.now() - t0) / 1000).toFixed(1)}s`);
   page.on("request", (rq) => {
     const u = new URL(rq.url());
-    if (u.pathname.startsWith("/neon/rest/")) mark(`→ ${rq.method()} ${u.pathname.replace("/neon/rest/v1/", "").replace(/[0-9a-f-]{32,}/g, "…")}`);
+    if (isData(u)) mark(`→ ${rq.method()} ${dataPath(u)}`);
   });
   page.on("requestfinished", async (rq) => {
     const u = new URL(rq.url());
-    if (u.pathname.startsWith("/neon/rest/")) mark(`← ${(await rq.response())?.status() ?? "?"} ${u.pathname.replace("/neon/rest/v1/", "").replace(/[0-9a-f-]{32,}/g, "…")}`);
+    if (isData(u)) mark(`← ${(await rq.response())?.status() ?? "?"} ${dataPath(u)}`);
+  });
+  page.on("requestfailed", (rq) => {
+    const u = new URL(rq.url());
+    if (isData(u)) mark(`✗ ${dataPath(u)} (${rq.failure()?.errorText ?? "failed"})`);
   });
   const open = async (path) => {
     await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
