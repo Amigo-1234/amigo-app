@@ -197,11 +197,16 @@ ahead) load early, except with Data Saver or on 2G.
 |---|---|---|
 | Cold, first photo | 3.4 s | 13.7 s |
 | Reload, first photo | 1.4 s | 2.7 s |
-| Viewer: feed copy shown | 0.14 s | 0.11 s |
-| Viewer: full photo shown | 0.44 s | 0.42 s |
-| Sign-out | 10 cached photos → 0 | |
+| Cold: photos the service worker downloaded | 5 of 5 | 8 of 8 |
+| Reload: photos answered by the app's photo cache | 5 of 5 (0 downloads) | 8 of 8 (0 downloads) |
+| Later visit (new tab, browser cache cleared): photo downloads | **0** | **0** |
+| Later visit, first photo shown | 3.1 s | 11.9 s* |
+| Viewer: feed copy shown | 0.09–0.14 s | 0.08–0.11 s |
+| Viewer: full photo shown | 0.12–0.44 s | 0.09–0.42 s |
+| Sign-out | 8–10 cached photos → 0 | |
 
-RETURNING_PLACEHOLDER
+\* On a later visit with the browser cache cleared, the time is the app itself downloading again over 3G
+(the same as a cold load); none of it is photos. Ranges are from two runs (16:32 and 16:50 UTC).
 
 Unit tests (`test:sw-cache`, 14 checks): re-signed links come from the cache without a download, expired
 links never do, message attachments and other hosts are never touched, non-images, refusals and large files
@@ -212,7 +217,10 @@ aren't stored, at most 300 kept with oldest first out, old Moment photos refetch
 - The recipient sometimes didn't see a new message (the first-check race above).
 - The live media test read the conversation before the background photo decrypt finished, and the push
   test counted the device list before it reloaded (test timing, fixed in the tests).
-- The photo-cache measurement compared against a request type that never occurs and always reported 0.
+- The photo-cache measurement compared against a request type that never occurs and always reported 0;
+  it now also counts the service worker's own downloads and measures the later visit in a fresh tab.
+- Test runs overlapped a new Preview build taking over the URL mid-run (a push to the branch rebuilds it);
+  re-runs now go on an unchanged commit.
 
 ## G. Remaining limits
 
