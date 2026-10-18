@@ -174,6 +174,8 @@ try {
   // How many different sign-in tokens the app uses (hashed here, never printed).
   const tokenHashes = new Set();
   let dataRequests = 0;
+  let pageLoads = 0;
+  page.on("framenavigated", (f) => f === page.mainFrame() && pageLoads++);
   page.on("request", (rq) => {
     if (!isData(new URL(rq.url()))) return;
     dataRequests++;
@@ -329,8 +331,8 @@ try {
     ok(`UI: quick ${want === "true" ? "like" : "unlike"} ${round} right after opening reaches the database`, dbOk, `${JSON.stringify({ count: p?.like_count, liked: p?.liked })} · ${recent()}`);
     ok(`UI: …and the heart shows it`, (await btn.getAttribute("aria-pressed")) === want, JSON.stringify(await state(btn)));
   }
-  info("sign-in tokens used by the app in this session", `${tokenHashes.size} different, over ${dataRequests} database requests`);
-  ok("the app reuses its sign-in token (no new token per request)", tokenHashes.size <= 6, `${tokenHashes.size} tokens / ${dataRequests} requests`);
+  info("sign-in tokens used by the app in this session", `${tokenHashes.size} different, over ${dataRequests} database requests and ${pageLoads} page loads`);
+  ok("the app reuses its sign-in token (about one per page load, not one per request)", tokenHashes.size <= pageLoads + 2, `${tokenHashes.size} tokens / ${pageLoads} page loads / ${dataRequests} requests`);
   const left = problems.splice(0);
   if (left.length) info("errors seen in the app", left.slice(-8).join(" | "));
 } catch (e) {
