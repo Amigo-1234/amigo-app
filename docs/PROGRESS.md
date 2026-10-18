@@ -41,7 +41,7 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
     Screen), test notification, device list. Vercel env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT,
     PUSH_SERVER_SECRET (sensitive). Migration 20261019110000 (live). Locked-screen delivery on a real phone: **not yet
     verified on a device** (automated: local crypto + delivery tests; live test in Google Chrome via Google's push
-    service — Playwright's Firefox build hides PushManager, its Chromium has no push keys).
+    service passed 2026-10-18: registration, test notification, generic message notification while closed, tap opens the conversation).
   - **Worlds**: admins create, edit and cancel Worlds in the app (fairness locks once started: start time, link
     and scoring fixed); state from the server clock (countdowns corrected by `server_now`); members get a "live"
     notice and push when it opens, via `worlds_tick`, which any signed-in app calls every 5 min (no admin tab

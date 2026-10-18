@@ -81,7 +81,7 @@ Live on Preview (GitHub Actions, real Neon + R2, temporary accounts deleted afte
   photo Moment, encrypted photo message (sender and recipient), no horizontal scroll.
 - Worlds journey on two phones: countdown, join, goes live on time without a reload, "live" notice,
   post, competition entry, like, leaderboard, chat, ended state, closed chat, late posts refused.
-- Push in Google Chrome through Google's real push service: see "Live runs" below.
+- Push in Google Chrome through Google's real push service (desktop browser, not a locked phone).
 
 ### Live runs (2026-10-18)
 
@@ -90,7 +90,7 @@ Live on Preview (GitHub Actions, real Neon + R2, temporary accounts deleted afte
 | Media API (real R2 + Neon) | e7de076, 080dc0b | passed |
 | iPhone 13 browser journeys | e7de076, 080dc0b | all passed, including the encrypted photo message (recipient decrypted it; R2 holds ciphertext only) |
 | Worlds, two phones | e7de076 | all passed: live on time without a reload or an admin, notice, post/entry/like/leaderboard, chat in 0.8 s, winner, chat closed, late posts refused |
-| Push, Google Chrome | 080dc0b | Settings offers it; subscription refused because Playwright's browser contexts behave like incognito windows, where Chrome doesn't support push ("Registration failed - permission denied"). Re-run with a normal Chrome profile: PUSH_RESULT |
+| Push, Google Chrome | 080dc0b | Settings offers it; subscription refused because Playwright's browser contexts behave like incognito windows, where Chrome doesn't support push ("Registration failed - permission denied"). Re-run with a normal Chrome profile (31cb02b): **all passed** — device registered with Google's push service, test notification delivered, a new message notified the device while Amigo was closed with only "You have a new message on Amigo." (no text or names), tapping opens that conversation, turning off unregisters |
 
 Found by the live push test: a push service that never answers left the switch spinning (now times out
 after 30 s), and people in a private/incognito window got a generic error (now told why).
