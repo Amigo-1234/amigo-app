@@ -26,6 +26,22 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - **Legal (drafts v0.1)**: 7 documents at `/legal`, versioned; acceptance recorded at registration; re-acceptance gate.
 - **Creator monetization**: architecture only, programme closed; users see "Creator monetization is coming soon."
 - **Account deletion**: password re-check plus typed confirmation; cascades through all owned data.
+- **Quality phase (2026-10-18/19, Preview; production deploy pending)** — see [QUALITY.md](QUALITY.md) once written:
+  - **Images**: one signing call per screen (`/api/media-sign`, `media_sign_set`), ~1080 px copies for feeds/grids
+    (`media_begin_variant`, readable exactly when the original is), ~24 px blurred previews stored with each post,
+    links identical within their 30-min window (browser cache hits), R2 host preconnected. Measured on Preview (Pixel 5):
+    4G first feed photo 6.0 → 4.0 s, all visible 7.3 → 4.0 s, image bytes −70 %, 3G first photo 36.6 → 22.7 s.
+    Migrations 20261019090000, 20261019091000 (live).
+  - **Moments**: framing (fill / whole photo over blurred copy, zoom 1–4, focus point) and caption position chosen
+    in the composer, stored per Moment and applied on every screen size; viewer waits for the photo, shows
+    loading/Retry, preloads the next Moment. Migration 20261019100000 (live).
+  - **Web Push**: standard Web Push, encrypted to the device, VAPID-signed, no paid provider. Pushes say only "new
+    message" + conversation; notification text is generic. Server-checked targets (secret hash in `push_server`),
+    blocking/prefs/rate limit respected, expired devices removed. Settings: enable per device (iPhone needs Home
+    Screen), test notification, device list. Vercel env: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT,
+    PUSH_SERVER_SECRET (sensitive). Migration 20261019110000 (live). Locked-screen delivery on a real phone: **not yet
+    verified on a device** (automated: local crypto test; live Firefox test via Mozilla push).
+  - Next: Worlds end-to-end, full feature audit, Preview journeys, production deploy.
 - **Performance & stability (2026-10-18, on production as `dpl_9xexuvhTA3HASvJ5wd5QRE6cg9Hs`, commit `0efd9e8`)**: first paint on 3G 9.5 → 4.0 s, warm feed on 4G 3.0 → 1.3 s, screen revisits ~0.1 s, idle traffic −60 %, message delivery p50 ~0.85 s; resilient posting/messaging offline; privacy-safe perf monitoring. Load test: 100 simulated users, p95 85 ms, 0 errors. Details: [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Blockers / owner decisions
@@ -47,4 +63,4 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - Don't use SQLSTATE codes starting with `PT`: PostgREST treats them as HTTP statuses.
 - Live tests run from temporary GitHub Actions workflows, removed after use.
 
-_Last updated 2026-10-18._
+_Last updated 2026-10-19._
