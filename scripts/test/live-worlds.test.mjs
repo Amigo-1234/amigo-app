@@ -170,7 +170,8 @@ try {
   await a.page.locator(".world-hero__title").waitFor();
   const ended = await pill(a.page);
   ok("after the end it shows as ended", /Ended/.test(ended), ended);
-  if (w.competition) ok("the winner is shown", await a.page.getByLabel("Winner").getByText("World Test A").isVisible().catch(() => false));
+  // The final leaderboard loads just after the World itself.
+  if (w.competition) ok("the winner is shown", await a.page.getByLabel("Winner").getByText("World Test A").first().waitFor({ timeout: 15000 }).then(() => true, () => false));
   ok("no composer once it has ended", !(await a.page.getByPlaceholder(`Say something in ${w.title}…`).isVisible().catch(() => false)));
   ok("no Join button once it has ended", !(await a.page.getByRole("button", { name: /Join|Joined/ }).first().isVisible().catch(() => false)));
   await a.page.goto(`${BASE}/worlds/${WORLD}?tab=chat`);

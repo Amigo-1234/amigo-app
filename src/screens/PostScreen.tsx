@@ -1,11 +1,14 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { profileHref } from "../features/profile/links";
-import { ArrowLeft, CircleAlert, CornerLeftUp, MessageCircle, SearchX } from "lucide-react";
+import { ArrowLeft, CircleAlert, CornerLeftUp, Heart, MessageCircle, SearchX } from "lucide-react";
 import { dataSource, type Post, type Reply } from "../data";
 import { POST_MAX_LENGTH } from "../features/composer/Composer";
 import { describeError } from "../features/feed/errors";
 import { PostCard } from "../features/posts/PostCard";
+import { PostOptions } from "../features/posts/PostOptions";
+import { useLike } from "../features/posts/usePostActions";
+import { formatCount } from "../lib/format";
 import { PostSkeleton } from "../features/posts/PostSkeleton";
 import { RichText } from "../features/posts/RichText";
 import { timeAgo, timeAgoLong } from "../lib/time";
@@ -138,8 +141,28 @@ function ReplyRow({ reply }: { reply: Reply }) {
         <p className="reply__text">
           <RichText text={reply.text} />
         </p>
+        {reply.post && <ReplyActions post={reply.post} />}
       </div>
     </article>
+  );
+}
+
+/** Like and options (edit, delete, report, block) on a reply. */
+function ReplyActions({ post }: { post: Post }) {
+  const { liked, count, toggle } = useLike(post);
+  return (
+    <footer className="reply__actions">
+      <button
+        className={`action action--like${liked ? " is-active" : ""}`}
+        onClick={toggle}
+        aria-pressed={liked}
+        aria-label={`${liked ? "Unlike" : "Like"} reply. ${count} ${count === 1 ? "like" : "likes"}`}
+      >
+        <Heart size={16} strokeWidth={1.9} fill={liked ? "currentColor" : "none"} aria-hidden="true" />
+        <span className="action__count">{count > 0 ? formatCount(count) : ""}</span>
+      </button>
+      <PostOptions post={post} focus={false} />
+    </footer>
   );
 }
 

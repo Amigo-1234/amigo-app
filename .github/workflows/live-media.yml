@@ -28,7 +28,7 @@ jobs:
         run: node scripts/test/live-media.test.mjs
       - name: Install Playwright (runner only, not a project dependency)
         if: always()
-        run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium firefox
+        run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
       - name: Live mobile browser test (iPhone 13)
         if: always()
         env:
@@ -37,13 +37,13 @@ jobs:
           SHOTS: shots
         timeout-minutes: 12
         run: mkdir -p shots && node scripts/test/live-mobile.test.mjs
-      - name: Live push notification test (Firefox, real push service)
+      - name: Live push notification test (Google Chrome, real push service)
         if: always()
         env:
           BASE: https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         timeout-minutes: 8
-        run: node scripts/test/live-push.test.mjs
+        run: xvfb-run -a node scripts/test/live-push.test.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

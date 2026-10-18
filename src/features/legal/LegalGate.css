@@ -72,3 +72,21 @@
     bottom: var(--space-4);
   }
 }
+
+.legal-gate__leave {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.legal-gate__leave-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.legal-gate__delete {
+  display: grid;
+  gap: var(--space-3);
+}

@@ -1,7 +1,7 @@
 /**
  * Web Push end to end on a deployed environment, through a real push service:
- * Firefox subscribes with Mozilla's push service (Chromium builds without
- * Google's keys can't), the app registers the device, and we check that
+ * Google Chrome subscribes with Google's push service (Playwright's Chromium
+ * has no push keys), the app registers the device, and we check that
  *   1. "Send a test notification" reaches the device's service worker, and
  *   2. a direct message from another account makes the device show
  *      "You have a new message on Amigo." while Amigo isn't open there,
@@ -11,7 +11,7 @@
  *   BASE=… VERCEL_BYPASS=… node scripts/test/live-push.test.mjs
  */
 import { randomBytes } from "node:crypto";
-import { chromium, firefox, devices } from "playwright";
+import { chromium, devices } from "playwright";
 
 const { BASE, VERCEL_BYPASS } = process.env;
 if (!BASE || !VERCEL_BYPASS) throw new Error("Set BASE and VERCEL_BYPASS");
@@ -85,12 +85,14 @@ try {
   const B = await account(tag, "b");
   people.push(B);
 
-  // B: Firefox, with Mozilla's push service. Notifications allowed as if the person tapped "Allow".
-  step = "open Firefox signed in as B";
-  const b = await open(firefox, B, {
-    launch: { firefoxUserPrefs: { "dom.push.enabled": true, "dom.serviceWorkers.enabled": true, "permissions.default.desktop-notification": 1, "dom.webnotifications.requireuserinteraction": false } },
+  // B: Google Chrome (registers with Google's push service; Playwright's own
+  // Chromium has no push keys and its Firefox build hides PushManager), with
+  // notifications allowed as if the person tapped "Allow". Runs headed (xvfb).
+  step = "open Chrome signed in as B";
+  const b = await open(chromium, B, {
+    launch: { channel: "chrome", headless: false },
     // Phone-sized, so the app shows its phone layout (as the other live tests use).
-    context: { viewport: { width: 390, height: 844 } },
+    context: { viewport: { width: 390, height: 844 }, permissions: ["notifications"] },
   });
   await b.page.waitForFunction(() => navigator.serviceWorker?.controller || navigator.serviceWorker?.getRegistration(), null, { timeout: 30000 }).catch(() => undefined);
   step = "Settings → notifications row";
@@ -116,7 +118,7 @@ try {
     got = await shown(b.page);
   }
   const test = got.find((n) => n.tag === "test");
-  ok("test notification delivered to the device (via Mozilla push)", !!test, JSON.stringify(got));
+  ok("test notification delivered to the device (via the browser's push service)", !!test, JSON.stringify(got));
   ok("it says only that notifications work", test?.body === "Notifications are working on this device." && test?.title === "Amigo");
   await b.page.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications()).forEach((n) => n.close()));
 

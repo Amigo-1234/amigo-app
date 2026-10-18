@@ -8,43 +8,42 @@ import { CancelWorld, WorldEditor } from "../worlds/WorldEditor";
 import { Sheet } from "../../ui/Sheet";
 import { Button } from "../../ui/Button";
 
-/** Real counts only — things that need an admin's attention, and what admins did recently. */
+type Count = number | "error";
+const settled = async <T,>(p: Promise<T[]>, keep: (x: T) => boolean = () => true): Promise<Count> =>
+  p.then((rows) => rows.filter(keep).length, () => "error" as const);
+
+/**
+ * Real counts only — things that need an admin's attention, and what admins
+ * did recently. Each count loads on its own, so one failing source shows
+ * "couldn't load" instead of holding up the rest.
+ */
 export function AdminOverview() {
   const viewer = useViewer();
-  const [counts, setCounts] = useState<{ pending: number; reports: number; flags: number; messageReports: number; momentReports: number } | null>(null);
+  const [counts, setCounts] = useState<{ label: string; to: string; n: Count }[] | null>(null);
   const [audit, setAudit] = useState<AdminAuditEntry[] | null>(null);
+  const [auditFailed, setAuditFailed] = useState(false);
   useEffect(() => {
-    const a = dataSource.admin!.support;
-    const dm = dataSource.admin!.messageReports;
-    void Promise.all([
-      a.listRequests(viewer.id, "pending"),
-      a.listReports(viewer.id, "open"),
-      a.suspicious(viewer.id),
-      a.audit(viewer.id, 8),
-      dm ? dm.list(viewer.id).catch(() => []) : Promise.resolve([]),
-      dataSource.admin!.moments ? dataSource.admin!.moments.listReports(viewer.id).catch(() => []) : Promise.resolve([]),
-    ]).then(
-      ([pending, reports, flags, log, dms, moments]) => {
-        setCounts({
-          pending: pending.length,
-          reports: reports.length,
-          flags: flags.length,
-          messageReports: dms.filter((r) => r.status === "open").length,
-          momentReports: moments.filter((r) => r.status === "open").length,
-        });
-        setAudit(log);
-      },
+    const admin = dataSource.admin!;
+    const a = admin.support;
+    const sources: { label: string; to: string; load: () => Promise<Count> }[] = [
+      ...(admin.moderation ? [{ label: "Open reports on posts", to: "/admin/reports", load: () => settled(admin.moderation!.listReports("open")) }] : []),
+      ...(admin.messageReports ? [{ label: "Open message reports", to: "/admin/reports", load: () => settled(admin.messageReports!.list(viewer.id), (r) => r.status === "open") }] : []),
+      ...(admin.moments ? [{ label: "Reported Moments", to: "/admin/reports", load: () => settled(admin.moments!.listReports(viewer.id), (r) => r.status === "open") }] : []),
+      { label: "Support requests waiting for review", to: "/admin/support?status=pending", load: () => settled(a.listRequests(viewer.id, "pending")) },
+      { label: "Open reports on Support requests", to: "/admin/support?tab=reports", load: () => settled(a.listReports(viewer.id, "open")) },
+      { label: "Support activity flagged for a look", to: "/admin/support?tab=activity", load: () => settled(a.suspicious(viewer.id)) },
+    ];
+    let live = true;
+    void Promise.all(sources.map((x) => x.load())).then((ns) => live && setCounts(sources.map((x, i) => ({ label: x.label, to: x.to, n: ns[i] }))));
+    a.audit(viewer.id, 8).then(
+      (log) => live && setAudit(log),
+      () => live && setAuditFailed(true),
     );
+    return () => {
+      live = false;
+    };
   }, [viewer.id]);
-  const items = counts
-    ? [
-        { n: counts.pending, label: "Support requests waiting for review", to: "/admin/support?status=pending" },
-        { n: counts.reports, label: "Open reports on Support requests", to: "/admin/support?tab=reports" },
-        { n: counts.flags, label: "Support activity flagged for a look", to: "/admin/support?tab=activity" },
-        ...(dataSource.admin!.messageReports ? [{ n: counts.messageReports, label: "Open message reports", to: "/admin/reports" }] : []),
-        ...(dataSource.admin!.moments ? [{ n: counts.momentReports, label: "Reported Moments", to: "/admin/reports" }] : []),
-      ]
-    : [];
+  const items = counts ?? [];
   return (
     <>
       <section className="admin-card" aria-labelledby="ov-attn">
@@ -56,7 +55,15 @@ export function AdminOverview() {
             {items.map((i) => (
               <li key={i.label}>
                 <Link to={i.to}>
-                  <strong className={i.n ? "is-due" : ""}>{i.n}</strong> {i.label}
+                  {i.n === "error" ? (
+                    <>
+                      <strong>—</strong> {i.label} <span className="admin-muted">(couldn't load)</span>
+                    </>
+                  ) : (
+                    <>
+                      <strong className={i.n ? "is-due" : ""}>{i.n}</strong> {i.label}
+                    </>
+                  )}
                 </Link>
               </li>
             ))}
@@ -65,7 +72,7 @@ export function AdminOverview() {
       </section>
       <section className="admin-card" aria-labelledby="ov-audit">
         <h2 id="ov-audit" className="admin-card__title">Recent admin actions</h2>
-        <AuditList entries={audit} />
+        {auditFailed ? <p className="admin-muted">Couldn't load recent actions. Reload to try again.</p> : <AuditList entries={audit} />}
       </section>
     </>
   );
@@ -94,9 +101,11 @@ export function AdminWorlds() {
   const [worlds, setWorlds] = useState<World[] | null>(null);
   const [editing, setEditing] = useState<World | "new" | null>(null);
   const [cancelling, setCancelling] = useState<World | null>(null);
+  const [failed, setFailed] = useState(false);
   const load = () => {
     if (!dataSource.worlds) return setWorlds([]);
-    void dataSource.worlds.listWorlds(viewer.id).then(setWorlds, () => setWorlds([]));
+    setFailed(false);
+    void dataSource.worlds.listWorlds(viewer.id).then(setWorlds, () => setFailed(true));
   };
   useEffect(load, [viewer.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const now = serverNow();
@@ -114,7 +123,18 @@ export function AdminWorlds() {
       ) : (
         <p className="admin-muted">Managing Worlds isn't available on this backend.</p>
       )}
-      {worlds && worlds.length === 0 && <p className="admin-muted">No Worlds yet.</p>}
+      {failed ? (
+        <p className="admin-muted">
+          Couldn't load Worlds.{" "}
+          <Button size="sm" variant="ghost" onClick={load}>
+            Try again
+          </Button>
+        </p>
+      ) : !worlds ? (
+        <p className="admin-muted">Loading…</p>
+      ) : (
+        worlds.length === 0 && <p className="admin-muted">No Worlds yet.</p>
+      )}
       <ul className="admin-rows">
         {sorted.map((w) => {
           const st = worldStatus(w, now);

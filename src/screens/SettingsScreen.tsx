@@ -56,7 +56,7 @@ const MIN_PASSWORD = 8;
 const errorText = (err: unknown) => authMessage(err instanceof AuthError ? err.code : undefined);
 
 const BACKEND_LABEL: Record<string, string> = {
-  neon: "Preview · Neon",
+  neon: "Neon",
   supabase: "Supabase",
   firebase: "Classic",
   demo: "Demo data",
@@ -330,9 +330,9 @@ function PrivacySection() {
   return (
     <Section id="set-privacy" title="Privacy">
       <InfoRow icon={<Eye size={20} />} title="Profile" detail="Your profile, followers and public posts are visible to people on Amigo." />
-      <InfoRow icon={<Users size={20} />} title="Post audience" detail="Choose Everyone or Followers each time you post." />
+      <InfoRow icon={<Users size={20} />} title="Who sees what you share" detail="Posts are public. For a Moment, you choose Everyone or Followers each time." />
       {dataSource.messages && <InfoRow icon={<KeyRound size={20} />} title="Messages" detail="End-to-end encrypted. Only your devices can read them." />}
-      {dataSource.blocking && <LinkRow to="/settings/blocked" icon={<Ban size={20} />} title="Blocked accounts" detail="People you blocked. They aren't told" />}
+      {dataSource.blocking && <LinkRow to="/settings/blocked" icon={<Ban size={20} />} title="Blocked accounts" detail="People you blocked can't message you, follow you, or see or reply to your posts. They aren't told" />}
     </Section>
   );
 }

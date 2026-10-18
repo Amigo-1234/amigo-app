@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { clearDraft, loadDraft, saveDraft } from "../features/composer/draft";
 import { dataSource, type NewPostInput, type Post } from "../data";
+import { limitText } from "../features/feed/errors";
 import { useViewer } from "./session";
 import { useToast } from "./toast";
 
@@ -16,6 +17,8 @@ export interface PendingPost {
   /** Object URLs of the processed images, for instant display. Revoked when done. */
   previews: string[];
   status: "sending" | "failed" | "sent";
+  /** Why it failed, when the server said (rate limit, suspension, upload limit). */
+  error?: string;
   /** Set once stored, so screens can drop the optimistic copy when the real post arrives. */
   postId?: string;
 }
@@ -51,7 +54,7 @@ export function PublishingProvider({ children }: { children: ReactNode }) {
 
   const send = useCallback(
     async (localId: string, input: NewPostInput) => {
-      update(localId, { status: "sending" });
+      update(localId, { status: "sending", error: undefined });
       try {
         const { id } = await dataSource.createPost(viewer, input);
         update(localId, { status: "sent", postId: id });
@@ -61,10 +64,11 @@ export function PublishingProvider({ children }: { children: ReactNode }) {
         setTimeout(() => remove(localId), SENT_GRACE_MS);
       } catch (e) {
         console.error(e);
-        update(localId, { status: "failed" });
+        const reason = limitText(e);
+        update(localId, { status: "failed", error: reason ?? undefined });
         // Also keep the text as the composer's draft, so closing or reloading the app doesn't lose it.
         if (!input.world && !loadDraft(viewer.id)) saveDraft(viewer.id, input.text, input.media.length);
-        toast("Your post didn't go through. It's saved — tap Retry.", "error");
+        toast(reason ? `${reason} Your post is saved.` : "Your post didn't go through. It's saved — tap Retry.", "error");
       }
     },
     [viewer, toast, remove],

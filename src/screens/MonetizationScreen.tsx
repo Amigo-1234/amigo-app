@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, CircleAlert, Sparkles } from "lucide-react";
 import { dataSource, type CreatorOverview } from "../data";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useToast } from "../state/toast";
@@ -20,13 +20,15 @@ export default function MonetizationScreen() {
   const navigate = useNavigate();
   const toast = useToast();
   const api = dataSource.monetization;
-  const [o, setO] = useState<CreatorOverview | null | undefined>(undefined);
+  const [o, setO] = useState<CreatorOverview | "error" | null | undefined>(undefined);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     if (!api) return setO(null);
-    void api.overview().then(setO, () => setO(null));
-  }, [api]);
+    setO(undefined);
+    void api.overview().then(setO, () => setO("error"));
+  }, [api, attempt]);
 
   const header = (
     <ScreenHeader
@@ -47,6 +49,24 @@ export default function MonetizationScreen() {
           <Skeleton width="70%" height={22} />
           <Skeleton width="100%" height={120} />
         </div>
+      </>
+    );
+  }
+  if (o === "error") {
+    return (
+      <>
+        {header}
+        <StateMessage
+          tone="error"
+          icon={<CircleAlert size={24} />}
+          title="Couldn't load your creator overview"
+          body="Check your connection and try again."
+          action={
+            <Button variant="secondary" onClick={() => setAttempt((n) => n + 1)}>
+              Try again
+            </Button>
+          }
+        />
       </>
     );
   }

@@ -72,6 +72,9 @@ export default function AdminScreen() {
             {dataSource.admin?.moderation && <AdminClientErrors />}
           </>
         )}
+        {!SECTIONS.some((x) => x.id === section) && (
+          <AdminPlaceholder title="Nothing here" body="This admin section doesn't exist." link={{ to: "/admin", label: "Back to the overview" }} />
+        )}
         {section === "support" && <SupportAdmin />}
         {section === "worlds" && <AdminWorlds />}
         {section === "users" && <AdminUsers />}

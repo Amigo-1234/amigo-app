@@ -306,6 +306,12 @@ try {
       const bubbles = await pageB.locator(".msgs .msg").allInnerTexts().catch(() => []);
       console.log(`info recipient's chat shows: ${JSON.stringify(bubbles.map((t) => t.replace(/\s+/g, " ").slice(0, 120)))}`);
       console.log(`info recipient's console: ${redact(errorsB.slice(-4).join(" | ")).slice(0, 500)}`);
+      const textB = await pageB.locator("main").innerText().catch(() => "");
+      console.log(`info recipient's page (${new URL(pageB.url()).pathname}): ${JSON.stringify(textB.replace(/\s+/g, " ").slice(0, 300))}`);
+      // Whether the server has the message for B at all (counts only; no content).
+      const convId = conversation.split("/").pop();
+      const rows = await get(`dm_messages?conversation_id=eq.${convId}&select=id`).catch(() => null);
+      console.log(`info messages in the conversation visible to the sender: ${Array.isArray(rows) ? rows.length : "unreadable"}`);
     }
     await check("recipient's phone decrypts and shows the photo", shown);
     const src = (await got.getAttribute("src").catch(() => "")) ?? "";

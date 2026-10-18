@@ -267,7 +267,7 @@ export function ReportForm({ target, targetId, what, onDone }: { target: Content
 }
 
 /** ⋯ on someone else's profile: copy link, report. */
-export function ProfileOptions({ id, handle }: { id: string; handle: string }) {
+export function ProfileOptions({ id, handle, onBlocked }: { id: string; handle: string; onBlocked?: () => void }) {
   const toast = useToast();
   const [sheet, setSheet] = useState<null | "menu" | "report" | "block">(null);
   const close = () => setSheet(null);
@@ -311,21 +311,21 @@ export function ProfileOptions({ id, handle }: { id: string; handle: string }) {
         {sheet === "report" && <ReportForm target="profile" targetId={id} what={`@${handle}`} onDone={close} />}
       </Sheet>
       <Sheet open={sheet === "block"} onClose={close} label="Block">
-        {sheet === "block" && <BlockConfirm userId={id} handle={handle} onDone={close} />}
+        {sheet === "block" && <BlockConfirm userId={id} handle={handle} onDone={close} onBlocked={onBlocked} />}
       </Sheet>
     </>
   );
 }
 
-/** Block confirmation (same effect everywhere: no messages either way, follows removed). */
-export function BlockConfirm({ userId, handle, onDone }: { userId: string; handle: string; onDone: () => void }) {
+/** Block confirmation (same effect everywhere: no messages or posts either way, follows removed). */
+export function BlockConfirm({ userId, handle, onDone, onBlocked }: { userId: string; handle: string; onDone: () => void; onBlocked?: () => void }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   return (
     <div className="sheet-form">
       <h2 className="sheet-form__title">Block @{handle}?</h2>
       <p className="sheet-form__body">
-        {"Neither of you will be able to message the other, you'll stop following each other, and they can't follow you again. They aren't told. You can unblock any time in Settings → Blocked accounts."}
+        {"Neither of you will see the other's posts or be able to reply, like or message, you'll stop following each other, and they can't follow you again. They aren't told. You can unblock any time from their profile or Settings → Blocked accounts."}
       </p>
       <div className="sheet-form__actions">
         <Button variant="ghost" onClick={onDone}>
@@ -339,6 +339,7 @@ export function BlockConfirm({ userId, handle, onDone }: { userId: string; handl
             try {
               await dataSource.blocking!.block(userId);
               toast(`Blocked @${handle}`);
+              onBlocked?.();
               onDone();
             } catch {
               toast("Couldn't block. Try again.", "error");

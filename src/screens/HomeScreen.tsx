@@ -128,7 +128,7 @@ export default function HomeScreen() {
           <PostCard
             key={p.localId}
             post={pendingAsPost(p, viewer)}
-            pending={{ status: p.status, onRetry: () => publishing.retry(p.localId), onDiscard: () => publishing.discard(p.localId) }}
+            pending={{ status: p.status, error: p.error, onRetry: () => publishing.retry(p.localId), onDiscard: () => publishing.discard(p.localId) }}
           />
         ))}
 

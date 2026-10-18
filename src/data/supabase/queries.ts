@@ -156,7 +156,7 @@ export async function fetchBookmarks(db: Db, viewerId: string, limit: number): P
   return rows.map((r) => toPost(db, r, liked));
 }
 
-export async function fetchReplies(db: Db, postId: string): Promise<Reply[]> {
+export async function fetchReplies(db: Db, postId: string, viewerId: string | null = null): Promise<Reply[]> {
   const { data, error } = await db
     .from("posts")
     .select(POST_SELECT)
@@ -165,7 +165,15 @@ export async function fetchReplies(db: Db, postId: string): Promise<Reply[]> {
     .limit(500)
     .returns<PostRow[]>();
   if (error) throw dataError(error);
-  return data.map((r) => ({ id: r.id, postId, author: toAuthor(r.author), text: r.body, createdAt: new Date(r.created_at) }));
+  const liked = await likedSet(db, viewerId, data.slice(0, 100).map((r) => r.id));
+  return data.map((r) => ({
+    id: r.id,
+    postId,
+    author: toAuthor(r.author),
+    text: r.body,
+    createdAt: new Date(r.created_at),
+    post: { ...toPost(db, r, liked), replyTo: { postId, handle: "" } },
+  }));
 }
 
 export async function fetchProfile(db: Db, userId: string) {

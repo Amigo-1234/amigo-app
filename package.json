@@ -19,6 +19,7 @@
     "test:media": "node scripts/test/media.test.mjs",
     "test:push": "node scripts/test/push.test.mjs",
     "test:worlds": "node scripts/test/worlds.test.mjs",
+    "test:blocking": "node scripts/test/blocking.test.mjs",
     "migrate:extract": "node scripts/migration/extract.ts",
     "migrate:audit": "node scripts/migration/audit.ts",
     "migrate:plan": "node scripts/migration/migrate.ts --plan-only",

@@ -25,6 +25,8 @@ const INTERACTIVE = "a, button, video, input, textarea, [role='button']";
 
 export interface PendingState {
   status: "sending" | "failed" | "sent";
+  /** A specific reason from the server, shown instead of the generic message. */
+  error?: string;
   onRetry: () => void;
   onDiscard: () => void;
 }
@@ -150,7 +152,7 @@ export const PostCard = memo(function PostCard({
         <footer className="post__pending" role="status">
           {pending.status === "failed" ? (
             <>
-              <span className="post__pending-text post__pending-text--error">Couldn't post. Your post is saved here.</span>
+              <span className="post__pending-text post__pending-text--error">{pending.error ?? "Couldn't post."} Your post is saved here.</span>
               <button type="button" className="post__pending-btn post__pending-btn--primary" onClick={pending.onRetry}>
                 Retry
               </button>

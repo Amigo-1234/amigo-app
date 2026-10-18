@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowLeft, CalendarDays, HandHeart, CircleAlert, Feather, Image as ImageIcon, Mail, MessageCircle, Settings, UserRoundX } from "lucide-react";
+import { ArrowLeft, Ban, CalendarDays, HandHeart, CircleAlert, Feather, Image as ImageIcon, Mail, MessageCircle, Settings, UserRoundX } from "lucide-react";
 import { dataSource, type Profile, type ProfileTab, type SupportProfileStats } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
@@ -43,6 +43,7 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
 
   const profile = state.status === "ready" ? state.data : null;
+  const [blocked, setBlocked] = useBlockedByMe(profile && !profile.isViewer ? profile.id : null);
   const back = () => (window.history.state?.idx > 0 ? navigate(-1) : navigate("/"));
 
   return (
@@ -89,12 +90,22 @@ export default function ProfileScreen() {
         <>
           <ProfileHeader
             profile={profile}
+            blocked={blocked}
+            onBlockChange={(b) => {
+              setBlocked(b);
+              // Blocking removes follows both ways; refresh the counts and feed.
+              reload();
+            }}
             onEdit={() => setEditing(true)}
             onFollowChange={(following) =>
               patch((p) => ({ ...p, viewerFollows: following, followerCount: p.followerCount + (following ? 1 : -1) }))
             }
           />
-          <ProfileTabs profile={profile} />
+          {blocked ? (
+            <StateMessage icon={<Ban size={24} />} title={`You blocked @${profile.handle}`} body="You won't see their posts and they can't see yours, follow you or message you. Unblock to see their posts again." />
+          ) : (
+            <ProfileTabs profile={profile} />
+          )}
           {profile.isViewer && (
             <EditProfileSheet
               open={editing}
@@ -154,7 +165,63 @@ function MessageButton({ profile }: { profile: Profile }) {
   );
 }
 
-function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; onEdit: () => void; onFollowChange: (f: boolean) => void }) {
+/** Whether the viewer has blocked this person (null while unknown or not applicable). */
+function useBlockedByMe(personId: string | null): [boolean, (b: boolean) => void] {
+  const [blocked, setBlocked] = useState(false);
+  useEffect(() => {
+    setBlocked(false);
+    if (!personId || !dataSource.blocking) return;
+    let live = true;
+    dataSource.blocking.list().then(
+      (list) => live && setBlocked(list.some((b) => b.id === personId)),
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [personId]);
+  return [blocked, setBlocked];
+}
+
+function UnblockButton({ profile, onDone }: { profile: Profile; onDone: () => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  return (
+    <Button
+      variant="secondary"
+      size="md"
+      loading={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await dataSource.blocking!.unblock(profile.id);
+          toast(`Unblocked @${profile.handle}`);
+          onDone();
+        } catch {
+          toast("Couldn't unblock. Try again.", "error");
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      Unblock
+    </Button>
+  );
+}
+
+function ProfileHeader({
+  profile,
+  blocked,
+  onBlockChange,
+  onEdit,
+  onFollowChange,
+}: {
+  profile: Profile;
+  blocked: boolean;
+  onBlockChange: (blocked: boolean) => void;
+  onEdit: () => void;
+  onFollowChange: (f: boolean) => void;
+}) {
   return (
     <section className="profile" aria-label={`${profile.name}'s profile`}>
       <div className="profile__top">
@@ -164,11 +231,13 @@ function ProfileHeader({ profile, onEdit, onFollowChange }: { profile: Profile; 
             <Button variant="secondary" size="sm" onClick={onEdit}>
               Edit profile
             </Button>
+          ) : blocked ? (
+            <UnblockButton profile={profile} onDone={() => onBlockChange(false)} />
           ) : (
             <>
               {messagesEnabled && <MessageButton profile={profile} />}
               <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} size="md" onChange={onFollowChange} />
-              <ProfileOptions id={profile.id} handle={profile.handle} />
+              <ProfileOptions id={profile.id} handle={profile.handle} onBlocked={() => onBlockChange(true)} />
             </>
           )}
         </div>

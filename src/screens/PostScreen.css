@@ -84,6 +84,16 @@
   overflow-wrap: anywhere;
 }
 
+.reply__actions {
+  display: flex;
+  align-items: center;
+  margin: 2px 0 -6px -8px;
+}
+
+.reply__actions .post__options {
+  align-self: center;
+}
+
 .replies-note {
   padding: var(--space-6) var(--space-4);
   color: var(--text-3);

@@ -167,7 +167,8 @@ const LEGACY_SIGNIN = import.meta.env.VITE_LEGACY_SIGNIN === "true";
  * against Firebase; on success it sets it as their Supabase password.
  */
 async function tryLegacySignIn(email: string, password: string): Promise<boolean> {
-  if (!LEGACY_SIGNIN) return false;
+  // The Firebase bridge is a Supabase Edge Function; Neon has none.
+  if (!LEGACY_SIGNIN || isNeon) return false;
   const { data, error } = await supabase.functions.invoke<{ status: string }>("legacy-sign-in", { body: { email, password } });
   if (data?.status === "migrated") return true;
   // 429 from the bridge: surface it rather than claiming the password is wrong.
@@ -189,7 +190,11 @@ async function loadViewer(user: { id: string; email?: string | null; email_confi
     profileLoad = load;
     void load.promise.finally(() => profileLoad === load && (profileLoad = null)).catch(() => undefined);
   }
-  const data = await profileLoad!.promise.catch(() => null);
+  let data = await profileLoad!.promise.catch(() => null);
+  // A failed profile read (flaky network) must not leave the app with a
+  // placeholder name and handle: retry once now, and again in the background.
+  if (!data) data = await q.fetchProfile(supabase, user.id).catch(() => null);
+  if (!data) scheduleViewerRetry(user.id);
   return {
     id: user.id,
     name: data?.display_name ?? "Amigo",
@@ -203,6 +208,15 @@ async function loadViewer(user: { id: string; email?: string | null; email_confi
 const viewerListeners = new Set<(v: Viewer | null) => void>();
 const recoveryListeners = new Set<() => void>();
 let currentUser: { id: string; email?: string | null; email_confirmed_at?: string | null } | null = null;
+
+let viewerRetry: ReturnType<typeof setTimeout> | null = null;
+function scheduleViewerRetry(userId: string) {
+  if (viewerRetry) return;
+  viewerRetry = setTimeout(() => {
+    viewerRetry = null;
+    if (currentUser?.id === userId) void emitViewer();
+  }, 8000);
+}
 
 let emitGeneration = 0;
 async function emitViewer() {
@@ -528,7 +542,7 @@ export const supabaseSource: DataSource = {
   subscribeReplies(postId, sub) {
     return liveQuery(
       `replies:${postId}`,
-      () => q.fetchReplies(supabase, postId),
+      () => q.fetchReplies(supabase, postId, currentUser?.id ?? null),
       sub,
       (ch, refresh) => ch.on("postgres_changes", { event: "*", schema: "public", table: "posts", filter: `parent_id=eq.${postId}` }, refresh),
     );
@@ -689,15 +703,14 @@ export const supabaseSource: DataSource = {
     moderation: moderation?.admin,
     monetization: platform.monetizationAdmin,
     moments: moments?.admin,
-    messageReports: isNeon
-      ? undefined
-      : {
-          list: () => q.adminMessageReports(supabase),
-          async setStatus(_adminId, reportId, status) {
-            await q.adminSetMessageReportStatus(supabase, reportId, status);
-            invalidate();
-          },
-        },
+    // Evidence is only what the reporter chose to attach from their own decrypted copy.
+    messageReports: {
+      list: () => q.adminMessageReports(supabase),
+      async setStatus(_adminId, reportId, status) {
+        await q.adminSetMessageReportStatus(supabase, reportId, status);
+        invalidate();
+      },
+    },
     support: {
       listRequests: (adminId, status) => q.adminListRequests(supabase, adminId, status),
       async moderate(_adminId, requestId, action, note) {

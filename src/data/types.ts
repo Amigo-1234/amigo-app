@@ -123,6 +123,8 @@ export interface Reply {
   author: Author;
   text: string;
   createdAt: Date | null;
+  /** The reply as a full post (likes, options), where the backend provides it. */
+  post?: Post;
 }
 
 export interface PersonSummary {
