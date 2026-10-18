@@ -26,14 +26,14 @@ jobs:
       - name: Fresh sign-in token probe
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: BASE=${{ inputs.base || '' }}; BASE=${BASE:-$(head -1 .github/live-interactions.run)}; node scripts/test/live-token-probe.mjs
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; node scripts/test/live-token-probe.mjs
       - name: Likes and replies (Chromium)
         if: always()
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: BASE=${{ inputs.base || '' }}; BASE=${BASE:-$(head -1 .github/live-interactions.run)}; ENGINE=chromium node scripts/test/live-interactions.test.mjs
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=chromium node scripts/test/live-interactions.test.mjs
       - name: Likes and replies (WebKit, as in iPhone Safari)
         if: always()
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: BASE=${{ inputs.base || '' }}; BASE=${BASE:-$(head -1 .github/live-interactions.run)}; ENGINE=webkit node scripts/test/live-interactions.test.mjs
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-interactions.test.mjs
