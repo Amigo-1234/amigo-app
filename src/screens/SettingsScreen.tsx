@@ -540,8 +540,15 @@ function PushSettings() {
       }
     } catch (e) {
       // The reason only (e.g. "Registration failed - push service error"); no keys or endpoints.
-      console.warn("push:", e instanceof Error ? e.message : String(e));
-      toast("Couldn't change notifications. Try again.", "error");
+      const reason = e instanceof Error ? e.message : String(e);
+      console.warn("push:", reason);
+      // Chrome refuses push in private/incognito windows with this error, after permission was granted.
+      toast(
+        /Registration failed - permission denied/i.test(reason)
+          ? "This window can't receive notifications. Private or incognito windows don't support them — try a normal window."
+          : "Couldn't change notifications. Try again.",
+        "error",
+      );
       setStatus(await pushStatus(api).catch(() => "unsupported" as const));
     } finally {
       setBusy(false);

@@ -11,6 +11,9 @@
  *   BASE=… VERCEL_BYPASS=… node scripts/test/live-push.test.mjs
  */
 import { randomBytes } from "node:crypto";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { chromium, devices } from "playwright";
 
 const { BASE, VERCEL_BYPASS } = process.env;
@@ -47,9 +50,17 @@ async function tokenOf(p) {
 }
 
 async function open(browserType, who, opts = {}) {
-  const browser = await browserType.launch(opts.launch ?? {});
-  browsers.push(browser);
-  const ctx = await browser.newContext({ ...(opts.device ?? {}), ...(opts.context ?? {}) });
+  let ctx;
+  if (opts.persistent) {
+    // A real (non-incognito) profile: Chrome refuses push subscriptions in incognito,
+    // and Playwright's ordinary contexts are incognito-like.
+    ctx = await browserType.launchPersistentContext(mkdtempSync(join(tmpdir(), "amigo-push-")), { ...(opts.launch ?? {}), ...(opts.context ?? {}) });
+    browsers.push({ contexts: () => [ctx], close: () => ctx.close() });
+  } else {
+    const browser = await browserType.launch(opts.launch ?? {});
+    browsers.push(browser);
+    ctx = await browser.newContext({ ...(opts.device ?? {}), ...(opts.context ?? {}) });
+  }
   await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 }).catch(() => undefined);
   await ctx.addCookies(
     who.cookies.map((raw) => {
@@ -58,14 +69,14 @@ async function open(browserType, who, opts = {}) {
       return { name: pair.slice(0, i), value: pair.slice(i + 1), domain: host, path: "/", secure: true, httpOnly: /httponly/i.test(raw), sameSite: "Lax" };
     }),
   );
-  const page = await ctx.newPage();
+  const page = ctx.pages()[0] ?? (await ctx.newPage());
   page.setDefaultTimeout(45000);
   await page.goto(BASE, { waitUntil: "load" });
   const agree = page.getByRole("button", { name: "I agree" });
   await agree.waitFor({ timeout: 20000 }).catch(() => undefined);
   if (await agree.isVisible().catch(() => false)) await agree.click();
   await page.locator(".bottom-create").waitFor();
-  return { browser, ctx, page };
+  return { ctx, page };
 }
 
 /** Notifications the service worker is showing right now (title/body/tag/url only). */
@@ -90,6 +101,7 @@ try {
   // notifications allowed as if the person tapped "Allow". Runs headed (xvfb).
   step = "open Chrome signed in as B";
   const b = await open(chromium, B, {
+    persistent: true,
     launch: { channel: "chrome", headless: false },
     // Phone-sized, so the app shows its phone layout (as the other live tests use).
     context: { viewport: { width: 390, height: 844 }, permissions: ["notifications"] },
