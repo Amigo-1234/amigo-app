@@ -98,6 +98,7 @@ function kind(url) {
   if (u.pathname.startsWith("/neon/auth/")) return "auth";
   if (u.pathname.endsWith(".wasm")) return "crypto wasm";
   if (u.pathname.startsWith("/assets/")) return "asset";
+  if (u.pathname.startsWith("/api/media/")) return "/api/media"; // never print object keys
   if (u.pathname.startsWith("/api/")) return u.pathname;
   return "page";
 }

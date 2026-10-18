@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useState, type ImgHTMLAttributes } from "react";
+import { useEffect, useReducer, useState, type ImgHTMLAttributes, type RefObject } from "react";
 
 /**
  * Turning "/api/media/<key>" into a signed link to the private bucket.
@@ -65,6 +65,36 @@ function rememberOrigin(url: string) {
   } catch {
     /* storage unavailable */
   }
+}
+
+// ------------------------------------------------------- the photo cache
+//
+// The service worker keeps photos this browser was shown (public/sw.js,
+// "photos"). It belongs to one person at a time: emptied on sign-out and when
+// someone else signs in on this browser. Only the owner's id is remembered.
+const MEDIA_CACHE = "amigo-media-v1";
+const OWNER_KEY = "amigo:media-owner";
+
+/** Empties this browser's photo cache (sign-out, account deleted). */
+export async function clearMediaCache() {
+  try {
+    localStorage.removeItem(OWNER_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+  if (typeof caches !== "undefined") await caches.delete(MEDIA_CACHE).catch(() => false);
+}
+
+/** Someone is signed in: if it isn't whoever the cached photos were shown to, empty the cache first. */
+export function setMediaOwner(userId: string) {
+  let previous: string | null = null;
+  try {
+    previous = localStorage.getItem(OWNER_KEY);
+    if (previous !== userId) localStorage.setItem(OWNER_KEY, userId);
+  } catch {
+    /* storage unavailable: the cache still empties on sign-out */
+  }
+  if (previous && previous !== userId && typeof caches !== "undefined") void caches.delete(MEDIA_CACHE).catch(() => false);
 }
 
 /** The signed-in person changed: links signed for the previous one are dropped. */
@@ -167,4 +197,44 @@ export function MediaImg({ src, size = "full", onError, style, ...rest }: ImgPro
       }}
     />
   );
+}
+
+// ----------------------------------------------------------- preloading
+//
+// The browser's own lazy loading starts an image only when it's almost on
+// screen (on iPhone, very close). Photos about one screen ahead start loading
+// a little earlier, so they're usually ready when scrolled to — a few posts
+// ahead, never the whole feed. Off when the phone asks to save data or is on 2G.
+const saveData = () => {
+  const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  return !!c?.saveData || /(^|-)2g$/.test(c?.effectiveType ?? "");
+};
+let nearObserver: IntersectionObserver | null = null;
+const nearCallbacks = new WeakMap<Element, () => void>();
+function observeNear(el: Element, onNear: () => void): () => void {
+  if (typeof IntersectionObserver === "undefined" || saveData()) return () => {};
+  nearObserver ??= new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        nearCallbacks.get(e.target)?.();
+        nearObserver?.unobserve(e.target);
+      }
+    },
+    { rootMargin: "0px 0px 100% 0px" },
+  );
+  nearCallbacks.set(el, onNear);
+  nearObserver.observe(el);
+  return () => nearObserver?.unobserve(el);
+}
+
+/** True once the element is within about a screen below the viewport (then stays true). */
+export function useNearScreen(ref: RefObject<Element | null>): boolean {
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || near) return;
+    return observeNear(el, () => setNear(true));
+  }, [ref, near]);
+  return near;
 }

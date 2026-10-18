@@ -122,15 +122,16 @@ async function phone(who, profile) {
     const o = open.get(e.requestId);
     if (o) o.status = e.response.status;
     if (o && e.response.fromDiskCache) o.disk = true;
+    if (o && e.response.fromServiceWorker) o.sw = true;
   });
   cdp.on("Network.loadingFinished", (e) => {
     const o = open.get(e.requestId);
     if (!o) return;
     open.delete(e.requestId);
     if (o.disk) return void net.cached++;
-    net.hops.push({ kind: o.kind, ms: (e.timestamp - o.t) * 1000, bytes: e.encodedDataLength, status: o.status });
+    net.hops.push({ kind: o.kind, ms: (e.timestamp - o.t) * 1000, bytes: e.encodedDataLength, status: o.status, sw: !!o.sw });
   });
-  return { ctx, page, net, reset: () => ((net.hops = []), (net.cached = 0)) };
+  return { ctx, page, cdp, net, reset: () => ((net.hops = []), (net.cached = 0)) };
 }
 
 const summary = (net) => {
@@ -143,7 +144,9 @@ const summary = (net) => {
   }
   const out = {};
   for (const [k, v] of Object.entries(by)) out[k] = { n: v.n, kb: Math.round(v.kb), p50: pct(v.ms, 50), p95: pct(v.ms, 95) };
-  return { ...out, servedFromCache: net.cached };
+  // Answered by the app's photo cache (service worker) rather than the network.
+  const fromApp = net.hops.filter((h) => h.sw && h.kind === "R2 file").length;
+  return { ...out, servedFromCache: net.cached, photosFromAppCache: fromApp };
 };
 
 /** Image timings since this page's navigation, read in the page. */
@@ -261,6 +264,24 @@ try {
     await p.page.locator(".post-media img").first().waitFor({ timeout: 90000 }).catch(() => results.failures.push(`${name}: no feed image (reload)`));
     await sleep(settle / 2);
     out.reload = { ...(await images(p.page)), network: summary(p.net) };
+    // A later visit: the browser's own cache is gone (links rotate every 30 minutes,
+    // and iOS evicts it), so only the app's photo cache can avoid re-downloading.
+    p.reset();
+    await p.cdp.send("Network.clearBrowserCache");
+    await p.page.reload({ waitUntil: "commit" });
+    await p.page.locator(".post-media img").first().waitFor({ timeout: 90000 }).catch(() => results.failures.push(`${name}: no feed image (returning)`));
+    await sleep(settle / 2);
+    out.returning = { ...(await images(p.page)), network: summary(p.net) };
+    out.cacheEntries = await p.page.evaluate(async () => ((await caches.has("amigo-media-v1")) ? (await (await caches.open("amigo-media-v1")).keys()).length : 0));
+    // The viewer: the feed copy at once, the full photo only now.
+    p.reset();
+    const tv = Date.now();
+    await p.page.locator(".media-tile__open").first().click();
+    const smallMs = await p.page.locator(".media-viewer__img--small, .media-viewer__img.is-loaded").first().waitFor({ timeout: 60000 }).then(() => Date.now() - tv, () => null);
+    const fullMs = await p.page.locator(".media-viewer__img.is-loaded").first().waitFor({ timeout: 90000 }).then(() => Date.now() - tv, () => null);
+    out.viewer = { firstPictureMs: smallMs, fullPhotoMs: fullMs, network: summary(p.net) };
+    await p.page.keyboard.press("Escape");
+    await sleep(500);
     // Scroll through the feed and back to the top.
     p.reset();
     for (let i = 0; i < 6; i++) {
@@ -291,6 +312,25 @@ try {
     await p.ctx.close();
     results.profiles[name] = out;
     console.log(`profile ${name}: ${JSON.stringify(out)}`);
+  }
+  // ------------------------------------------------ signing out empties the photo cache
+  {
+    const p = await phone(B, null);
+    await p.page.goto(BASE, { waitUntil: "load" });
+    await p.page.locator(".post-media img").first().waitFor({ timeout: 60000 }).catch(() => undefined);
+    await p.page.reload({ waitUntil: "load" });
+    await sleep(6000);
+    const count = () => p.page.evaluate(async () => ((await caches.has("amigo-media-v1")) ? (await (await caches.open("amigo-media-v1")).keys()).length : 0));
+    const before = await count();
+    await p.page.goto(`${BASE}/settings`, { waitUntil: "load" });
+    await p.page.getByRole("button", { name: /^Sign out/ }).first().click();
+    const confirm = p.page.getByRole("dialog").getByRole("button", { name: /^Sign out/ });
+    if (await confirm.isVisible().catch(() => false)) await confirm.click();
+    await sleep(3000);
+    const after = await count();
+    results.signOut = { photosCachedBefore: before, photosCachedAfter: after };
+    if (!(before > 0 && after === 0)) results.failures.push(`sign-out cache: ${before} -> ${after}`);
+    await p.ctx.close();
   }
 } catch (e) {
   results.failures.push(String(e.message).split("\n")[0]);

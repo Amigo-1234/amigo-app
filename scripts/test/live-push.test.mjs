@@ -174,6 +174,9 @@ try {
   // 3. Activity: A likes B's post → B's device says who liked it (never the post's text).
   step = "activity push";
   await bPage.evaluate(async () => (await (await navigator.serviceWorker.ready).getNotifications()).forEach((n) => n.close()));
+  // As for the message: no Amigo page open on B's device while the push arrives
+  // (an open, focused Amigo shows activity itself instead of a notification).
+  await bPage.goto("about:blank");
   const api = async (who, path, body) => {
     const token = await tokenOf(who);
     return fetch(`${BASE}${path}`, { method: "POST", headers: { ...BYPASS, authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify(body) });
@@ -183,11 +186,9 @@ try {
   await api(A, "/neon/rest/v1/rpc/set_post_like", { p_post_id: created.id, p_liked: true });
   // What A's app does right after a like.
   await api(A, "/api/push-notify", { activity: true });
-  let act = null;
-  for (let i = 0; i < 30 && !act; i++) {
-    await sleep(1000);
-    act = (await shown(bPage).catch(() => [])).find((n) => n.tag?.startsWith("act-like-"));
-  }
+  await sleep(15000);
+  await bPage.goto(`${BASE}/offline.html`).catch(() => undefined);
+  const act = (await shown(bPage).catch(() => [])).find((n) => n.tag?.startsWith("act-like-")) ?? null;
   ok("a like on your post notifies your device", !!act, JSON.stringify(act));
   ok("…saying who liked it, without the post's text", act?.body === "Push Test A liked your post." && !JSON.stringify(act).includes(postText), act?.body ?? "");
   ok("…and opens that post", act?.url === `/post/${created.id}`, act?.url ?? "");

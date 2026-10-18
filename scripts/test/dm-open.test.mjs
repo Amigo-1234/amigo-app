@@ -99,6 +99,20 @@ try {
   await B.send(ids.ben, conv, { text: "after" });
   const v3 = await value((s) => A2.subscribeConversation(conv, ids.ana, s));
   ok("an unapproved device still receives no keys (security rule unchanged)", v3.messages.at(-1)?.undecryptable === true);
+
+  // A message stored between a view's first load and the app's first background
+  // check must still appear (it used to be absorbed into the check's baseline).
+  const A3 = createSupabaseMessages(asUser(ids.ana), oneShot, () => {}, opts);
+  await A3.security.setup(ids.ana);
+  const seen = [];
+  let stop;
+  const first = await new Promise((resolve, reject) => {
+    stop = A3.subscribeConversation(conv, ids.ana, { onData: (v, info) => { if (!info?.cached) { seen.push(v.messages.length); if (seen.length === 1) resolve(v); } }, onError: reject });
+  });
+  await B.send(ids.ben, conv, { text: "between load and first check" });
+  await new Promise((r) => setTimeout(r, 4000));
+  stop?.();
+  ok("a message stored right after the conversation loads still shows up", seen.at(-1) === first.messages.length + 1, JSON.stringify(seen));
 } catch (e) {
   failures++;
   console.error("error:", e);

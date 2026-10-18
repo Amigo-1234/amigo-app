@@ -19,7 +19,7 @@ import { createModeration } from "./supabase/moderation";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPushApi } from "./supabase/push";
 import * as worldsExtra from "./supabase/worldsExtra";
-import { setMediaSigner } from "../lib/mediaLinks";
+import { clearMediaCache, setMediaSigner } from "../lib/mediaLinks";
 import { makePreview } from "../lib/image";
 import { createPlatform } from "./supabase/platform";
 import { cached, dropPrefetches, prefetch, remember, setCacheOwner, takePrefetch } from "./supabase/viewCache";
@@ -368,8 +368,9 @@ export const supabaseSource: DataSource = {
     if (error) throw authError(error);
     const { error: delError } = await supabase.rpc("delete_my_account" as never, { p_confirm: "DELETE" } as never);
     if (delError) throw new AuthError(delError.code === "AC001" ? "invalid-credentials" : "unknown", delError.message);
-    // Forget this browser's keys, drafts and session for the deleted account.
+    // Forget this browser's keys, drafts, photos and session for the deleted account.
     setCacheOwner(null);
+    await clearMediaCache();
     try {
       for (const k of Object.keys(localStorage)) if (k.includes(userId)) localStorage.removeItem(k);
       if (typeof indexedDB !== "undefined" && indexedDB.databases) {
@@ -487,6 +488,7 @@ export const supabaseSource: DataSource = {
     // This device stops getting the account's notifications (while the session can still say so).
     await forgetPushDevice().catch(() => undefined);
     setCacheOwner(null);
+    await clearMediaCache();
     await supabase.auth.signOut();
     if (isNeon) {
       currentUser = null;

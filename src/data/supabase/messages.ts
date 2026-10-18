@@ -616,7 +616,10 @@ export function createSupabaseMessages(
         await d.refresh().catch(() => undefined);
         pokeVerifications();
       }
-      if (force || mail || (lastPulse !== null && key !== lastPulse)) {
+      // The first check after the app starts can't tell what changed since the views
+      // loaded (a message stored between a view's first load and this check would
+      // already be in the baseline and never shown), so it refreshes them once.
+      if (force || mail || lastPulse === null || key !== lastPulse) {
         lastChangeAt = Date.now();
         for (const l of lives) l.run();
       }

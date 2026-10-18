@@ -22,6 +22,7 @@
     "test:blocking": "node scripts/test/blocking.test.mjs",
     "test:dm-open": "node scripts/test/dm-open.test.mjs",
     "test:activity-push": "node scripts/test/activity-push.test.mjs",
+    "test:sw-cache": "node scripts/test/sw-photo-cache.test.mjs",
     "migrate:extract": "node scripts/migration/extract.ts",
     "migrate:audit": "node scripts/migration/audit.ts",
     "migrate:plan": "node scripts/migration/migrate.ts --plan-only",

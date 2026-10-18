@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { MediaItem } from "../../data";
-import { MediaImg } from "../../lib/mediaLinks";
+import { MediaImg, useNearScreen } from "../../lib/mediaLinks";
 
 const MIN_RATIO = 4 / 5; // tallest single-image crop (portrait)
 const MAX_RATIO = 1.91; // widest single-image crop (landscape)
@@ -86,6 +86,8 @@ function MediaTile({
 }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  const tileRef = useRef<HTMLDivElement>(null);
+  const near = useNearScreen(tileRef);
   const name = label ?? (item.alt || (total > 1 ? `Image ${index + 1} of ${total}` : "Image"));
 
   const media = !item.url ? (
@@ -95,11 +97,11 @@ function MediaTile({
   ) : item.type === "video" ? (
     <video src={item.url} poster={item.posterUrl} muted playsInline preload="metadata" onLoadedData={() => setLoaded(true)} />
   ) : (
-    <MediaImg src={item.url} size="sm" alt={item.alt ?? ""} loading="lazy" decoding="async" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
+    <MediaImg src={item.url} size="sm" alt={item.alt ?? ""} loading={near ? "eager" : "lazy"} decoding="async" onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />
   );
 
   return (
-    <div className={`media-tile${loaded ? " is-loaded" : ""}`}>
+    <div ref={tileRef} className={`media-tile${loaded ? " is-loaded" : ""}`}>
       {item.preview && !loaded && !failed && <span className="media-tile__preview" style={{ backgroundImage: `url("${item.preview}")` }} aria-hidden="true" />}
       {onOpen ? (
         <button

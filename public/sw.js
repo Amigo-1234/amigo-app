@@ -1,12 +1,16 @@
-// Amigo World service worker — deliberately minimal.
+// Amigo World service worker — deliberately small.
 //
-// It never caches app data, API responses, messages or keys: only a tiny
-// offline page, shown when a page load fails because the device is offline.
+// It never caches app data, API responses, messages or keys. It keeps:
+//   * a tiny offline page, shown when a page load fails because the device is offline;
+//   * a bounded cache of public-facing photos (post, avatar and Moment images),
+//     so a photo seen before isn't downloaded again — see "photos" below.
 // Everything else goes straight to the network, so a new deployment is picked
 // up on the next load (hashed assets, index.html served no-cache).
 // It also replaces the old cache-first worker: activation deletes every other cache.
 const OFFLINE_CACHE = "amigo-offline-v1";
 const OFFLINE_URL = "/offline.html";
+const MEDIA_CACHE = "amigo-media-v1";
+const KEEP = [OFFLINE_CACHE, MEDIA_CACHE];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(OFFLINE_CACHE).then((c) => c.add(new Request(OFFLINE_URL, { cache: "reload" }))));
@@ -17,7 +21,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== OFFLINE_CACHE).map((k) => caches.delete(k)));
+      await Promise.all(keys.filter((k) => !KEEP.includes(k)).map((k) => caches.delete(k)));
       await self.clients.claim();
     })(),
   );
@@ -25,12 +29,88 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const req = event.request;
-  // Only full page loads; every other request is untouched.
+  if (isCacheablePhoto(req)) return event.respondWith(photo(req));
+  // Otherwise only full page loads; every other request is untouched.
   if (req.mode !== "navigate") return;
   event.respondWith(
     fetch(req).catch(async () => (await caches.match(OFFLINE_URL)) ?? new Response("You're offline.", { status: 503 })),
   );
 });
+
+// ---------------------------------------------------------------- photos
+//
+// Photo links are signed and change every 30 minutes, so the browser's own
+// cache (keyed by the full link) misses a photo seen in an earlier window and
+// downloads it again. Each stored photo's name is random and its bytes never
+// change, so here a photo is cached by its location without the signature.
+//
+// Privacy and authorization:
+//   * Only post, avatar and Moment photos. Message attachments (/dm/) are never
+//     cached here (they're ciphertext; the decrypted photo only ever exists in
+//     the page's memory).
+//   * A cached photo is only served for a link the server signed for this
+//     person just now (unexpired), so every use still went through the
+//     server's visibility check (blocked, followers-only, deleted, expired Moment).
+//   * The app empties this cache on sign-out and when someone else signs in.
+// Limits: at most MAX_ENTRIES photos, MAX_ENTRY_BYTES each, oldest out first;
+// Moment photos for a day, others for two weeks. The browser may evict it at
+// any time (iOS does after a few weeks unused); then photos simply download.
+
+const MAX_ENTRIES = 300;
+const MAX_ENTRY_BYTES = 4 * 1024 * 1024;
+const DAY = 24 * 3600 * 1000;
+const PHOTO_PATH = /^\/[^/]+\/[0-9a-f-]{36}\/(avatar|post|moment)\/(?:[0-9a-f-]{36}\/)?[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif)$/;
+
+function isCacheablePhoto(req) {
+  if (req.method !== "GET") return false;
+  const url = new URL(req.url);
+  return url.hostname.endsWith(".r2.cloudflarestorage.com") && PHOTO_PATH.test(url.pathname) && url.searchParams.has("X-Amz-Signature");
+}
+
+/** The link is currently valid (signed recently for whoever is asking). */
+function linkValid(url) {
+  const date = url.searchParams.get("X-Amz-Date") || "";
+  const m = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(date);
+  if (!m) return false;
+  const start = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]);
+  const expires = Number(url.searchParams.get("X-Amz-Expires") || 0) * 1000;
+  return Date.now() >= start - 5 * 60 * 1000 && Date.now() < start + expires;
+}
+
+async function photo(req) {
+  const url = new URL(req.url);
+  if (!linkValid(url)) return fetch(req);
+  const key = url.origin + url.pathname;
+  const maxAge = url.pathname.includes("/moment/") ? DAY : 14 * DAY;
+  const cache = await caches.open(MEDIA_CACHE);
+  const hit = await cache.match(key);
+  if (hit && Date.now() - Number(hit.headers.get("x-amigo-at") || 0) < maxAge) return hit;
+  // A readable (CORS) response, so it can be stored without the large size
+  // padding browsers apply to opaque ones; <img> accepts it as well.
+  const res = await fetch(url.href, { mode: "cors", credentials: "omit" }).catch(() => null);
+  if (!res || !res.ok || res.type !== "cors" || !/^image\//.test(res.headers.get("content-type") || "")) return res ?? fetch(req);
+  const bytes = await res.clone().arrayBuffer();
+  if (bytes.byteLength <= MAX_ENTRY_BYTES) {
+    const headers = new Headers(res.headers);
+    headers.set("x-amigo-at", String(Date.now()));
+    await cache.put(key, new Response(bytes, { status: 200, headers })).catch(() => undefined);
+    await trim(cache);
+  }
+  return res;
+}
+
+let trimming = null;
+function trim(cache) {
+  // Oldest entries out first (Cache Storage keeps insertion order).
+  return (trimming ??= (async () => {
+    try {
+      const keys = await cache.keys();
+      for (const k of keys.slice(0, Math.max(0, keys.length - MAX_ENTRIES))) await cache.delete(k);
+    } finally {
+      trimming = null;
+    }
+  })());
+}
 
 // ------------------------------------------------------------------ push
 //

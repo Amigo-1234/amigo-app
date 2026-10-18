@@ -6,7 +6,7 @@
  * nothing here decides what anyone may see. Cleared whenever the signed-in
  * person changes or signs out.
  */
-import { forgetMediaLinks } from "../../lib/mediaLinks";
+import { forgetMediaLinks, setMediaOwner } from "../../lib/mediaLinks";
 
 const MAX_ENTRIES = 60;
 const values = new Map<string, unknown>();
@@ -16,6 +16,7 @@ let owner: string | null | undefined;
 export function setCacheOwner(userId: string | null) {
   if (userId === owner) return;
   forgetMediaLinks();
+  if (userId) setMediaOwner(userId);
   values.clear();
   inflight.clear();
   owner = userId;
