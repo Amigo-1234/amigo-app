@@ -12,7 +12,8 @@ new paid services, a provider/region change, or any change to encryption, auth o
   doing feed, profile, notifications, inbox, Moments, likes and posts with background polling,
   60 s per level, against the live Neon Data API from a US GitHub runner.
 - **Database**: `pg_stat_statements` (installed in the private `admin_private` schema).
-- Baseline = production before this work. After = Preview with the same Neon database.
+- Baseline = production before this work. After = Preview with the same Neon database, then
+  production again after the deploy (2026-10-18, deployment `dpl_9xexuvhTA3HASvJ5wd5QRE6cg9Hs`).
 
 ## Bottlenecks found
 
@@ -39,21 +40,24 @@ new paid services, a provider/region change, or any change to encryption, auth o
 
 ## Results
 
-| Measure | Before | After |
-|---|---|---|
-| First paint, 3G | 9.5 s | 4.0 s |
-| First paint, 4G | 1.8 s | 0.72 s |
-| Feed visible, 4G, cold | 3.5 s | 2.63 s |
-| Feed visible, 4G, warm | 3.0 s | 0.99 s |
-| Feed visible, 3G, warm | 3.4 s | 1.48 s |
-| Feed visible, fast, warm | 1.76 s | 0.85 s |
-| Home revisit, 4G / 3G | 490 / 1191 ms | 52 / 58 ms |
-| Notifications revisit, 4G | 250 ms | 51 ms |
-| Messages revisit, 3G | 570 ms | 30 ms |
-| Idle requests/min: Home / inbox / open chat | 24 / 18 / 20 | 9 / 4 / 6 |
-| Message delivery p50, fast / 4G | 1.33 / 1.43 s | 0.81 / 0.86 s |
-| Open a conversation, fast / 4G | 2.2 / 4.5 s | 1.35 / 3.05 s |
-| Feed photo | 612 KB | ≤ ~350 KB (new uploads) |
+| Measure | Before (prod) | After (Preview) | After (prod) |
+|---|---|---|---|
+| First paint, 3G | 9.5 s | 4.0 s | 4.0 s |
+| First paint, 4G | 1.8 s | 0.72 s | 0.68 s |
+| Feed visible, 4G, cold | 3.5 s | 2.63 s | 2.69 s |
+| Feed visible, 4G, warm | 3.0 s | 0.99 s | 1.33 s |
+| Feed visible, 3G, warm | 3.4 s | 1.48 s | 2.14 s |
+| Feed visible, fast, warm | 1.76 s | 0.85 s | 0.91 s |
+| Home revisit, 4G / 3G | 490 / 1191 ms | 52 / 58 ms | 156 / 120 ms |
+| Notifications revisit, 4G | 250 ms | 51 ms | 108 ms |
+| Messages revisit, 3G | 570 ms | 30 ms | 47 ms |
+| Idle requests/min: Home / inbox / open chat | 24 / 18 / 20 | 9 / 4 / 6 | 9 / 4 / 6 |
+| Message delivery p50, fast / 4G | 1.33 / 1.43 s | 0.81 / 0.86 s | 0.83 / 0.93 s |
+| Open a conversation, fast / 4G | 2.2 / 4.5 s | 1.35 / 3.05 s | 0.88 / 3.67 s |
+| Feed photo | 612 KB | ≤ ~350 KB (new uploads) | same |
+
+Single runs from one GitHub runner; differences of a few hundred ms between the two "after"
+columns are within run-to-run noise (production also has more real posts with photos in the feed).
 
 Typing indicator: 1.1–1.6 s. Encryption still downloads on a cold load, but after the feed.
 
@@ -90,6 +94,11 @@ All 100 temporary accounts and their posts were deleted; real data was unchanged
 - **Polling, not push**: Neon Realtime isn't available for this project, so idle open apps still
   make 4–9 requests/min each. This drives Neon compute hours more than query cost does.
 - **Cold encryption load** (1.9 MB gzip) still costs seconds on 3G when opening Messages first.
+- **Slow 3G, first visit, signed in: the feed takes ~11.5 s** (first paint 4 s; the splash shows
+  meanwhile). It is bound by downloading ~315 KB of JavaScript at 400 kbps; the next step would be
+  splitting the first-screen bundle further.
+- The first production perf-audit run timed out once at its first step (60 s) and did not
+  reproduce on the re-run; the harness now records which step failed and the page landmarks.
 - **Rare encrypted-photo failure for a brand-new recipient** (1 in ~8 earlier runs; not reproduced
   since; diagnostics in the live test).
 - Neon compute auto-suspends when idle; the first request after a pause is slower.

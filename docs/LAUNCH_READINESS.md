@@ -81,7 +81,9 @@ four blockers below are cleared.
 - Text Moments against live Neon (photo Moments are live-tested).
 - Encrypted message photos through the browser UI (live-tested through the app's messaging module, not the screen).
 - Real devices: iOS Safari long-press and swipe-to-reply gestures were not tried on hardware.
-- Load: one benchmark of messaging latency; nothing at beta-scale concurrency.
+- Load: 10/25/50/100 simulated users against the live Data API (2026-10-18): p95 ≤ 87 ms, 0 errors
+  at every level ([PERFORMANCE.md](PERFORMANCE.md)). Not load-tested: sign-in bursts, media
+  functions, R2 at scale, many concurrent encrypted conversations.
 
 ## Recommended beta limits
 

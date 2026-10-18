@@ -26,6 +26,7 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - **Legal (drafts v0.1)**: 7 documents at `/legal`, versioned; acceptance recorded at registration; re-acceptance gate.
 - **Creator monetization**: architecture only, programme closed; users see "Creator monetization is coming soon."
 - **Account deletion**: password re-check plus typed confirmation; cascades through all owned data.
+- **Performance & stability (2026-10-18, on production as `dpl_9xexuvhTA3HASvJ5wd5QRE6cg9Hs`, commit `0efd9e8`)**: first paint on 3G 9.5 → 4.0 s, warm feed on 4G 3.0 → 1.3 s, screen revisits ~0.1 s, idle traffic −60 %, message delivery p50 ~0.85 s; resilient posting/messaging offline; privacy-safe perf monitoring. Load test: 100 simulated users, p95 85 ms, 0 errors. Details: [PERFORMANCE.md](PERFORMANCE.md).
 
 ## Blockers / owner decisions
 - **Production (2026-10-17, owner-authorized)**: `https://amigo-app-one.vercel.app` serves the redesigned app on Neon + R2 (deployment `dpl_2be8nDqcHjFxZYt3qujfNkYorUYo`, commit `e223f1a`, deployed from this branch; `main` not merged). Legacy rollback: Vercel instant rollback to `dpl_BLQeNsTyyeeSUgpZSyvnAR62AuaS` (`main` @ `d344bac`); Firebase untouched. A push to `main` would redeploy the legacy app to production. **Waiting on the owner: add `https://amigo-app-one.vercel.app` to the R2 bucket CORS rule** — until then photo uploads fail on production (everything else passed the production smoke test, `.github/workflows/prod-smoke.yml`).
@@ -46,4 +47,4 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - Don't use SQLSTATE codes starting with `PT`: PostgREST treats them as HTTP statuses.
 - Live tests run from temporary GitHub Actions workflows, removed after use.
 
-_Last updated 2026-10-17._
+_Last updated 2026-10-18._
