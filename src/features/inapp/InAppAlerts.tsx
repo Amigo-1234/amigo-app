@@ -25,14 +25,15 @@ const SHOW_MS = 5000;
 const MAX_QUEUE = 3;
 const ICONS = { message: MessageCircle, like: Heart, reply: Reply, follow: UserPlus, mention: AtSign, support: HandHeart } as const;
 
-/** Take one snapshot from a live subscription, then stop listening. */
-function once<T>(subscribe: (sub: { onData: (v: T) => void; onError: (e: Error) => void }) => () => void): Promise<T> {
+/** Take one fresh snapshot from a live subscription, then stop listening. */
+function once<T>(subscribe: (sub: { onData: (v: T, info?: { cached: true }) => void; onError: (e: Error) => void }) => () => void): Promise<T> {
   return new Promise((resolve, reject) => {
     let stop: (() => void) | null = null;
     let done = false;
     stop = subscribe({
-      onData: (v) => {
-        if (done) return;
+      onData: (v, info) => {
+        // What the view showed last time comes first; it can't hold what just arrived.
+        if (done || info?.cached) return;
         done = true;
         queueMicrotask(() => stop?.());
         resolve(v);

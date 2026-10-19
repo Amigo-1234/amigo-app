@@ -331,7 +331,15 @@ export class E2EDevice {
    */
   private async ensureIdentity() {
     const status = await this.machine.crossSigningStatus();
-    if (status.hasMaster && status.hasSelfSigning) return;
+    if (status.hasMaster && status.hasSelfSigning) {
+      // A setup cut short (app closed after the identity was made, before it or this
+      // device's signature reached the server) is finished now, with the same identity.
+      // Only while the server's identity is still this one: never over a reset made elsewhere.
+      const published = await this.machine.getIdentity(this.me());
+      const self = (await this.machine.getUserDevices(this.me())).get(new this.c.DeviceId(this.deviceId));
+      if ((!published || published.isVerified()) && !self?.isCrossSignedByOwner()) await this.bootstrap(false);
+      return;
+    }
     const own = await this.machine.getIdentity(this.me());
     if (!own) await this.bootstrap(false);
   }
