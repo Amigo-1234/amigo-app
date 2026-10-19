@@ -17,6 +17,18 @@ import { VerifiedBadge } from "../../ui/VerifiedBadge";
 const COLLAPSE_AT = 480;
 
 /** Short, text-only posts get set in display type — Amigo's "statement" post. */
+/** The first `max` characters (whole emoji, at most 6 lines), ending at a word and never mid-link. */
+function shorten(text: string, max: number) {
+  const chars = Array.from(text.split("\n").slice(0, 6).join("\n"));
+  if (chars.length <= max && text.split("\n").length <= 6) return text;
+  let cut = chars.slice(0, max).join("");
+  const space = cut.search(/\s\S*$/);
+  if (space > max * 0.6) cut = cut.slice(0, space);
+  // Don't end inside a link: drop a trailing partial URL.
+  cut = cut.replace(/\s?https?:\/\/\S*$/, "");
+  return cut.trimEnd() + "…";
+}
+
 function isStatement(post: Post) {
   return !post.replyTo && post.media.length === 0 && post.text.length > 0 && post.text.length <= 90 && !post.text.includes("\n");
 }
@@ -52,8 +64,11 @@ export const PostCard = memo(function PostCard({
 
   const focus = variant === "focus";
   const href = `/post/${post.id}`;
-  const longText = !focus && !expanded && post.text.length > COLLAPSE_AT;
-  const text = longText ? post.text.slice(0, COLLAPSE_AT).trimEnd() + "…" : post.text;
+  // Long text is shortened in lists; the post's own page always shows all of it.
+  // Cut on a word boundary and never inside an emoji or a link, or past 6 lines.
+  const collapsible = !focus && (post.text.length > COLLAPSE_AT || post.text.split("\n").length > 6);
+  const longText = collapsible && !expanded;
+  const text = longText ? shorten(post.text, COLLAPSE_AT) : post.text;
   const nameId = `post-${post.id}-author`;
   const authorHref = profileHref(post.author.handle);
   const replyToHref = post.replyTo ? profileHref(post.replyTo.handle) : null;
@@ -130,11 +145,11 @@ export const PostCard = memo(function PostCard({
       )}
 
       {post.text && (
-        <div className={`post__text${isStatement(post) ? " post__text--statement" : ""}`}>
+        <div className={`post__text${isStatement(post) ? " post__text--statement" : ""}${post.media.length ? " post__text--caption" : ""}`}>
           <RichText text={text} />
-          {longText && (
-            <button className="post__more" onClick={() => setExpanded(true)}>
-              Show more
+          {collapsible && (
+            <button className="post__more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+              {expanded ? "Show less" : "Show more"}
             </button>
           )}
         </div>

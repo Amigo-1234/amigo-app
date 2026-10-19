@@ -77,6 +77,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+.field__count.is-low {
+  color: var(--warning);
+}
+
 .field__hint {
   min-height: 1.2em;
   font-size: var(--text-sm);

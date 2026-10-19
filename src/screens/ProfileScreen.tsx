@@ -247,12 +247,21 @@ function ProfileHeader({
         {profile.name}
         <VerifiedBadge verified={profile.verified} size={20} />
       </h2>
-      <p className="profile__handle">@{profile.handle}</p>
+      <p className="profile__handle">
+        @{profile.handle}
+        {!profile.isViewer && profile.followsViewer && <span className="profile__follows-you">Follows you</span>}
+      </p>
 
-      {profile.bio && (
+      {profile.bio ? (
         <p className="profile__bio">
           <RichText text={profile.bio} />
         </p>
+      ) : (
+        profile.isViewer && (
+          <button type="button" className="profile__bio-empty" onClick={onEdit}>
+            Add a bio — a line or two about you and what you share
+          </button>
+        )
       )}
 
       {profile.joinedAt && (

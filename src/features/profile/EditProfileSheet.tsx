@@ -181,15 +181,18 @@ function EditProfileForm({ profile, onClose, onSaved }: { profile: Profile; onCl
 
         <label className="field">
           <span className="field__label">
-            Bio <span className="field__count">{bio.length}/{BIO_MAX_LENGTH}</span>
+            Bio{" "}
+            <span className={`field__count${BIO_MAX_LENGTH - bio.length <= 20 ? " is-low" : ""}`} aria-live="polite">
+              {bioOk ? `${BIO_MAX_LENGTH - bio.length} left` : `${bio.length - BIO_MAX_LENGTH} over the limit`}
+            </span>
           </span>
           <textarea
             className="field__input edit-profile__bio"
             value={bio}
-            rows={3}
+            rows={4}
             onChange={(e) => setBio(e.target.value)}
             aria-invalid={!bioOk}
-            placeholder="A little about you"
+            placeholder="A little about you. Line breaks and links are kept."
           />
         </label>
 
