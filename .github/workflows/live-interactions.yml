@@ -37,3 +37,13 @@ jobs:
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-interactions.test.mjs
+      - name: Moment reactions (Chromium, 4G-like)
+        if: always()
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=chromium node scripts/test/live-moment-react.test.mjs
+      - name: Moment reactions (WebKit)
+        if: always()
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-moment-react.test.mjs
