@@ -358,9 +358,26 @@
   transform: scale(1.08);
 }
 
+.moment-react:active {
+  transform: scale(0.9);
+}
+
 .moment-react[aria-pressed="true"] {
   background: rgba(255, 255, 255, 0.4);
   box-shadow: 0 0 0 2px #fff;
+  animation: moment-react-pop var(--dur-fast) ease-out;
+}
+
+@keyframes moment-react-pop {
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-react[aria-pressed="true"] {
+    animation: none;
+  }
 }
 
 .moment-viewer__reply {

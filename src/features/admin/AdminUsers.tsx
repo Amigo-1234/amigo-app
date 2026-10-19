@@ -20,7 +20,7 @@ const typeLabel = (t: VerificationType) => TYPES.find((x) => x.id === t)?.label 
 
 type Found = { person: PersonSummary; verification: Verification | null };
 
-/** Admin → Users. Only verification for now; account management comes later. */
+/** Admin → Users → verification badges (account management is in AdminAccounts). */
 export function AdminUsers() {
   const viewer = useViewer();
   const toast = useToast();
@@ -157,7 +157,6 @@ export function AdminUsers() {
         )}
       </section>
 
-      <p className="admin-muted">Searching, suspending and managing accounts isn't built yet.</p>
     </>
   );
 }

@@ -285,3 +285,15 @@
 .auth__legal {
   margin-top: var(--space-2);
 }
+
+.auth__credit {
+  margin: var(--space-6) 0 0;
+  color: var(--text-3);
+  font-size: var(--text-xs);
+}
+
+.auth__credit a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

@@ -117,6 +117,78 @@ export interface PlatformStats {
   suspended: number;
 }
 
+/**
+ * Admin → Overview (migration 20261020090000_admin_insights.sql). All counted on
+ * the server. "Active" = did something that leaves a record (posted, replied,
+ * liked, followed, messaged, posted/viewed/reacted to a Moment, joined a World,
+ * opened a Support request) — a lower bound, since reading leaves none.
+ */
+export interface PlatformInsights {
+  generatedAt: Date;
+  users: number;
+  usersVerifiedEmail: number;
+  newUsersToday: number;
+  newUsers7d: number;
+  dau: number;
+  wau: number;
+  mau: number;
+  posts: number;
+  replies: number;
+  posts7d: number;
+  momentsLive: number;
+  moments7d: number;
+  worlds: number;
+  worldsLive: number;
+  worldsUpcoming: number;
+  supportRequests: number;
+  supportOpen: number;
+  reportsOpen: number;
+  moderationActions7d: number;
+  suspended: number;
+  admins: number;
+  /** Last 14 days (UTC), oldest first. */
+  daily: { day: string; signups: number; posts: number; active: number }[];
+  recentUsers: { id: string; handle: string; name: string; avatarUrl: string | null; joinedAt: Date }[];
+}
+
+export interface AdminUserRow {
+  id: string;
+  handle: string;
+  name: string;
+  avatarUrl: string | null;
+  joinedAt: Date;
+  posts: number;
+  followers: number;
+  emailVerified: boolean;
+  isAdmin: boolean;
+  suspended: boolean;
+  suspendedUntil: Date | null;
+}
+
+export interface AdminUserDetail extends AdminUserRow {
+  bio: string;
+  replies: number;
+  following: number;
+  likesGiven: number;
+  moments30d: number;
+  lastActive: Date | null;
+  suspension: { reason: string; since: Date; until: Date | null } | null;
+  warnings: { message: string; at: Date; acknowledged: boolean }[];
+  reportsAgainst: { posts: number; profile: number; messages: number; moments: number; open: number };
+  reportsMade: number;
+}
+
+export interface AdminHistoryEntry {
+  id: string;
+  admin: string | null;
+  action: string;
+  targetType: string;
+  summary: string;
+  at: Date;
+}
+
+export type AdminNoteTarget = "user" | "post" | "moment" | "post_report" | "dm_report" | "moment_report" | "support_request" | "world";
+
 export interface Reply {
   id: string;
   postId: string;
@@ -848,6 +920,15 @@ export interface ModerationAdminApi {
   /** A warning the person sees until they acknowledge it. */
   warn(userId: string, message: string): Promise<void>;
   stats(): Promise<PlatformStats>;
+  /** Overview metrics, a 14-day trend and newest accounts (newer databases only). */
+  insights?(): Promise<PlatformInsights>;
+  /** People by handle or name; empty query lists the newest. */
+  searchUsers?(query: string): Promise<AdminUserRow[]>;
+  userDetail?(userId: string): Promise<AdminUserDetail>;
+  /** A moderation note, kept in the audit log. */
+  addNote?(targetType: AdminNoteTarget, targetId: string, note: string): Promise<void>;
+  /** Admin actions and notes about one person, report or item. */
+  history?(targetId: string): Promise<AdminHistoryEntry[]>;
   /** App errors people's devices reported, grouped (no personal data). */
   clientErrors(hours: number): Promise<{ total: number; top: { message: string; route: string; version: string; count: number; lastAt: Date }[] }>;
 }

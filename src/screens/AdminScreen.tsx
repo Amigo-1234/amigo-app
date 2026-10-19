@@ -8,6 +8,8 @@ import { useIsAdmin } from "../features/admin/useAdmin";
 import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
 import { AdminUsers } from "../features/admin/AdminUsers";
+import { AdminAccounts } from "../features/admin/AdminAccounts";
+import { AdminInsights } from "../features/admin/AdminInsights";
 import { AdminMessageReports } from "../features/admin/AdminMessageReports";
 import { AdminMomentReports } from "../features/admin/AdminMomentReports";
 import { ScreenHeader } from "../shell/ScreenHeader";
@@ -67,7 +69,7 @@ export default function AdminScreen() {
       <div className="admin-body">
         {section === "" && (
           <>
-            {dataSource.admin?.moderation && <AdminStats />}
+            {dataSource.admin?.moderation && (dataSource.admin.moderation.insights ? <AdminInsights fallback={<AdminStats />} /> : <AdminStats />)}
             <AdminOverview />
             {dataSource.admin?.moderation && <AdminClientErrors />}
           </>
@@ -77,7 +79,12 @@ export default function AdminScreen() {
         )}
         {section === "support" && <SupportAdmin />}
         {section === "worlds" && <AdminWorlds />}
-        {section === "users" && <AdminUsers />}
+        {section === "users" && (
+          <>
+            {dataSource.admin?.moderation?.searchUsers && <AdminAccounts />}
+            <AdminUsers />
+          </>
+        )}
         {section === "monetization" && dataSource.admin?.monetization && <AdminMonetization />}
         {section === "legal" && dataSource.admin?.legal && <AdminLegal />}
         {section === "reports" && (

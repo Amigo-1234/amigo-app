@@ -12,6 +12,12 @@ on:
       base:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
+      suite:
+        description: "all | likes | moments | admin (default: all except admin)"
+        required: false
+      admin_nonce:
+        description: "admin suite: tag of the temporary admin account an operator grants"
+        required: false
 jobs:
   live-interactions:
     runs-on: ubuntu-latest
@@ -24,26 +30,33 @@ jobs:
           cache: npm
       - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
       - name: Fresh sign-in token probe
+        if: inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'likes'
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; node scripts/test/live-token-probe.mjs
       - name: Likes and replies (Chromium)
-        if: always()
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'likes')
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=chromium node scripts/test/live-interactions.test.mjs
       - name: Likes and replies (WebKit, as in iPhone Safari)
-        if: always()
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'likes')
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-interactions.test.mjs
       - name: Moment reactions (Chromium, 4G-like)
-        if: always()
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'moments')
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=chromium node scripts/test/live-moment-react.test.mjs
       - name: Moment reactions (WebKit)
-        if: always()
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'moments')
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-moment-react.test.mjs
+      - name: Admin control centre (needs an operator to grant the temporary admin)
+        if: always() && inputs.suite == 'admin'
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          ADMIN_NONCE: ${{ inputs.admin_nonce }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; node scripts/test/live-admin.test.mjs

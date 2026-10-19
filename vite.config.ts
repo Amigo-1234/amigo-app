@@ -8,7 +8,17 @@ const commit = (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7);
 const appVersion = commit ? `${version}+${commit}` : version;
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // /version.json: what the running app compares itself with to offer a reload (src/features/update).
+    {
+      name: "amigo-version-file",
+      apply: "build",
+      generateBundle() {
+        this.emitFile({ type: "asset", fileName: "version.json", source: JSON.stringify({ version: appVersion }) });
+      },
+    },
+  ],
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
   // legacy/ holds the old prototype page for reference only.
   optimizeDeps: { entries: ["index.html"] },

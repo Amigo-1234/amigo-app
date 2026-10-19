@@ -28,7 +28,9 @@ import {
   Users,
   Heart,
   Orbit,
+  Code2,
 } from "lucide-react";
+import { CREATOR } from "../lib/creator";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { CodeField, PasswordField, authMessage } from "../features/auth";
 import { profilesEnabled } from "../features/profile/links";
@@ -684,6 +686,14 @@ function AboutSection() {
   return (
     <Section id="set-about" title="About">
       <InfoRow icon={<Info size={20} />} title="Amigo World" detail={`Version ${__APP_VERSION__} · ${BACKEND_LABEL[dataSource.kind] ?? dataSource.kind}`} />
+      <a href={CREATOR.url} target="_blank" rel="noopener noreferrer" className="settings-row settings-row--action">
+        <Row
+          icon={<Code2 size={20} />}
+          title={`Built by ${CREATOR.name} · ${CREATOR.studio}`}
+          detail={`Amigo World is created by ${CREATOR.studio}. See more work at ${CREATOR.url.replace("https://", "")}`}
+          trailing={<ChevronRight size={18} className="settings-row__chev" aria-hidden="true" />}
+        />
+      </a>
       <LinkRow to="/legal" icon={<FileText size={20} />} title="Terms, privacy and policies" detail="Terms of Service, Privacy Policy, Community Guidelines and more" />
       <InstallRow />
       {dataSource.resetDemo && (

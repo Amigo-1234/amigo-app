@@ -357,3 +357,9 @@
     display: none;
   }
 }
+
+.rail__foot a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}

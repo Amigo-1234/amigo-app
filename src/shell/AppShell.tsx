@@ -19,6 +19,7 @@ import { NAV } from "./nav";
 import { useScrollMemory } from "./useScrollMemory";
 import { RightRail } from "./RightRail";
 import { SuspensionBanner } from "../features/moderation/SuspensionBanner";
+import { UpdateBanner } from "../features/update/UpdateBanner";
 import "./AppShell.css";
 
 export function AppShell() {
@@ -122,6 +123,7 @@ export function AppShell() {
       </aside>
 
       <main id="main" className="main" tabIndex={-1}>
+        <UpdateBanner />
         <SuspensionBanner />
         {securityApi && !inMessages && <SignInNotice />}
         <Suspense fallback={null}>

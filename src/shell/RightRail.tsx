@@ -1,3 +1,4 @@
+import { CREATOR } from "../lib/creator";
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router";
 import { dataSource, type PersonSummary } from "../data";
@@ -14,7 +15,12 @@ export function RightRail() {
     <aside className="rail" aria-label="Suggestions">
       <div className="rail__inner">
         {!hideSuggestions && <WhoToFollow />}
-        <p className="rail__foot">Amigo World · {new Date().getFullYear()}</p>
+        <p className="rail__foot">
+          Amigo World · Created by{" "}
+          <a href={CREATOR.url} target="_blank" rel="noopener noreferrer">
+            {CREATOR.studio}
+          </a>
+        </p>
       </div>
     </aside>
   );

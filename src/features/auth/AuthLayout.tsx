@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AmigoMark, Wordmark } from "../../ui/Brand";
+import { CREATOR } from "../../lib/creator";
 import "../../screens/AuthScreen.css";
 
 /**
@@ -26,6 +27,12 @@ export function AuthLayout({ stepKey, children }: { stepKey: string; children: R
         <div className="auth__card" key={stepKey}>
           {children}
         </div>
+        <p className="auth__credit">
+          Created by{" "}
+          <a href={CREATOR.url} target="_blank" rel="noopener noreferrer">
+            {CREATOR.studio}
+          </a>
+        </p>
       </main>
     </div>
   );

@@ -212,14 +212,46 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
 
   // --------------------------------------------------------------- actions
 
-  async function react(emoji: string) {
+  // The tapped reaction shows at once; saving happens behind it. Quick repeated
+  // taps send only the latest choice, and a failed save puts back the last saved one.
+  const [chosen, setChosen] = useState<Record<string, string | null>>({});
+  const saving = useRef<Record<string, { sending: boolean; want: string | null; saved: string | null }>>({});
+  const shownReaction = moment ? (moment.id in chosen ? chosen[moment.id] : (moment.viewerReaction ?? null)) : null;
+
+  // Once the live data agrees, it takes over again.
+  useEffect(() => {
+    if (!moment || !(moment.id in chosen) || saving.current[moment.id]?.sending) return;
+    if ((moment.viewerReaction ?? null) === chosen[moment.id])
+      setChosen((c) => {
+        const { [moment.id]: _, ...rest } = c;
+        return rest;
+      });
+  }, [moment, chosen]);
+
+  function react(emoji: string) {
     if (!moment) return;
-    const nextEmoji = moment.viewerReaction === emoji ? null : emoji;
+    const id = moment.id;
+    const nextEmoji = shownReaction === emoji ? null : emoji;
+    setChosen((c) => ({ ...c, [id]: nextEmoji }));
+    const s = (saving.current[id] ??= { sending: false, want: null, saved: moment.viewerReaction ?? null });
+    s.want = nextEmoji;
+    if (!s.sending) void save(id, s);
+  }
+
+  async function save(id: string, s: { sending: boolean; want: string | null; saved: string | null }) {
+    s.sending = true;
     try {
-      await api.react(viewer.id, moment.id, nextEmoji);
-      if (nextEmoji) toast(`Reacted ${nextEmoji}`);
+      while (s.want !== s.saved) {
+        const want = s.want;
+        await api.react(viewer.id, id, want);
+        s.saved = want;
+      }
     } catch {
+      s.want = s.saved;
+      setChosen((c) => ({ ...c, [id]: s.saved }));
       toast("Couldn't react. Try again.", "error");
+    } finally {
+      s.sending = false;
     }
   }
 
@@ -327,7 +359,7 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
               <>
                 <div className="moment-viewer__reactions" role="group" aria-label="React">
                   {MOMENT_REACTIONS.map((r) => (
-                    <button key={r} type="button" className="moment-react" aria-pressed={moment.viewerReaction === r} aria-label={`React ${r}`} onClick={() => react(r)}>
+                    <button key={r} type="button" className="moment-react" aria-pressed={shownReaction === r} aria-label={`React ${r}`} onClick={() => react(r)}>
                       {r}
                     </button>
                   ))}
