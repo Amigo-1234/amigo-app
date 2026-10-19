@@ -124,8 +124,23 @@ try {
   let reactRequests = 0;
   page.on("request", (rq) => rq.url().includes("/rpc/react_to_moment") && reactRequests++);
 
+  const feed = (await rpc(B, "moments_feed")).data;
+  ok("B's Moments feed (API) includes A's Moment", Array.isArray(feed) && feed.some((m) => m.id === momentId), Array.isArray(feed) ? `${feed.length} Moments` : JSON.stringify(feed).slice(0, 160));
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /React Test A's Moments/ }).click();
+  // A new account first accepts the legal documents, as in the app.
+  const agree = page.getByRole("button", { name: "I agree" });
+  await agree.waitFor({ timeout: 8000 }).catch(() => undefined);
+  if (await agree.isVisible().catch(() => false)) await agree.click();
+  const bubble = page.locator(".moments-row button.moment-bubble").filter({ hasText: "React" });
+  try {
+    await bubble.first().waitFor({ timeout: 20000 });
+  } catch (e) {
+    const labels = await page.locator(".moments-row button").evaluateAll((bs) => bs.map((b) => b.getAttribute("aria-label")));
+    info("Moments row buttons", JSON.stringify(labels));
+    info("page", `${page.url().replace(BASE, "")} · ${(await page.locator("h1, h2").allInnerTexts()).slice(0, 4).join(" | ")}`);
+    throw e;
+  }
+  await bubble.first().click();
   await page.locator(".moment-react").first().waitFor();
   await sleep(1500); // let the viewer settle (seen mark, live data)
 
