@@ -72,11 +72,11 @@ export function AdminAccounts() {
                   <span className="admin-muted">
                     @{u.handle} · joined {timeAgo(u.joinedAt)} · {u.posts} posts · {u.followers} followers
                   </span>
-                </span>
-                <span className="admin-badges">
-                  {u.isAdmin && <span className="admin-badge">Admin</span>}
-                  {u.suspended && <span className="admin-badge admin-badge--danger">Suspended</span>}
-                  {!u.emailVerified && <span className="admin-badge admin-badge--muted">Email not verified</span>}
+                  <span className="admin-badges">
+                    {u.isAdmin && <span className="admin-badge">Admin</span>}
+                    {u.suspended && <span className="admin-badge admin-badge--danger">Suspended</span>}
+                    {!u.emailVerified && <span className="admin-badge admin-badge--muted">Email not verified</span>}
+                  </span>
                 </span>
               </button>
               {selected === u.id && (

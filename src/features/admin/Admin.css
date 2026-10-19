@@ -441,11 +441,19 @@
   min-width: 0;
 }
 
+.admin-account .admin-muted {
+  overflow-wrap: anywhere;
+}
+
 .admin-badges {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 4px;
+  margin-top: 2px;
+}
+
+.admin-badges:empty {
+  display: none;
 }
 
 .admin-badge {
