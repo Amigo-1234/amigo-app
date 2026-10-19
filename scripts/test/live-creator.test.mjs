@@ -52,6 +52,11 @@ try {
   me.id = (await res.json()).user.id;
 
   let r = await rpc("my_creator_programme");
+  if (r.code === "42501") {
+    // Test setup only: a brand-new sign-in token is occasionally refused once (the app retries this itself).
+    await sleep(2000);
+    r = await rpc("my_creator_programme");
+  }
   ok("the programme overview loads", r.status === 200 && r.data?.creator_status === "not_eligible", JSON.stringify(r.data).slice(0, 120));
   const open = !!r.data?.applications_open;
   console.log(`info applications are ${open ? "OPEN" : "closed"} on this database`);
