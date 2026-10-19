@@ -105,10 +105,11 @@ async function phone(p, name) {
   const failedCalls = [];
   const watch = (page) => {
     page.setDefaultTimeout(20000);
-    page.on("pageerror", (e) => problems.push(`${name} page error: ${e.message.slice(0, 200)}`));
+    // WebKit reports a fetch cancelled by navigation as "… due to access control checks" / "Load failed"; not an app error.
+    const noise = (t) => /access control checks|^Load failed$/i.test(t);
+    page.on("pageerror", (e) => !noise(e.message) && problems.push(`${name} page error: ${e.message.slice(0, 200)}`));
     page.on("console", (m) => {
-      // WebKit logs cancelled cross-origin fetches as "access control checks"; not an app error.
-      if (m.type() === "error" && !/access control checks/i.test(m.text())) problems.push(`${name} console: ${m.text().slice(0, 200)}`);
+      if (m.type() === "error" && !/access control checks|TypeError: Load failed/i.test(m.text())) problems.push(`${name} console: ${m.text().slice(0, 200)}`);
     });
     page.on("response", (r) => {
       const u = new URL(r.url());
