@@ -1,11 +1,39 @@
-# Launch readiness — Amigo World on Neon (preview)
+# Launch readiness — Amigo World on Neon
 
-_Assessed 2026-10-17 on branch `claude/amigo-world-restart-7mrbrf`. Nothing here is on `main` or Firebase production._
+_Re-assessed 2026-10-19. Production: `efa7658` (`dpl_9W3zzhEK2AmdvTS5jeisyM1MfNE9`). Release candidate on Preview:
+`97fd955`. Legacy rollback `dpl_BLQeNsTyyeeSUgpZSyvnAR62AuaS` untouched. Nothing merged into `main`._
 
-**Overall: not ready for public launch. Close to ready for a small invited beta**, once the
-four blockers below are cleared.
+## Release candidate 97fd955 (Preview only — production needs the owner's approval)
 
-## Blockers (must clear before any public launch)
+| Change | Verified |
+| --- | --- |
+| Moment reactions show instantly; repeated taps send only the last choice; failed saves roll back | typecheck/build; live timing test written (`live-moment-react.test.mjs`) — **live run pending (GitHub runners queued)** |
+| Admin control centre: metrics (accounts, new today/7 d, DAU/WAU/MAU with definition, content, Worlds, Support Hub, reports, admin actions), 14-day charts with table view, newest accounts | functions checked on a local copy (non-admin refused, internal counter not callable); applied to Neon with the right grants; live test written (`live-admin.test.mjs`) — **pending** |
+| Admin → Users → Accounts: search, detail (activity counts, standing, reports, warnings), suspend / restore / warn with confirmation, notes and history | as above; all enforced by `support_require_admin()` in the database |
+| Update notice (`/version.json`, checked on return to foreground, ≤ every 10 min, never auto-reloads) | build emits the file; served `no-cache` |
+| "Created by AMIGODEV" (Settings → About, sign-in screen, desktop rail) → https://amigo-dev.vercel.app | text only: the portfolio couldn't be reached from the build environment to obtain the logo |
+
+Migration `20261020090000_admin_insights.sql` (live): adds six admin-only functions, no tables or data changed.
+Undo is in the file header.
+
+## Owner decisions needed before a public launch
+
+1. **Legal text (blocker).** 25 placeholders across six documents: legal name and address (terms, privacy),
+   contact emails (terms, privacy, guidelines, deletion, copyright, monetization), minimum age (drafted as 13),
+   governing law and disputes, retention periods, legal bases and transfer mechanisms, DMCA/counter-notice.
+   **Factual gap:** `privacy-0.1.md:45` says to add the media-storage provider "when media uploads launch" —
+   photos are live on Cloudflare R2, so the privacy policy must name it. Not edited: legal changes need approval.
+2. **Admin account.** No admin exists yet. Grant the owner's account (SQL: `insert into app_admins (user_id, note)
+   select id, 'owner' from profiles where username = '<handle>'`). There is deliberately no admin sign-up.
+3. **Logo.** Provide the AMIGODEV logo file if it should appear beside the credit.
+4. **Creator monetization** stays "coming soon" (nothing financial is enabled). Hide the Settings entry until it
+   opens? Recommended, needs a yes.
+5. **App stores:** not listed and nothing submitted. A store release needs a developer account (paid), native
+   wrapper, privacy labels and the legal text above — postpone until after the web beta.
+
+## Earlier assessment (2026-10-17)
+
+### Blockers then
 
 1. **Legal text.** All seven documents are drafts (v0.1) with `[OWNER]` / `[LEGAL REVIEW]`
    placeholders: legal entity, address, contact, governing law, minimum age. They need the owner's
@@ -20,7 +48,7 @@ four blockers below are cleared.
    against real R2 + Neon, and an iPhone-profile browser run). Video posts and voice notes have no UI
    yet. Production needs its own domain added to the bucket's CORS rule.
 
-## Status by area
+### Status by area
 
 | Area | Status | Notes |
 | --- | --- | --- |
@@ -54,7 +82,7 @@ four blockers below are cleared.
 | Crash handling | READY | Error boundary + router error screens; stale-deployment reload prompt |
 | Test-account cleanup | BLOCKED (awaiting confirmation) | Script prepared, guarded, not run |
 
-## Security checks (live Neon, after every migration today)
+### Security checks (live Neon, after every migration today)
 
 - No function in `public` is executable by `PUBLIC`.
 - Every table in `public` has row-level security on.
@@ -65,7 +93,7 @@ four blockers below are cleared.
 - Messages: the server sees that a reaction or edit relates to a message, but never its content
   (documented in `docs/architecture/MESSAGES.md`).
 
-## Costs (Free plans only, nothing paid introduced)
+### Costs (Free plans only, nothing paid introduced)
 
 - **Neon Free**: compute auto-suspends when idle. Polling is the main cost driver: messages pulse
   every 1 s only while a conversation is open, the inbox every 3 s, the badge every 15 s, other
@@ -74,7 +102,7 @@ four blockers below are cleared.
   (no function invocation). Each media upload and each image view is one Edge invocation (the
   view redirects to R2, so bytes don't pass through Vercel); R2 egress is free.
 
-## Untested or only tested locally
+### Untested or only tested locally
 
 - Reactions, edits, unsend and history paging against live Neon (local PostgREST only).
 - Bookmarks, post edit/delete, reports and suspension against live Neon.
@@ -85,7 +113,7 @@ four blockers below are cleared.
   at every level ([PERFORMANCE.md](PERFORMANCE.md)). Not load-tested: sign-in bursts, media
   functions, R2 at scale, many concurrent encrypted conversations.
 
-## Recommended beta limits
+### Recommended beta limits
 
 - Invite-only, **≤ 50 people**, while compute hours and R2 usage are watched daily. Upload limits stay on: 60 uploads/hour and 1 GB/day per person; images 10 MB (avatars 5 MB).
 - One admin (the owner) on duty for reports; suspensions as needed.
