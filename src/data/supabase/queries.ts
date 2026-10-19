@@ -195,13 +195,14 @@ export async function fetchFollowingIds(db: Db, viewerId: string) {
   return new Set(data.map((r) => r.followee_id));
 }
 
-export async function fetchSuggestions(db: Db, max: number): Promise<PersonSummary[]> {
+export async function fetchSuggestions(db: Db, viewerId: string, max: number): Promise<PersonSummary[]> {
   const { data, error } = await db
     .rpc("suggested_profiles", { p_limit: max })
     .select(`id, username, display_name, avatar_url, ${VERIFICATION_EMBED}`)
     .returns<ProfileRow[]>();
   if (error) throw dataError(error);
-  return data.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: false, verified: !!p.verification }));
+  const { followers } = await followRelations(db, viewerId, data.map((p) => p.id));
+  return data.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: false, followsViewer: followers.has(p.id), verified: !!p.verification }));
 }
 
 // ------------------------------------------------------------------- writes
@@ -251,11 +252,33 @@ async function viewerFollowsSet(db: Db, viewerId: string, ids: string[]): Promis
   return new Set(data.map((r) => r.followee_id));
 }
 
+/**
+ * Both directions between the viewer and these people, in one request: whom the
+ * viewer follows (Following) and who follows the viewer (Follow Back).
+ */
+async function followRelations(db: Db, viewerId: string, ids: string[]): Promise<{ following: Set<string>; followers: Set<string> }> {
+  const others = [...new Set(ids)].filter((id) => id !== viewerId);
+  if (others.length === 0) return { following: new Set(), followers: new Set() };
+  const list = others.join(",");
+  const { data, error } = await db
+    .from("follows")
+    .select("follower_id, followee_id")
+    .or(`and(follower_id.eq.${viewerId},followee_id.in.(${list})),and(followee_id.eq.${viewerId},follower_id.in.(${list}))`);
+  if (error) throw dataError(error);
+  const following = new Set<string>();
+  const followers = new Set<string>();
+  for (const r of data) {
+    if (r.follower_id === viewerId) following.add(r.followee_id);
+    else followers.add(r.follower_id);
+  }
+  return { following, followers };
+}
+
 export async function fetchProfileByHandle(db: Db, handle: string, viewerId: string): Promise<Profile | null> {
   const { data, error } = await db.from("profiles").select(PROFILE_COLUMNS).eq("username", handle.toLowerCase()).maybeSingle();
   if (error) throw dataError(error);
   if (!data) return null;
-  const following = data.id === viewerId ? new Set<string>() : await viewerFollowsSet(db, viewerId, [data.id]);
+  const { following, followers } = await followRelations(db, viewerId, [data.id]);
   return {
     id: data.id,
     name: data.display_name,
@@ -267,6 +290,7 @@ export async function fetchProfileByHandle(db: Db, handle: string, viewerId: str
     postCount: data.post_count,
     joinedAt: new Date(data.created_at),
     viewerFollows: following.has(data.id),
+    followsViewer: followers.has(data.id),
     isViewer: data.id === viewerId,
     verified: !!(data as { verification?: unknown }).verification,
   };
@@ -317,8 +341,8 @@ export async function fetchFollowList(db: Db, profileId: string, kind: FollowLis
     .returns<{ person: ProfileRow | null }[]>();
   if (error) throw dataError(error);
   const people = data.map((r) => r.person).filter((p): p is ProfileRow => !!p);
-  const following = await viewerFollowsSet(db, viewerId, people.map((p) => p.id));
-  return people.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: following.has(p.id), verified: !!p.verification }));
+  const { following, followers } = await followRelations(db, viewerId, people.map((p) => p.id));
+  return people.map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, viewerFollows: following.has(p.id), followsViewer: followers.has(p.id), verified: !!p.verification }));
 }
 
 export async function isHandleAvailable(db: Db, handle: string, viewerId: string) {
@@ -370,9 +394,9 @@ export async function searchPeople(db: Db, query: string, viewerId: string, limi
   if (error) throw dataError(error);
   // Usernames that start with the query rank first (people usually type the start of a handle).
   const ranked = [...data].sort((a, b) => Number(b.username.startsWith(q)) - Number(a.username.startsWith(q))).slice(0, limit);
-  const following = await viewerFollowsSet(db, viewerId, ranked.map((p) => p.id));
+  const { following, followers } = await followRelations(db, viewerId, ranked.map((p) => p.id));
   return ranked.map((p) => ({
-    id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id),
+    id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id), followsViewer: followers.has(p.id),
     verified: !!(p as { verification?: unknown }).verification,
   }));
 }
@@ -420,11 +444,14 @@ export async function fetchExplore(db: Db, viewerId: string): Promise<ExploreFee
   }
 
   const allRows = [...popularRows, ...conversations.data!, ...media.data!];
-  const liked = await likedSet(db, viewerId, [...new Set(allRows.map((r) => r.id))]);
+  const [liked, { followers }] = await Promise.all([
+    likedSet(db, viewerId, [...new Set(allRows.map((r) => r.id))]),
+    followRelations(db, viewerId, people.data!.map((p) => p.id)),
+  ]);
   const map = (rows: PostRow[]) => rows.map((r) => toPost(db, r, liked));
   return {
     suggestedPeople: people.data!.map((p) => ({
-      id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: false, verified: !!p.verification,
+      id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: false, followsViewer: followers.has(p.id), verified: !!p.verification,
     })),
     popular: { posts: map(popularRows), windowDays },
     conversations: map(conversations.data!),
@@ -643,9 +670,9 @@ export async function fetchLeaderboard(db: Db, worldId: string, viewerId: string
   if (error) throw dataError(error);
   if (data.length === 0) return [];
   const ids = data.map((r) => r.user_id);
-  const [profiles, following] = await Promise.all([
+  const [profiles, { following, followers }] = await Promise.all([
     db.from("profiles").select("id, username, display_name, avatar_url").in("id", ids),
-    viewerFollowsSet(db, viewerId, ids),
+    followRelations(db, viewerId, ids),
   ]);
   if (profiles.error) throw dataError(profiles.error);
   const byId = new Map(profiles.data.map((p) => [p.id, p]));
@@ -655,6 +682,7 @@ export async function fetchLeaderboard(db: Db, worldId: string, viewerId: string
     points: r.points,
     entries: r.entries,
     viewerFollows: following.has(r.user_id),
+    followsViewer: followers.has(r.user_id),
   }));
 }
 
@@ -687,10 +715,10 @@ export async function fetchParticipants(db: Db, worldId: string, viewerId: strin
     .returns<{ person: (ProfileRow & { bio: string }) | null }[]>();
   if (error) throw dataError(error);
   const people = data.map((r) => r.person).filter((p): p is ProfileRow & { bio: string } => !!p);
-  const following = await viewerFollowsSet(db, viewerId, people.map((p) => p.id));
+  const { following, followers } = await followRelations(db, viewerId, people.map((p) => p.id));
   return [...people.filter((p) => !following.has(p.id)), ...people.filter((p) => following.has(p.id))]
     .slice(0, limit)
-    .map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id), verified: !!p.verification }));
+    .map((p) => ({ id: p.id, name: p.display_name, handle: p.username, avatarUrl: p.avatar_url, bio: p.bio, viewerFollows: following.has(p.id), followsViewer: followers.has(p.id), verified: !!p.verification }));
 }
 
 // -------------------------------------------------------------- support hub

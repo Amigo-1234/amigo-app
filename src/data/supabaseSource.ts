@@ -586,7 +586,7 @@ export const supabaseSource: DataSource = {
   },
 
   getFollowingIds: (viewerId) => q.fetchFollowingIds(supabase, viewerId),
-  getPeopleSuggestions: (_viewerId, max) => q.fetchSuggestions(supabase, max),
+  getPeopleSuggestions: (viewerId, max) => q.fetchSuggestions(supabase, viewerId, max),
 
   async follow(viewerId, targetId) {
     await q.follow(supabase, viewerId, targetId);
