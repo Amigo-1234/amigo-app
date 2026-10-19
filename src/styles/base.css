@@ -160,3 +160,17 @@ a {
 .creator-link img {
   border-radius: 3px;
 }
+
+/* Quick double taps on controls shouldn't zoom the page (iOS); pinch-to-zoom
+   stays available everywhere for accessibility. */
+button,
+a,
+input,
+select,
+textarea,
+label,
+[role="button"],
+[role="tab"],
+[role="switch"] {
+  touch-action: manipulation;
+}
