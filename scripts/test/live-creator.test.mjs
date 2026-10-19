@@ -103,7 +103,9 @@ try {
   const page = await ctx.newPage();
   page.setDefaultTimeout(20000);
   const errs = [];
-  page.on("pageerror", (e) => errs.push(e.message.slice(0, 160)));
+  // WebKit logs a cancelled in-flight cross-origin request (e.g. the background perf report when the page
+  // changes) as "… due to access control checks"; that's the browser, not the app, so it's not counted.
+  page.on("pageerror", (e) => !/due to access control checks/.test(e.message) && errs.push(e.message.slice(0, 160)));
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   const agree = page.getByRole("button", { name: "I agree" });
   await agree.waitFor({ timeout: 8000 }).catch(() => undefined);
