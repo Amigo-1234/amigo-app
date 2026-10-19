@@ -1511,6 +1511,8 @@ export interface DataSource {
   monetization?: MonetizationApi;
   /** Creator Programme: applications, status, dashboard, feedback. */
   creatorProgramme?: CreatorProgrammeApi;
+  /** The original bytes of a stored photo ("/api/media/<key>"), permission-checked. */
+  mediaBytes?(src: string): Promise<Blob>;
   /** Password reset by emailed code instead of a link (Neon). Without it, sendPasswordReset emails a link. */
   passwordResetByCode?: { send(email: string): Promise<void>; reset(email: string, code: string, password: string): Promise<void> };
 

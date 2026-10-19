@@ -357,6 +357,14 @@ export const supabaseSource: DataSource = {
   },
   monetization: platform.monetization,
   creatorProgramme: platform.creatorProgramme,
+  ...(media
+    ? {
+        async mediaBytes(src: string) {
+          const key = src.startsWith("/api/media/") ? src.slice("/api/media/".length).split("?")[0] : src;
+          return new Blob([(await media.bytes(key)) as BlobPart]);
+        },
+      }
+    : {}),
   postTools: moderation?.postTools,
   accountStatus: moderation?.accountStatus,
   acknowledgeWarning: moderation?.acknowledgeWarning,

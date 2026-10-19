@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronLeft, ChevronRight, X, ZoomIn, ZoomOut } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut } from "lucide-react";
+import { useToast } from "../../state/toast";
+import { saveImage } from "./saveImage";
 import type { MediaItem } from "../../data";
 import "./MediaViewer.css";
 import { MediaImg, mediaSrc } from "../../lib/mediaLinks";
@@ -98,6 +100,7 @@ export function MediaViewerProvider({ children }: { children: ReactNode }) {
         <button className="media-viewer__btn media-viewer__close" onClick={close} aria-label="Close" autoFocus>
           <X size={22} />
         </button>
+        {item?.type === "image" && <DownloadButton key={item.url} url={item.url} />}
 
         {many && state && (
           <>
@@ -123,6 +126,36 @@ export function MediaViewerProvider({ children }: { children: ReactNode }) {
 }
 
 export const useMediaViewer = () => useContext(ViewerContext);
+
+/** Save the photo being viewed (best authorised copy; share sheet on phones, download elsewhere). */
+function DownloadButton({ url }: { url: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`media-viewer__btn media-viewer__download${busy ? " is-busy" : ""}`}
+      aria-label={busy ? "Preparing photo…" : "Save photo"}
+      aria-busy={busy}
+      disabled={busy}
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={async (e) => {
+        e.stopPropagation();
+        setBusy(true);
+        try {
+          const r = await saveImage(url);
+          if (r === "downloaded") toast("Download started");
+        } catch {
+          toast("Couldn't save the photo. Check your connection and try again.", "error");
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? <span className="btn__spinner" aria-hidden="true" /> : <Download size={20} />}
+    </button>
+  );
+}
 
 /**
  * Keeps the page exactly where it is while the viewer is open. `overflow:
