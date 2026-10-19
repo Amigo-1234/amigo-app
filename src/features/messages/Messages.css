@@ -925,3 +925,42 @@
   padding: var(--space-2);
   color: var(--text-3);
 }
+
+/* Conversation starters (an empty conversation only). */
+.msg-starters {
+  display: grid;
+  gap: 6px;
+  padding: 2px 2px 8px;
+}
+
+.msg-starters__label {
+  color: var(--text-3);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.msg-starters__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.msg-starter {
+  max-width: 100%;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.msg-starter:active {
+  background: var(--surface-2);
+}

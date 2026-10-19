@@ -318,7 +318,14 @@ export function ConversationPane({ conversationId }: { conversationId: string })
       )}
 
       {conversation.canSend && trust === "changed-verified" ? null : conversation.canSend ? (
-        <MessageComposer conversationId={conversationId} peerName={peer.name} replyTo={replyTo} onCancelReply={() => setReplyTo(null)} onSend={send} />
+        <MessageComposer
+          conversationId={conversationId}
+          peerName={peer.name}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
+          onSend={send}
+          suggestions={c.status === "ready" && c.messages.length === 0 && c.pending.length === 0}
+        />
       ) : (
         <div className="convo__blocked" role="status">
           {conversation.blockedByViewer ? (

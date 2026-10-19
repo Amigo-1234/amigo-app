@@ -34,13 +34,19 @@ function writeDraft(key: string, text: string) {
  * Shift+Enter adds a line. Typing state is sent while you type and cleared
  * after a pause or when you send.
  */
+/** Simple openers for an empty conversation. Fixed text, chosen on this device: nothing is analysed or sent anywhere. */
+const STARTERS = ["Hey! How's your day going?", "Nice to connect with you!", "What have you been up to lately?", "Hey, I saw your profile and thought I'd say hi."];
+
 export function MessageComposer({
   conversationId,
   peerName,
   replyTo,
   onCancelReply,
   onSend,
+  suggestions = false,
 }: {
+  /** A new conversation: offer a few openers (inserted for editing, never sent automatically). */
+  suggestions?: boolean;
   conversationId: string;
   peerName: string;
   replyTo: MessageQuote | null;
@@ -144,6 +150,31 @@ export function MessageComposer({
 
   return (
     <form className="msg-composer" onSubmit={submit} aria-label="Write a message">
+      {suggestions && !text.trim() && !image && (
+        <div className="msg-starters" role="group" aria-label="Break the ice">
+          <span className="msg-starters__label">Break the ice</span>
+          <div className="msg-starters__list">
+            {STARTERS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className="msg-starter"
+                onClick={() => {
+                  setText(s);
+                  requestAnimationFrame(() => {
+                    const el = inputRef.current;
+                    if (!el) return;
+                    el.focus();
+                    el.setSelectionRange(s.length, s.length);
+                  });
+                }}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       {replyTo && (
         <div className="msg-composer__reply">
           <Reply size={16} aria-hidden="true" />
