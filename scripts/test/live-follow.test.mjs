@@ -133,12 +133,22 @@ try {
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   const agree = page.getByRole("button", { name: "I agree" });
   await agree.waitFor({ timeout: 8000 }).catch(() => undefined);
-  if (await agree.isVisible().catch(() => false)) await agree.click();
+  if (await agree.isVisible().catch(() => false)) {
+    await agree.click();
+    await agree.waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
+  }
+  await page.locator(".bottom-create").waitFor().catch(() => undefined);
 
   const profileButton = () => page.locator(".profile__action .follow-btn");
   const openProfile = async (h) => {
     await page.goto(`${BASE}/u/${h}`, { waitUntil: "networkidle" });
-    await page.locator(".profile__action").waitFor();
+    try {
+      await page.locator(".profile__action").waitFor();
+    } catch (e) {
+      const text = ((await page.locator("main").innerText().catch(() => "")) || "").replace(/\s+/g, " ").slice(0, 200);
+      info("profile didn't show", `${page.url().replace(BASE, "")} · ${text} · ${problems.slice(-3).join(" | ")}`);
+      throw e;
+    }
   };
   const label = async (loc) => ((await loc.textContent().catch(() => null)) ?? "").trim();
   const waitLabel = async (loc, want, ms = 8000) => {
