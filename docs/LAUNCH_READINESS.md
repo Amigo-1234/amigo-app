@@ -18,11 +18,22 @@ Undo is in the file header.
 
 ## Owner decisions needed before a public launch
 
-1. **Legal text (blocker).** 25 placeholders across six documents: legal name and address (terms, privacy),
-   contact emails (terms, privacy, guidelines, deletion, copyright, monetization), minimum age (drafted as 13),
-   governing law and disputes, retention periods, legal bases and transfer mechanisms, DMCA/counter-notice.
-   **Factual gap:** `privacy-0.1.md:45` says to add the media-storage provider "when media uploads launch" —
-   photos are live on Cloudflare R2, so the privacy policy must name it. Not edited: legal changes need approval.
+1. **Legal text (blocker).** Nothing is invented; these are the facts needed from the owner (and a lawyer
+   where marked) to replace the 25 placeholders in `src/legal/docs/*-0.1.md`:
+   - **Operator:** legal name of the person or company running Amigo World; postal address if your jurisdiction
+     requires one (terms §1 and contact, privacy §1).
+   - **Contact emails:** one support address and one privacy/legal address (or confirm one address for both).
+     Used in terms, privacy, guidelines, deletion, copyright, monetization.
+   - **Minimum age:** confirm 13 or give another age (terms, privacy).
+   - **Governing law and disputes:** which country's law, which courts, any dispute process (terms). *Lawyer.*
+   - **Retention:** how long backups and deleted-account remnants are kept; confirm deletion windows
+     (deletion policy). *Lawyer for legal-hold rules.*
+   - **Service providers to list:** confirm Neon (database, auth), Vercel (hosting), Cloudflare R2 (photos —
+     already live, so the privacy policy must name it) and the email-code sender; whether data-processing
+     agreements are in place (privacy).
+   - *Lawyer:* legal bases for processing, international transfer mechanism, limitation-of-liability wording,
+     copyright counter-notice / DMCA agent.
+   - Monetization terms stay unpublished while the programme is closed.
 2. **Admin account — resolved, nothing to grant.** The owner account @amigoisaboy has been admin since
    2026-10-12 (email verified; audit log shows its World admin actions on 2026-10-18). The earlier "no admin"
    line was stale text from before the grant. No other admin exists; there is deliberately no admin sign-up.
