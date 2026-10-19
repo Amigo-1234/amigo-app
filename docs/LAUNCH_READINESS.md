@@ -1,24 +1,78 @@
-# Launch readiness — Amigo World on Neon
+# Launch readiness — Amigo World
 
-_Re-assessed 2026-10-19. Production: `efa7658` (`dpl_9W3zzhEK2AmdvTS5jeisyM1MfNE9`). Release candidate on Preview:
-`97fd955`. Legacy rollback `dpl_BLQeNsTyyeeSUgpZSyvnAR62AuaS` untouched. Nothing merged into `main`._
+_Updated 2026-10-19 (Phase 2). Development: `claude/amigo-world-restart-7mrbrf`, Preview
+https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app. Production:
+https://amigo-app-one.vercel.app = `dpl_FbiTotxmWnmRP1hhXN6mDkfGdZCo` (commit `2ee1b02`: `efa7658` + Follow Back fix).
+Rollbacks kept: `dpl_9W3zzhEK2AmdvTS5jeisyM1MfNE9` (efa7658), legacy `dpl_BLQeNsTyyeeSUgpZSyvnAR62AuaS` (main).
+Nothing merged into `main`. **Production deployment of the work below is not done and needs the owner's approval.**_
 
-## Release candidate 97fd955 (Preview only — production needs the owner's approval)
+**Recommendation:** ready for a **small, invited beta (≤ 50 people)** once the legal placeholders are filled and the
+release below is promoted; **not ready for an open public launch** (legal text, single admin, free-tier limits).
 
-| Change | Verified |
+## A. Completed on Preview (not yet on production)
+
+| Feature | How it was verified |
 | --- | --- |
-| Moment reactions show instantly; repeated taps send only the last choice; failed saves roll back | **Live, Preview vs production** (`live-moment-react.test.mjs`, run 39290011371): tap → selected, WebKit **1195–1720 ms → 1–2 ms**; Chromium 4G-like (150 ms, CPU ×4) **1001 ms → 3–4 ms**; 5 quick taps **5 requests → 1**, saved result correct, author sees the reaction |
-| Admin control centre: metrics (accounts, new today/7 d, DAU/WAU/MAU with definition, content, Worlds, Support Hub, reports, admin actions), 14-day charts with table view, newest accounts | functions checked on a local copy (non-admin refused, internal counter not callable); applied to Neon with the right grants; live test written (`live-admin.test.mjs`) — **pending** |
-| Admin → Users → Accounts: search, detail (activity counts, standing, reports, warnings), suspend / restore / warn with confirmation, notes and history | **Local UI run** (app against a local copy of the schema, local-only admin): suspend → database refuses the account's post (400) → restore → posts again (200); note and history shown; no page errors. Live: non-admin, signed-out and anon calls refused (42501). Not run live on Preview: needs a temporary admin grant (owner approval) |
-| Update notice (`/version.json`, checked on return to foreground, ≤ every 10 min, never auto-reloads) | build emits the file; served `no-cache` |
-| "Created by AMIGODEV" (Settings → About, sign-in screen, desktop rail) → https://amigo-dev.vercel.app | text only: the portfolio couldn't be reached from the build environment to obtain the logo |
+| Creator Programme: Settings → Creator Monetization; apply (category, description, reason, links, notes), statuses Not applied / Pending / More information requested / Approved / Rejected / Suspended / Revoked; withdraw; resubmit | Local DB, 50 checks (`npm run test:creator-programme`); local browser run of the whole flow (apply → info requested → resubmit → approve → dashboard → feedback → admin reply, no overflow, light/dark); live on Preview while applications are closed (`live-creator.test.mjs`, Chromium + WebKit) |
+| Creator dashboard (approved only): posts, likes and replies received, followers, verified followers, 8-week trend, recent posts — real counts only, no views/reach/earnings | Local DB checks against known activity; screenshots |
+| Creator feedback (private, optional rating, category, admin responses) + admin Creator Feedback inbox | Local DB: non-members refused, other members see nothing, no table access; local browser run |
+| Admin: Creator Programme queue (filter, search, details, profile link, approve / request info / reject with note, suspend / revoke / restore, previous decisions), Creator Feedback, Audit log section | Local browser run; every action refused to members on the live DB (42501) |
+| In-app notification banners (likes, replies, mentions, follows, Support Hub, messages) + per-device Banners / Sounds settings; original synthesised sounds | Local browser run: banner 28 s after a like (existing 30 s refresh), right text, tap opens the post, no repeat, no overflow. **Message banners not exercised end-to-end** (encrypted DMs need two devices) |
+| Save photo from the full-screen viewer (original quality via permission-checked link; decrypted copy for message photos; share sheet on phones) | Demo-mode browser run on desktop Chromium (download, correct format/name). **Not run on iPhone** |
+| Profile: "Follows you", "Add a bio", bio typography, counter; captions: safer shortening (no broken emoji/links, ≤ 6 lines), Show less | Unit check of shortening; screenshots |
+| Messages: "Break the ice" suggestions in an empty conversation (inserted for editing, never sent) | Demo-mode browser run |
+| Moments reactions instant (from the earlier release candidate) | Live: production WebKit 1195–1720 ms → Preview 1–2 ms per tap; 5 quick taps 5 → 1 request; passed again in the 272d2dc run |
+| Mobile: no horizontal overflow on 15 screens at 320 and 390 px; no double-tap zoom on controls (pinch-zoom kept); deep links keep their URL through sign-in | Browser checks |
+| Earlier on Preview: admin metrics/accounts/notes, update notice, AMIGODEV credit with the original mark, hidden-then-restored monetization entry | Earlier reports |
 
-Migration `20261020090000_admin_insights.sql` (live): adds six admin-only functions, no tables or data changed.
-Undo is in the file header.
+**Live test run on Preview `272d2dc` (run 39331672386):** fresh-token probe, likes & replies, Moment reactions,
+Follow/Follow Back, Creator Programme — all passed in Chromium and WebKit, except one WebKit console message from a
+cancelled background request (browser behaviour, not app code; the test now ignores that message, `ed0e72f`).
 
-## Owner decisions needed before a public launch
+## B. Outstanding issues
 
-1. **Legal text (blocker).** Nothing is invented; these are the facts needed from the owner (and a lawyer
+**P0 — launch blockers**
+- **Legal text**: 25 placeholders, privacy policy doesn't name Cloudflare R2 (live). Needs owner facts (section E) and
+  legal review. Publishing incomplete policies as final is not done.
+- **Production release**: everything in A is on Preview only; production lacks it (including the Moments fix the
+  owner noticed is missing there).
+
+**P1 — before wider release**
+- One admin (@amigoisaboy). Reports and creator reviews depend on one person.
+- Message banners and push for message volume: banner shows when a conversation *becomes* unread; a second message in
+  an already-unread conversation doesn't trigger another (no extra polling added).
+- Notification banners arrive with the 30 s refresh, not instantly (no Realtime on Neon; documented, not faked).
+- Free-tier capacity (section H). Watch compute and storage weekly.
+- Physical iPhone checks (section G) — automated WebKit is not a device test.
+- World chat messages can't be reported yet; no email-verification nudge outside Settings (from the earlier audit).
+
+**P2 — after beta**
+- Creator Programme: notifications to applicants on decisions (status is visible in the app); follower trend chart.
+- GIFs, voice notes, video posts; per-page share previews.
+- Native app store packaging (not started, by decision).
+
+## C. Performance (measured)
+
+- Moment reaction feedback: WebKit 1195–1720 ms → 1–2 ms; Chromium (4G-like) 1001 ms → 3–4 ms.
+- Follow Back tap → "Following": 30–48 ms (production and Preview).
+- Earlier measurements (PERFORMANCE.md): first paint on 3G 9.5 → 4.0 s, warm feed on 4G 3.0 → 1.3 s, message delivery
+  p50 ~0.85 s; load test 100 simulated users p95 85 ms.
+- New code adds no polling; the Creator dashboard queries are bounded (own posts; 8 weeks); bundle +~1 KB gzip on the
+  entry chunk (new screens load on demand).
+
+## D. Security
+
+Tested: every new admin function refuses members, signed-out callers and `anon` (live DB); helper functions not
+callable; no direct reads/writes of creator tables; members can't self-approve; feedback private to author + admins
+(local DB and live refusals); all functions `security definer` with empty `search_path`, no dynamic SQL; decisions
+audit-logged without feedback text; creator links https-only, rendered `noopener noreferrer nofollow`; downloads use
+the existing permission-checked media path and never upload or log decrypted content.
+Not re-tested in this phase: file upload validation, signed-URL expiry, rate limits, blocking and suspension beyond
+the earlier suites (which passed locally again today: blocking, Moments).
+
+## E. Legal — information needed from the owner
+
+Nothing is invented; these are the facts needed from the owner (and a lawyer
    where marked) to replace the 25 placeholders in `src/legal/docs/*-0.1.md`:
    - **Operator:** legal name of the person or company running Amigo World; postal address if your jurisdiction
      requires one (terms §1 and contact, privacy §1).
@@ -34,16 +88,39 @@ Undo is in the file header.
    - *Lawyer:* legal bases for processing, international transfer mechanism, limitation-of-liability wording,
      copyright counter-notice / DMCA agent.
    - Monetization terms stay unpublished while the programme is closed.
-2. **Admin account — resolved, nothing to grant.** The owner account @amigoisaboy has been admin since
-   2026-10-12 (email verified; audit log shows its World admin actions on 2026-10-18). The earlier "no admin"
-   line was stale text from before the grant. No other admin exists; there is deliberately no admin sign-up.
-3. **Logo.** Provide the AMIGODEV logo file if it should appear beside the credit.
-4. **Creator monetization:** Settings entry hidden (owner's decision, 2026-10-19); screen, data layer and admin
-   tools kept for later (`SHOW_MONETIZATION` in `SettingsScreen.tsx`). Nothing financial is enabled.
-5. **App stores:** not listed and nothing submitted. A store release needs a developer account (paid), native
-   wrapper, privacy labels and the legal text above — postpone until after the web beta.
 
-## Earlier assessment (2026-10-17)
+## F. Deployment readiness (what promotion needs)
+
+1. Owner approval to promote the dev branch (it contains the Follow Back fix as `3feab45`, so production's hotfix is
+   not lost). Deploy from git with the production target (same method as the current production), then run the live
+   suites on production, keeping `dpl_FbiTotxmWnmRP1hhXN6mDkfGdZCo` as the rollback.
+2. Database: migrations `20261020090000` and `20261021090000` are already applied to the shared database (additive;
+   the current production app doesn't use them). Nothing else to run.
+3. After promotion, the owner opens creator applications in Admin → Creator Programme ("Accept applications").
+   Keep them closed until then: the current production screen would show its old Apply button.
+
+## G. Manual iPhone checklist (installed Home Screen app, after promotion)
+
+1. Settings → About shows "Built by Idris · AMIGODEV" with the logo; the link opens the portfolio.
+2. Settings → Creator Monetization opens; status and early-access notice read correctly.
+3. Have a friend like your post while the app is open: a banner appears within ~30 s; tapping opens the post.
+   Turn Sounds on, tap anywhere once, and check the next banner plays a short sound (and that Silent mode mutes it).
+4. Open a photo, tap the download icon: the share sheet appears; "Save Image" puts it in Photos.
+5. Open a Moment from someone else and tap reactions quickly: the highlight follows each tap instantly.
+6. Visit the profile of someone who follows you: "Follows you" and "Follow Back".
+7. Start a new conversation: "Break the ice" chips; tapping one fills the box without sending.
+8. Double-tap a button quickly: the page doesn't zoom; pinch still zooms.
+
+## H. Infrastructure (Neon Free, Vercel Hobby, Cloudflare R2)
+
+- Neon: 0.25 CU fixed compute, 1 GB per-branch storage limit (database is 14 MB today), 6-hour point-in-time restore
+  window (the only backup), 112 connections (10 in use). Data API polling is the main compute cost; watch compute
+  hours monthly. A longer restore window or larger compute needs a paid plan (owner decision).
+- Vercel Hobby: edge functions for auth proxy and media; no other server cost added.
+- R2: photo storage and egress (egress free); watch storage.
+- No capacity guarantee is claimed; the 100-user load test was a short synthetic run.
+
+## Earlier assessments
 
 ### Blockers then
 

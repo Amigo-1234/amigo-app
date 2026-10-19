@@ -4,6 +4,12 @@ Branch `claude/amigo-world-restart-7mrbrf` · Neon project `amigo-world` (Free) 
 Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 
 ## Done
+- **Phase 2 (2026-10-19, Preview only — production not updated)**: Creator Programme (apply, review with more-info /
+  reject / approve, suspend / revoke, dashboard of real figures, private feedback, admin queue + feedback inbox +
+  audit log; migration 20261021090000, applied, additive), in-app notification banners + original sounds (per-device
+  settings), save photo from the viewer, Follows you / Add a bio / caption shortening, Break the ice in new
+  conversations, no double-tap zoom on controls. Details, tests, P0/P1 and the owner's checklist:
+  [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - **Follow Back (2026-10-19, on production as `dpl_FbiTotxmWnmRP1hhXN6mDkfGdZCo`, commit `2ee1b02` on
   `claude/follow-back-hotfix` = production `efa7658` + this fix only; same change as `3feab45` here)**: the
   button reads Follow / Follow Back / Following from both directions of the relationship (one request per
