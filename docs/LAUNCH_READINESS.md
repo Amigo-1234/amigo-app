@@ -23,11 +23,12 @@ Undo is in the file header.
    governing law and disputes, retention periods, legal bases and transfer mechanisms, DMCA/counter-notice.
    **Factual gap:** `privacy-0.1.md:45` says to add the media-storage provider "when media uploads launch" —
    photos are live on Cloudflare R2, so the privacy policy must name it. Not edited: legal changes need approval.
-2. **Admin account.** No admin exists yet. Grant the owner's account (SQL: `insert into app_admins (user_id, note)
-   select id, 'owner' from profiles where username = '<handle>'`). There is deliberately no admin sign-up.
+2. **Admin account — resolved, nothing to grant.** The owner account @amigoisaboy has been admin since
+   2026-10-12 (email verified; audit log shows its World admin actions on 2026-10-18). The earlier "no admin"
+   line was stale text from before the grant. No other admin exists; there is deliberately no admin sign-up.
 3. **Logo.** Provide the AMIGODEV logo file if it should appear beside the credit.
-4. **Creator monetization** stays "coming soon" (nothing financial is enabled). Hide the Settings entry until it
-   opens? Recommended, needs a yes.
+4. **Creator monetization:** Settings entry hidden (owner's decision, 2026-10-19); screen, data layer and admin
+   tools kept for later (`SHOW_MONETIZATION` in `SettingsScreen.tsx`). Nothing financial is enabled.
 5. **App stores:** not listed and nothing submitted. A store release needs a developer account (paid), native
    wrapper, privacy labels and the legal text above — postpone until after the web beta.
 

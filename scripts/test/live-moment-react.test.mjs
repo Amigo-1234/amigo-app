@@ -142,7 +142,11 @@ try {
   }
   await bubble.first().click();
   await page.locator(".moment-react").first().waitFor();
+  // Pause playback (Space, like holding a finger on the Moment) so it doesn't move
+  // on to the next one while the taps are timed.
+  await page.locator("dialog.moment-viewer").press(" ");
   await sleep(1500); // let the viewer settle (seen mark, live data)
+  ok("the viewer is paused on A's Moment", await page.getByText(`Reaction test ${tag}`).isVisible().catch(() => false));
 
   // Tap → selected, in the page's own clock (pointer event to the attribute change).
   const timeTap = (emoji, want) =>
@@ -166,7 +170,7 @@ try {
     const ms = await timeTap(emoji, want);
     times.push(ms);
     info(`tap ${emoji} → ${want === "true" ? "selected" : "cleared"}`, `${ms} ms`);
-    await sleep(2500); // let it save before the next one
+    await sleep(2000); // let it save before the next one
   }
   const worst = Math.max(...times);
   ok("each tap shows its result within 150 ms", worst <= 150, `${times.join(" / ")} ms`);
@@ -177,6 +181,7 @@ try {
   reactRequests = 0;
   await page.evaluate(() => {
     const btn = [...document.querySelectorAll(".moment-react")].find((b) => b.getAttribute("aria-label") === "React 🔥");
+    if (!btn) throw new Error("the reaction buttons are gone (the viewer moved on)");
     for (let i = 0; i < 5; i++) btn.click();
   });
   await sleep(5000);

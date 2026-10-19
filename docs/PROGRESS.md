@@ -73,7 +73,7 @@ Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 - ~~Media storage → Cloudflare R2~~ **Live-verified 2026-10-17** (see Done). For production: add the production domain to the bucket CORS rule and set the R2 variables for Production.
 - **Legal drafts**: `[OWNER: …]` placeholders cover entity, address, contact, governing law and minimum age (drafted as 13). Needs legal review.
 - ~~Test-account cleanup~~ **Done 2026-10-17** (owner-approved): 14 test accounts removed after re-verification; 3 real accounts and their data untouched.
-- **No admin account yet**: admin is granted to the owner's account only after identity is confirmed.
+- **Admin**: the owner account @amigoisaboy holds admin (granted 2026-10-12, email verified; audit log shows its World actions on 2026-10-18). No other admins; there is no admin sign-up.
 
 ## Next
 1. Drive an encrypted message photo through the browser UI in the live test; then video posts and voice notes.
