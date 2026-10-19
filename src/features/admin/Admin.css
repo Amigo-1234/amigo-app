@@ -497,3 +497,76 @@
   border-radius: var(--radius-md);
   background: var(--surface);
 }
+
+/* ---------------------------------------------------------- creator programme */
+
+.admin-tabs-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-chip {
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.admin-chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.admin-def {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.admin-def dt {
+  margin-top: var(--space-2);
+  color: var(--text-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.admin-def dd {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.admin-link-break {
+  overflow-wrap: anywhere;
+}
+
+.admin-feedback {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.admin-feedback__body,
+.admin-feedback__reply {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.admin-feedback__reply {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}

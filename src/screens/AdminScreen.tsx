@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { NavLink, useParams } from "react-router";
-import { FileText, Flag, HandHeart, LayoutDashboard, Orbit, ShieldAlert, Sparkles, UsersRound } from "lucide-react";
+import { FileText, Flag, HandHeart, History, LayoutDashboard, MessageSquareText, Orbit, ShieldAlert, Sparkles, UsersRound } from "lucide-react";
 import { dataSource } from "../data";
 import { AdminLegal, AdminMonetization } from "../features/admin/AdminPlatform";
 import { AdminClientErrors, AdminContentReports, AdminStats, AdminSuspensions } from "../features/admin/AdminModeration";
 import { useIsAdmin } from "../features/admin/useAdmin";
-import { AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
+import { AdminAuditLog, AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
+import { AdminCreatorApplications, AdminCreatorFeedback } from "../features/admin/AdminCreators";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
 import { AdminUsers } from "../features/admin/AdminUsers";
 import { AdminAccounts } from "../features/admin/AdminAccounts";
@@ -25,8 +26,10 @@ const SECTIONS = [
   { id: "worlds", label: "Worlds", icon: Orbit },
   { id: "users", label: "Users", icon: UsersRound },
   { id: "reports", label: "Reports", icon: Flag },
-  ...(dataSource.admin?.monetization ? [{ id: "monetization", label: "Monetization", icon: Sparkles }] : []),
+  ...(dataSource.admin?.monetization ? [{ id: "creators", label: "Creator Programme", icon: Sparkles }] : []),
+  ...(dataSource.admin?.creatorProgramme ? [{ id: "creator-feedback", label: "Creator Feedback", icon: MessageSquareText }] : []),
   ...(dataSource.admin?.legal ? [{ id: "legal", label: "Legal", icon: FileText }] : []),
+  { id: "audit", label: "Audit log", icon: History },
 ];
 
 export default function AdminScreen() {
@@ -85,7 +88,14 @@ export default function AdminScreen() {
             <AdminUsers />
           </>
         )}
-        {section === "monetization" && dataSource.admin?.monetization && <AdminMonetization />}
+        {section === "creators" && dataSource.admin?.monetization && (
+          <>
+            {dataSource.admin.creatorProgramme && <AdminCreatorApplications />}
+            <AdminMonetization />
+          </>
+        )}
+        {section === "creator-feedback" && dataSource.admin?.creatorProgramme && <AdminCreatorFeedback />}
+        {section === "audit" && <AdminAuditLog />}
         {section === "legal" && dataSource.admin?.legal && <AdminLegal />}
         {section === "reports" && (
           <>

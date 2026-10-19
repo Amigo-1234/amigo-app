@@ -800,7 +800,7 @@ export interface LegalAdminApi {
 
 // ------------------------------------------------------------ monetization
 
-export type MonetizationStatus = "not_eligible" | "eligible" | "suspended";
+export type MonetizationStatus = "not_eligible" | "eligible" | "suspended" | "revoked";
 
 export interface CreatorEngagement {
   verifiedFollowers: number;
@@ -828,6 +828,121 @@ export interface CreatorOverview {
 export interface MonetizationApi {
   overview(): Promise<CreatorOverview>;
   apply(): Promise<void>;
+}
+
+// ------------------------------------------------------- Creator Programme
+
+/**
+ * Creator Programme (migration 20261021090000). Early access: approval admits a
+ * creator to the programme; there are no earnings, balances or payouts.
+ */
+export const CREATOR_CATEGORIES = [
+  { id: "music", label: "Music" },
+  { id: "video", label: "Video" },
+  { id: "art", label: "Art & design" },
+  { id: "photography", label: "Photography" },
+  { id: "writing", label: "Writing" },
+  { id: "education", label: "Education" },
+  { id: "gaming", label: "Gaming" },
+  { id: "comedy", label: "Comedy" },
+  { id: "tech", label: "Tech" },
+  { id: "lifestyle", label: "Lifestyle" },
+  { id: "other", label: "Other" },
+] as const;
+export type CreatorCategory = (typeof CREATOR_CATEGORIES)[number]["id"];
+
+export type CreatorApplicationStatus = "pending" | "info_requested" | "approved" | "rejected" | "withdrawn";
+/** not_eligible = not (or no longer) in the programme; eligible = approved. */
+export type CreatorStatus = "not_eligible" | "eligible" | "suspended" | "revoked";
+
+export interface CreatorApplicationInput {
+  category: CreatorCategory;
+  description: string;
+  reason: string;
+  links: string[];
+  extra: string;
+}
+
+export interface CreatorStats {
+  posts: number;
+  likesReceived: number;
+  repliesReceived: number;
+  followers: number;
+  verifiedFollowers: number;
+  recentPosts: { id: string; body: string; likes: number; replies: number; createdAt: Date }[];
+  /** Last 8 weeks (Monday starts), oldest first. */
+  weekly: { week: string; posts: number; likes: number; replies: number }[];
+}
+
+export interface CreatorProgramme {
+  applicationsOpen: boolean;
+  publicNote: string;
+  creatorStatus: CreatorStatus;
+  creatorReason: string;
+  accountSuspended: boolean;
+  applicationsThisMonth: number;
+  application:
+    | (CreatorApplicationInput & {
+        id: string;
+        status: CreatorApplicationStatus;
+        submittedAt: Date;
+        updatedAt: Date;
+        reviewedAt: Date | null;
+        infoRequest: string;
+        reviewNote: string;
+      })
+    | null;
+  /** Only for approved creators. */
+  stats: CreatorStats | null;
+}
+
+export type CreatorFeedbackCategory = "programme" | "features" | "bug" | "support" | "other";
+export interface CreatorFeedback {
+  id: string;
+  category: CreatorFeedbackCategory;
+  rating: number | null;
+  body: string;
+  status: "open" | "reviewed" | "resolved";
+  adminResponse: string;
+  respondedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface CreatorProgrammeApi {
+  get(): Promise<CreatorProgramme>;
+  apply(input: CreatorApplicationInput): Promise<void>;
+  /** Answer a request for more information (or edit while pending). */
+  update(applicationId: string, input: CreatorApplicationInput): Promise<void>;
+  withdraw(applicationId: string): Promise<void>;
+  feedback(): Promise<CreatorFeedback[]>;
+  sendFeedback(input: { category: CreatorFeedbackCategory; rating: number | null; body: string }): Promise<void>;
+}
+
+export interface AdminCreatorApplication extends CreatorApplicationInput {
+  id: string;
+  person: Author;
+  status: CreatorApplicationStatus;
+  infoRequest: string;
+  creatorStatus: CreatorStatus;
+  current: CreatorEngagement & { openFraudFlags: number };
+  submittedAt: Date;
+  updatedAt: Date;
+  reviewedAt: Date | null;
+  reviewedBy: string | null;
+  reviewNote: string;
+}
+
+export interface AdminCreatorFeedback extends CreatorFeedback {
+  person: Author;
+  respondedBy: string | null;
+}
+
+export interface CreatorProgrammeAdminApi {
+  applications(status: CreatorApplicationStatus | "all", query: string): Promise<AdminCreatorApplication[]>;
+  decide(applicationId: string, decision: "approved" | "rejected" | "info_requested", note: string): Promise<void>;
+  stats(userId: string): Promise<CreatorStats>;
+  feedback(status: CreatorFeedback["status"] | "all"): Promise<AdminCreatorFeedback[]>;
+  updateFeedback(feedbackId: string, status: CreatorFeedback["status"], response: string): Promise<void>;
 }
 
 export interface MonetizationSettings {
@@ -876,6 +991,8 @@ export interface AdminApi {
   legal?: LegalAdminApi;
   /** Creator monetization — architecture only; nothing financial is enabled. */
   monetization?: MonetizationAdminApi;
+  /** Creator Programme applications and creator feedback (newer databases). */
+  creatorProgramme?: CreatorProgrammeAdminApi;
   support: SupportAdminApi;
   /** Message reports (only the evidence reporters submitted — admins can't read conversations). */
   messageReports?: MessageReportsAdminApi;
@@ -1392,6 +1509,8 @@ export interface DataSource {
   push?: PushApi;
   /** Creator monetization overview (coming soon; nothing financial). */
   monetization?: MonetizationApi;
+  /** Creator Programme: applications, status, dashboard, feedback. */
+  creatorProgramme?: CreatorProgrammeApi;
   /** Password reset by emailed code instead of a link (Neon). Without it, sendPasswordReset emails a link. */
   passwordResetByCode?: { send(email: string): Promise<void>; reset(email: string, code: string, password: string): Promise<void> };
 

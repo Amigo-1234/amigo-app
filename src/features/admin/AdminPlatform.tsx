@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router";
-import { dataSource, type CreatorApplication, type FraudFlag, type LegalSlug, type LegalVersion, type MonetizationSettings } from "../../data";
+import { dataSource, type FraudFlag, type LegalSlug, type LegalVersion, type MonetizationSettings } from "../../data";
 import { LEGAL_DOCS, loadLegalText } from "../../legal";
 import { timeAgo } from "../../lib/time";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
-import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { supportErrorText } from "../support/useSupport";
 
@@ -121,14 +120,13 @@ const FLAG_KINDS: { id: FraudFlag["kind"]; label: string }[] = [
   { id: "other", label: "Other" },
 ];
 
-/** Admin → Monetization: programme switches, criteria, applications, statuses, fraud flags. Nothing financial. */
+/** Admin → Creator Programme: programme switches, criteria, creator status by @handle, fraud flags. Nothing financial. */
 export function AdminMonetization() {
   const api = dataSource.admin!.monetization!;
   const viewer = useViewer();
   const toast = useToast();
   const [settings, setSettings] = useState<MonetizationSettings | null>(null);
   const [criteriaText, setCriteriaText] = useState("{}");
-  const [apps, setApps] = useState<CreatorApplication[] | null>(null);
   const [flags, setFlags] = useState<FraudFlag[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [handle, setHandle] = useState("");
@@ -140,7 +138,6 @@ export function AdminMonetization() {
       setSettings(s);
       setCriteriaText(JSON.stringify(s.criteria, null, 2));
     });
-    void api.applications("pending").then(setApps);
     void api.flags(true).then(setFlags);
   }, [api]);
   useEffect(load, [load]);
@@ -167,8 +164,8 @@ export function AdminMonetization() {
       <section className="admin-card" aria-labelledby="mon-prog">
         <h2 id="mon-prog" className="admin-card__title">Programme</h2>
         <p className="admin-muted">
-          Architecture only. No payments, earnings, balances or payouts exist, and none can be switched on here. Opening the programme only changes what
-          creators are told; approving an application marks a creator eligible, nothing more.
+          Early access. No payments, earnings, balances or payouts exist, and none can be switched on here. "Accept applications" lets people apply from
+          Settings → Creator Monetization; approving admits a creator to the programme and their dashboard, nothing more.
         </p>
         <form
           className="admin-user__form"
@@ -202,53 +199,17 @@ export function AdminMonetization() {
         </form>
       </section>
 
-      <section className="admin-card" aria-labelledby="mon-apps">
-        <h2 id="mon-apps" className="admin-card__title">Applications waiting</h2>
-        {!apps ? (
-          <p className="admin-muted">Loading…</p>
-        ) : apps.length === 0 ? (
-          <p className="admin-muted">No pending applications.</p>
-        ) : (
-          <ul className="admin-rows">
-            {apps.map((a) => (
-              <li key={a.id} className="admin-row">
-                <div className="admin-user__who">
-                  <Avatar name={a.person.name} src={a.person.avatarUrl} seed={a.person.id} size="sm" />
-                  <div>
-                    <Link to={`/u/${a.person.handle}`} className="admin-row__title">@{a.person.handle}</Link>
-                    <p className="admin-muted">
-                      Applied {timeAgo(a.submittedAt)} · {a.current.verifiedFollowers} verified followers · {a.current.supportReceived} verified support ·{" "}
-                      {a.current.posts30d} posts/30d · {a.current.accountAgeDays} days old
-                      {a.current.openFraudFlags > 0 && <strong> · {a.current.openFraudFlags} open fraud flag(s)</strong>}
-                    </p>
-                  </div>
-                </div>
-                <div className="admin-inline">
-                  <Button size="sm" disabled={busy} onClick={() => void run(() => api.review(a.id, "approved", reason), "Approved")}>
-                    Approve
-                  </Button>
-                  <Button size="sm" variant="danger" disabled={busy} onClick={() => void run(() => api.review(a.id, "rejected", reason), "Rejected")}>
-                    Reject
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        <input className="field__input" maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Note for the decision (shown to the creator)" aria-label="Decision note" />
-      </section>
-
       <section className="admin-card" aria-labelledby="mon-status">
-        <h2 id="mon-status" className="admin-card__title">Creator status and fraud flags</h2>
+        <h2 id="mon-status" className="admin-card__title">Creator status by username and fraud flags</h2>
         <div className="admin-user__form">
           <input className="field__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@username" aria-label="Username" />
           <input className="field__input" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="Reason (required, audited)" aria-label="Reason" />
           <div className="admin-inline">
-            {(["eligible", "not_eligible", "suspended"] as const).map((st) => (
+            {(["eligible", "not_eligible", "suspended", "revoked"] as const).map((st) => (
               <Button
                 key={st}
                 size="sm"
-                variant={st === "suspended" ? "danger" : "secondary"}
+                variant={st === "suspended" || st === "revoked" ? "danger" : "secondary"}
                 disabled={busy || !handle.trim() || reason.trim().length < 3}
                 onClick={() =>
                   void run(async () => {
@@ -258,7 +219,7 @@ export function AdminMonetization() {
                   }, `Status set to ${st.replace("_", " ")}`)
                 }
               >
-                {st === "eligible" ? "Mark eligible" : st === "not_eligible" ? "Not eligible" : "Suspend"}
+                {st === "eligible" ? "Approve as creator" : st === "not_eligible" ? "Remove from programme" : st === "suspended" ? "Suspend" : "Revoke"}
               </Button>
             ))}
           </div>

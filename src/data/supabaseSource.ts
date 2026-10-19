@@ -356,6 +356,7 @@ export const supabaseSource: DataSource = {
     },
   },
   monetization: platform.monetization,
+  creatorProgramme: platform.creatorProgramme,
   postTools: moderation?.postTools,
   accountStatus: moderation?.accountStatus,
   acknowledgeWarning: moderation?.acknowledgeWarning,
@@ -739,6 +740,7 @@ export const supabaseSource: DataSource = {
     legal: platform.legalAdmin,
     moderation: moderation?.admin,
     monetization: platform.monetizationAdmin,
+    creatorProgramme: platform.creatorProgrammeAdmin,
     moments: moments?.admin,
     // Evidence is only what the reporter chose to attach from their own decrypted copy.
     messageReports: {

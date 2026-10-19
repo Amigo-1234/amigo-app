@@ -31,11 +31,6 @@ import {
 } from "lucide-react";
 import { CREATOR } from "../lib/creator";
 
-/**
- * Creator monetization is built (screen, data layer, admin tools) but not open yet,
- * so its Settings entry is hidden. Set to true when the programme launches.
- */
-const SHOW_MONETIZATION = false;
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { CodeField, PasswordField, authMessage } from "../features/auth";
 import { profilesEnabled } from "../features/profile/links";
@@ -214,8 +209,8 @@ function AccountSection({ isAdmin }: { isAdmin: boolean }) {
         <DisplayNameRow />
       )}
       {dataSource.postTools && <LinkRow to="/bookmarks" icon={<Bookmark size={20} />} title="Bookmarks" detail="Posts you saved. Only you can see them" />}
-      {dataSource.monetization && SHOW_MONETIZATION && (
-        <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator monetization" detail="Coming soon — see your standing and engagement" />
+      {dataSource.creatorProgramme && (
+        <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator Monetization" detail="Creator Programme (early access) — apply, status and your dashboard" />
       )}
       {isAdmin && <LinkRow to="/admin" icon={<ShieldCheck size={20} />} title="Amigo admin" detail="Moderation, verification and support tools" />}
       {dataSource.deleteAccount && <DeleteAccountRow />}

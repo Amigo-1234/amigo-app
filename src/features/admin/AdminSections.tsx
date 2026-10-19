@@ -95,6 +95,30 @@ export function AuditList({ entries }: { entries: AdminAuditEntry[] | null }) {
   );
 }
 
+/** Admin → Audit log: the latest 100 admin actions (moderation, creator decisions, Worlds, Support Hub, settings). */
+export function AdminAuditLog() {
+  const viewer = useViewer();
+  const [entries, setEntries] = useState<AdminAuditEntry[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    dataSource.admin!.support.audit(viewer.id, 100).then(
+      (log) => live && setEntries(log),
+      () => live && setFailed(true),
+    );
+    return () => {
+      live = false;
+    };
+  }, [viewer.id]);
+  return (
+    <section className="admin-card" aria-labelledby="audit-title">
+      <h2 id="audit-title" className="admin-card__title">Audit log</h2>
+      <p className="admin-muted">Every admin action is recorded by the database. Notes and decisions about one person are also under Users → their account.</p>
+      {failed ? <p className="admin-muted">Couldn't load the audit log. Reload to try again.</p> : <AuditList entries={entries} />}
+    </section>
+  );
+}
+
 /** Admin → Worlds: create, edit and cancel scheduled events (every change is checked and audit-logged by the database). */
 export function AdminWorlds() {
   const viewer = useViewer();
