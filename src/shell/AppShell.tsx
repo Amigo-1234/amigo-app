@@ -20,6 +20,7 @@ import { useScrollMemory } from "./useScrollMemory";
 import { RightRail } from "./RightRail";
 import { SuspensionBanner } from "../features/moderation/SuspensionBanner";
 import { UpdateBanner } from "../features/update/UpdateBanner";
+import { InAppAlerts } from "../features/inapp/InAppAlerts";
 import "./AppShell.css";
 
 export function AppShell() {
@@ -124,6 +125,7 @@ export function AppShell() {
 
       <main id="main" className="main" tabIndex={-1}>
         <UpdateBanner />
+        <InAppAlerts />
         <SuspensionBanner />
         {securityApi && !inMessages && <SignInNotice />}
         <Suspense fallback={null}>

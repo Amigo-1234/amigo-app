@@ -28,7 +28,10 @@ import {
   Users,
   Heart,
   Orbit,
+  PanelTop,
+  Volume2,
 } from "lucide-react";
+import { alertPrefs, playAlertSound, setAlertPrefs, type AlertPrefs } from "../features/inapp/alertPrefs";
 import { CREATOR } from "../lib/creator";
 
 import { useIsAdmin } from "../features/admin/useAdmin";
@@ -493,8 +496,37 @@ function NotificationsSection() {
         }}
         trailing={marking ? <span className="btn__spinner settings-row__spin" aria-hidden="true" /> : null}
       />
+      <InAppAlertSettings />
       {dataSource.push && <PushSettings />}
     </Section>
+  );
+}
+
+/** Banners and sounds while the app is open — this device only. */
+function InAppAlertSettings() {
+  const [prefs, setPrefs] = useState(alertPrefs);
+  const toggle = (k: keyof AlertPrefs) => {
+    const next = setAlertPrefs({ [k]: !prefs[k] });
+    setPrefs(next);
+    if (k === "sounds" && next.sounds) playAlertSound("message");
+  };
+  return (
+    <>
+      <ButtonRow
+        icon={<PanelTop size={20} />}
+        title="In-app banners"
+        detail="Show new messages and activity at the top while you're using Amigo"
+        onClick={() => toggle("banners")}
+        trailing={<span className={`settings-switch${prefs.banners ? " is-on" : ""}`} role="switch" aria-checked={prefs.banners} aria-label="In-app banners" />}
+      />
+      <ButtonRow
+        icon={<Volume2 size={20} />}
+        title="Sounds"
+        detail="A short sound for new messages and activity while Amigo is open (after you've tapped somewhere — browsers require it)"
+        onClick={() => toggle("sounds")}
+        trailing={<span className={`settings-switch${prefs.sounds ? " is-on" : ""}`} role="switch" aria-checked={prefs.sounds} aria-label="Sounds" />}
+      />
+    </>
   );
 }
 
