@@ -4,6 +4,12 @@ Branch `claude/amigo-world-restart-7mrbrf` · Neon project `amigo-world` (Free) 
 Launch status: see [LAUNCH_READINESS.md](LAUNCH_READINESS.md).
 
 ## Done
+- **Follow Back (2026-10-19, on production as `dpl_FbiTotxmWnmRP1hhXN6mDkfGdZCo`, commit `2ee1b02` on
+  `claude/follow-back-hotfix` = production `efa7658` + this fix only; same change as `3feab45` here)**: the
+  button reads Follow / Follow Back / Following from both directions of the relationship (one request per
+  screen), on profiles, follower/following lists, search, suggestions and World leaderboards; no button on your
+  own profile; the "Unfollow" hint shows only under a mouse (a phone tap no longer flips it). Live test
+  `live-follow.test.mjs` passed in Chromium and WebKit on Preview and on production. Rollback: `dpl_9W3zzhEK2AmdvTS5jeisyM1MfNE9`.
 - **Neon foundation**: schema built from the Supabase migrations (`scripts/neon/build-schema.mjs`), Neon Auth through a same-origin Edge proxy (`api/neon.ts`), Data API called directly from the preview origin. The Data API refuses every request without a sign-in token.
 - **Auth & Settings**: instant session sync, branded loader, email verification and password reset by code, no fake controls.
 - **Encrypted messages**: Matrix crypto (vodozemac via matrix-sdk-crypto-wasm); the server holds ciphertext only. Pulse-driven updates and idempotent send. Live latency: send p50 175 ms, delivery p50 623 ms.
