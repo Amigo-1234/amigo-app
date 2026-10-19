@@ -84,7 +84,14 @@ try {
   people.push(A);
   const B = await account(tag, "b"); // reacts
   people.push(B);
-  let r = await api(B, "follows", { method: "POST", body: JSON.stringify({ follower_id: B.id, followee_id: A.id }) });
+  const follow = () => api(B, "follows", { method: "POST", body: JSON.stringify({ follower_id: B.id, followee_id: A.id }) });
+  let r = await follow();
+  // Test setup only: a brand-new sign-in token is occasionally refused once (see live-token-probe.mjs).
+  if (r.status === 403) {
+    info("follow refused once right after sign-up; retrying", String(r.status));
+    await sleep(2000);
+    r = await follow();
+  }
   ok("B follows A", r.status === 201 || r.status === 204, String(r.status));
   r = await rpc(A, "create_moment", { p_body: `Reaction test ${tag}`, p_background: "coral", p_media_path: null, p_media_width: null, p_media_height: null, p_audience: "followers" });
   const momentId = typeof r.data === "string" ? r.data : r.data?.id;
