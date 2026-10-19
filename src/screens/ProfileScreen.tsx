@@ -236,7 +236,7 @@ function ProfileHeader({
           ) : (
             <>
               {messagesEnabled && <MessageButton profile={profile} />}
-              <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} size="md" onChange={onFollowChange} />
+              <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} followsYou={profile.followsViewer} size="md" onChange={onFollowChange} />
               <ProfileOptions id={profile.id} handle={profile.handle} onBlocked={() => onBlockChange(true)} />
             </>
           )}

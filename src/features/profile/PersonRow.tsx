@@ -31,7 +31,7 @@ export function PersonRow({ person, onFollowChange }: { person: PersonSummary; o
       ) : (
         <span className="person-row__main">{body}</span>
       )}
-      <FollowButton personId={person.id} personName={person.name} following={person.viewerFollows} onChange={onFollowChange} />
+      <FollowButton personId={person.id} personName={person.name} following={person.viewerFollows} followsYou={person.followsViewer} onChange={onFollowChange} />
     </li>
   );
 }

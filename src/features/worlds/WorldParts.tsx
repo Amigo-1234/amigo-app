@@ -113,7 +113,7 @@ export function WinnerCard({ winner }: { winner: LeaderboardEntry }) {
           @{winner.person.handle} · {pts(winner.points)}
         </span>
       </div>
-      {!me && <FollowButton personId={winner.person.id} personName={winner.person.name} following={winner.viewerFollows} />}
+      {!me && <FollowButton personId={winner.person.id} personName={winner.person.name} following={winner.viewerFollows} followsYou={winner.followsViewer} />}
     </section>
   );
 }

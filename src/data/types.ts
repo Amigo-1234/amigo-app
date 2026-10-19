@@ -206,6 +206,8 @@ export interface PersonSummary {
   avatarUrl: string | null;
   verified?: boolean;
   viewerFollows: boolean;
+  /** They follow the viewer (drives "Follow Back"). Absent where the backend doesn't say. */
+  followsViewer?: boolean;
   /** Present where a short bio helps (search results, suggestions). */
   bio?: string;
 }
@@ -270,6 +272,8 @@ export interface Profile {
   postCount: number;
   joinedAt: Date | null;
   viewerFollows: boolean;
+  /** They follow the viewer (drives "Follow Back"). */
+  followsViewer?: boolean;
   isViewer: boolean;
 }
 
@@ -508,6 +512,7 @@ export interface LeaderboardEntry {
   points: number;
   entries: number;
   viewerFollows: boolean;
+  followsViewer?: boolean;
 }
 
 export interface WorldChatMessage {

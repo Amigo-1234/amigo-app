@@ -254,12 +254,13 @@ function profileOf(p: PersonRecord, viewerId: string): Profile {
     postCount: records.filter((r) => r.authorId === p.id && !r.parentId).length,
     joinedAt: p.joinedAt,
     viewerFollows: follows.has(edge(viewerId, p.id)),
+    followsViewer: follows.has(edge(p.id, viewerId)),
     isViewer: p.id === viewerId,
   };
 }
 
 const summary = (p: PersonRecord, viewerId: string): PersonSummary => ({
-  id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl, viewerFollows: follows.has(edge(viewerId, p.id)), bio: p.bio,
+  id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl, viewerFollows: follows.has(edge(viewerId, p.id)), followsViewer: follows.has(edge(p.id, viewerId)), bio: p.bio,
   verified: verifications.has(p.id),
 });
 
