@@ -28,7 +28,6 @@ import {
   Users,
   Heart,
   Orbit,
-  Code2,
 } from "lucide-react";
 import { CREATOR } from "../lib/creator";
 
@@ -694,9 +693,13 @@ function AboutSection() {
       <InfoRow icon={<Info size={20} />} title="Amigo World" detail={`Version ${__APP_VERSION__} · ${BACKEND_LABEL[dataSource.kind] ?? dataSource.kind}`} />
       <a href={CREATOR.url} target="_blank" rel="noopener noreferrer" className="settings-row settings-row--action">
         <Row
-          icon={<Code2 size={20} />}
+          icon={<img src={CREATOR.logo} alt="" width={24} height={24} className="settings-row__logo" />}
           title={`Built by ${CREATOR.name} · ${CREATOR.studio}`}
-          detail={`Amigo World is created by ${CREATOR.studio}. See more work at ${CREATOR.url.replace("https://", "")}`}
+          detail={
+            <>
+              {CREATOR.about} More at <span style={{ whiteSpace: "nowrap" }}>{CREATOR.url.replace("https://", "")}</span>
+            </>
+          }
           trailing={<ChevronRight size={18} className="settings-row__chev" aria-hidden="true" />}
         />
       </a>

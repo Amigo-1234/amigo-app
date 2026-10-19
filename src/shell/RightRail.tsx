@@ -17,7 +17,8 @@ export function RightRail() {
         {!hideSuggestions && <WhoToFollow />}
         <p className="rail__foot">
           Amigo World · Created by{" "}
-          <a href={CREATOR.url} target="_blank" rel="noopener noreferrer">
+          <a href={CREATOR.url} target="_blank" rel="noopener noreferrer" className="creator-link">
+            <img src={CREATOR.logo} alt="" width={14} height={14} />
             {CREATOR.studio}
           </a>
         </p>

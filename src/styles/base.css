@@ -148,3 +148,15 @@ a {
   color: var(--text-2);
   font-size: var(--text-sm);
 }
+
+/* "Created by AMIGODEV" with the original mark (src/lib/creator.ts). */
+.creator-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: bottom;
+}
+
+.creator-link img {
+  border-radius: 3px;
+}

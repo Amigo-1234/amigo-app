@@ -338,3 +338,8 @@ label.settings-row {
   color: var(--text-3);
   font-size: var(--text-sm);
 }
+
+.settings-row__logo {
+  display: block;
+  border-radius: 6px;
+}
