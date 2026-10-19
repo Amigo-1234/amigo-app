@@ -7,9 +7,9 @@ _Re-assessed 2026-10-19. Production: `efa7658` (`dpl_9W3zzhEK2AmdvTS5jeisyM1MfNE
 
 | Change | Verified |
 | --- | --- |
-| Moment reactions show instantly; repeated taps send only the last choice; failed saves roll back | typecheck/build; live timing test written (`live-moment-react.test.mjs`) — **live run pending (GitHub runners queued)** |
+| Moment reactions show instantly; repeated taps send only the last choice; failed saves roll back | **Live, Preview vs production** (`live-moment-react.test.mjs`, run 39290011371): tap → selected, WebKit **1195–1720 ms → 1–2 ms**; Chromium 4G-like (150 ms, CPU ×4) **1001 ms → 3–4 ms**; 5 quick taps **5 requests → 1**, saved result correct, author sees the reaction |
 | Admin control centre: metrics (accounts, new today/7 d, DAU/WAU/MAU with definition, content, Worlds, Support Hub, reports, admin actions), 14-day charts with table view, newest accounts | functions checked on a local copy (non-admin refused, internal counter not callable); applied to Neon with the right grants; live test written (`live-admin.test.mjs`) — **pending** |
-| Admin → Users → Accounts: search, detail (activity counts, standing, reports, warnings), suspend / restore / warn with confirmation, notes and history | as above; all enforced by `support_require_admin()` in the database |
+| Admin → Users → Accounts: search, detail (activity counts, standing, reports, warnings), suspend / restore / warn with confirmation, notes and history | **Local UI run** (app against a local copy of the schema, local-only admin): suspend → database refuses the account's post (400) → restore → posts again (200); note and history shown; no page errors. Live: non-admin, signed-out and anon calls refused (42501). Not run live on Preview: needs a temporary admin grant (owner approval) |
 | Update notice (`/version.json`, checked on return to foreground, ≤ every 10 min, never auto-reloads) | build emits the file; served `no-cache` |
 | "Created by AMIGODEV" (Settings → About, sign-in screen, desktop rail) → https://amigo-dev.vercel.app | text only: the portfolio couldn't be reached from the build environment to obtain the logo |
 
