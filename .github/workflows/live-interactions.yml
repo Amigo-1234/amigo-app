@@ -13,7 +13,7 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | sync | onboarding | auth | admin (default: all except admin)"
+        description: "all | likes | moments | follow | creator | messages | media | taps | sync | onboarding | auth | admin (default: all except admin)"
         required: false
       admin_nonce:
         description: "admin suite: tag of the temporary admin account an operator grants"
@@ -94,6 +94,16 @@ jobs:
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-moment-photo.test.mjs
+      - name: Moments taps over the feed (Chromium)
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'media' || inputs.suite == 'taps')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=chromium node scripts/test/live-moment-taps.test.mjs
+      - name: Moments taps over the feed (WebKit)
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'media' || inputs.suite == 'taps')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-moment-taps.test.mjs
       - name: Viewers and sheets (Chromium)
         if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'media')
         env:
