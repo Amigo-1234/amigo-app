@@ -37,7 +37,8 @@ import { CREATOR } from "../lib/creator";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { CodeField, PasswordField, authMessage } from "../features/auth";
 import { profilesEnabled } from "../features/profile/links";
-import { AuthError, dataSource } from "../data";
+import { AuthError, dataSource, INTERESTS, type Interest } from "../data";
+import { INTEREST_LABEL } from "../features/onboarding/state";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { notificationsEnabled, useUnread } from "../state/notifications";
 import { securityApi, useSecurity } from "../state/security";
@@ -131,6 +132,44 @@ export default function SettingsScreen() {
 
 // ------------------------------------------------------------------ layout
 
+/** What you're into (picked while joining). Saved as you tap; nothing is filtered by it yet. */
+function InterestsRow() {
+  const api = dataSource.interests!;
+  const toast = useToast();
+  const [picked, setPicked] = useState<Interest[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    api.get().then((list) => !cancelled && setPicked(list), () => !cancelled && setPicked([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [api]);
+  const toggle = (i: Interest) => {
+    if (!picked) return;
+    const before = picked;
+    const next = picked.includes(i) ? picked.filter((x) => x !== i) : [...picked, i];
+    setPicked(next);
+    api.set(next).catch(() => {
+      setPicked(before);
+      toast("Couldn't save your interests. Try again.", "error");
+    });
+  };
+  return (
+    <div className="settings-panel">
+      <p className="settings-panel__text">
+        <strong>Interests</strong> — what you're into. Kept for suggestions; your feed isn't filtered by them.
+      </p>
+      <div className="settings-interests" role="group" aria-label="Interests" aria-busy={!picked}>
+        {INTERESTS.map((i) => (
+          <button key={i} type="button" className="settings-chip" aria-pressed={!!picked?.includes(i)} disabled={!picked} onClick={() => toggle(i)}>
+            {INTEREST_LABEL[i]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section className="settings-section" aria-labelledby={id}>
@@ -211,6 +250,7 @@ function AccountSection({ isAdmin }: { isAdmin: boolean }) {
       ) : (
         <DisplayNameRow />
       )}
+      {dataSource.interests && <InterestsRow />}
       {dataSource.postTools && <LinkRow to="/bookmarks" icon={<Bookmark size={20} />} title="Bookmarks" detail="Posts you saved. Only you can see them" />}
       {dataSource.creatorProgramme && (
         <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator Monetization" detail="Creator Programme (early access) — apply, status and your dashboard" />

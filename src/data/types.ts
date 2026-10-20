@@ -289,6 +289,11 @@ export interface ProfileUpdate {
 }
 
 export const HANDLE_PATTERN = /^[a-z0-9_]{3,24}$/;
+
+/** Interests someone can pick while joining (the database accepts exactly these). */
+export const INTERESTS = ["technology", "football", "music", "gaming", "entertainment", "fashion", "photography", "business", "education", "science", "art", "lifestyle"] as const;
+export type Interest = (typeof INTERESTS)[number];
+export type SocialProvider = "google";
 export const BIO_MAX_LENGTH = 160;
 export const NAME_MAX_LENGTH = 50;
 
@@ -1491,6 +1496,10 @@ export interface DataSource {
   photoUploads?: boolean;
   /** Email ownership check by emailed code, for backends that sign people in before verifying (Neon). */
   emailVerification?: { sendCode(): Promise<void>; verify(code: string): Promise<void> };
+  /** What the person says they're into (kept for personalisation; nothing is filtered by it). */
+  interests?: { get(): Promise<Interest[]>; set(interests: Interest[]): Promise<Interest[]> };
+  /** "Continue with …" sign-in through the auth provider (OAuth/OpenID Connect). Returns after leaving for the provider. */
+  socialSignIn?: { providers: SocialProvider[]; start(provider: SocialProvider): Promise<void> };
   /** Bookmarks, edit, delete and report posts. */
   postTools?: PostToolsApi;
   /** Whether your account is suspended, plus unacknowledged warnings. */

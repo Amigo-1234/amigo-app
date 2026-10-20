@@ -59,6 +59,17 @@ export const neonEmailCodes = {
   },
 };
 
+/**
+ * "Continue with Google" (OAuth through Neon Auth). The browser leaves for Google and comes
+ * back to the app, where the session is picked up as usual.
+ */
+export const neonSocial = {
+  async start(provider: "google") {
+    const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo: `${location.origin}/` } } as never);
+    if (error) throw error;
+  },
+};
+
 /** Password reset by emailed code (the shared Neon email provider can't send links). */
 export const neonPasswordReset = {
   async send(email: string) {

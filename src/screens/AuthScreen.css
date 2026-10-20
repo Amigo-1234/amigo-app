@@ -297,3 +297,66 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* ---------- Continue with Google ---------- */
+
+.auth__social {
+  display: grid;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.auth-social {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--radius-pill, 999px);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 150ms ease, transform 120ms ease;
+}
+
+.auth-social:hover {
+  background: var(--surface-2);
+}
+
+.auth-social:active {
+  transform: scale(0.98);
+}
+
+.auth-social:disabled {
+  opacity: 0.6;
+}
+
+.auth__social-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  text-align: center;
+}
+
+.auth__or {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  margin: var(--space-1) 0 0;
+  color: var(--text-3);
+  font-size: var(--text-xs);
+}
+
+.auth__or::before,
+.auth__or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

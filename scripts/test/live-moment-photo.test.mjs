@@ -132,9 +132,11 @@ try {
 
   /** What the composer preview actually shows: its shape, and whether it's a real picture. */
   const inspect = (sel) =>
-    page.evaluate((sel) => {
+    page.evaluate(async (sel) => {
       const img = document.querySelector(sel);
       if (!img || !img.complete || !img.naturalWidth) return null;
+      // WebKit decodes large images lazily: drawing one not yet decoded gives a blank copy.
+      await img.decode().catch(() => undefined);
       const c = document.createElement("canvas");
       c.width = 24;
       c.height = 24;

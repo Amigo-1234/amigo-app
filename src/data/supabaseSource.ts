@@ -25,7 +25,7 @@ import { createPlatform } from "./supabase/platform";
 import { cached, dropPrefetches, prefetch, remember, setCacheOwner, takePrefetch } from "./supabase/viewCache";
 import * as q from "./supabase/queries";
 import { announceSync } from "../lib/sync";
-import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
+import { AuthError, INTERESTS, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Interest, type Subscription, type Viewer } from "./types";
 
 const REFRESH_DEBOUNCE_MS = 250;
 // Neon has no Realtime: open views refetch on this interval while the tab is
@@ -468,6 +468,28 @@ export const supabaseSource: DataSource = {
     currentUser = null;
     await emitViewer();
   },
+
+  interests: {
+    async get() {
+      const { data, error } = await supabase.rpc("my_interests" as never);
+      if (error) throw error;
+      return ((data as string[] | null) ?? []).filter((i): i is Interest => (INTERESTS as readonly string[]).includes(i));
+    },
+    async set(list) {
+      const { data, error } = await supabase.rpc("set_my_interests" as never, { p_interests: list } as never);
+      if (error) throw error;
+      return (data as Interest[] | null) ?? [];
+    },
+  },
+  socialSignIn: isNeon
+    ? {
+        providers: ["google"],
+        async start(provider) {
+          const { neonSocial } = await import("./supabase/neonClient");
+          await neonSocial.start(provider);
+        },
+      }
+    : undefined,
 
   emailVerification: isNeon
     ? {

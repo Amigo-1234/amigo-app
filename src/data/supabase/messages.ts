@@ -708,6 +708,45 @@ export function createSupabaseMessages(
     return entry;
   }
 
+  // ------------------------------------------------------------- sending
+
+  const sendQueues = new Map<string, Promise<unknown>>();
+  /** Runs fn after this conversation's earlier sends have finished (whether or not they worked). */
+  function inOrder<T>(conversationId: string, fn: () => Promise<T>): Promise<T> {
+    const run = (sendQueues.get(conversationId) ?? Promise.resolve()).then(fn, fn);
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    sendQueues.set(conversationId, tail);
+    void tail.then(() => sendQueues.get(conversationId) === tail && sendQueues.delete(conversationId));
+    return run;
+  }
+
+  async function sendNow(viewerId: string, conversationId: string, input: Parameters<MessagesApi["send"]>[2], text: string): Promise<{ id: string }> {
+    const { d, peerId } = await sender(viewerId, conversationId);
+    let image: MessagePayload["amigo.image"] = null;
+    if (input.image) {
+      const enc = d.encryptAttachment(new Uint8Array(await input.image.blob.arrayBuffer()));
+      let path = `${conversationId}/${crypto.randomUUID()}`;
+      // The media service returns the key it assigned (the path is a hint for the conversation).
+      path = (await backend.uploadAttachment!(path, enc.data)) || path;
+      image = { path, info: enc.info, width: input.image.width, height: input.image.height, mimetype: input.image.blob.type || "image/jpeg" };
+    }
+    const payload: MessagePayload = { msgtype: image ? "m.image" : "m.text", body: text, "amigo.reply_to": input.replyToId ?? null, "amigo.image": image };
+    const content = await d.encrypt(conversationId, peerId, payload).catch(translate);
+    // The id is chosen here, so a retry after a lost response can't store the message twice.
+    const messageId = input.clientId ?? globalThis.crypto.randomUUID();
+    const { data: sent, error: sendError } = await db.rpc("dm_send_v2" as never, { p_id: messageId, p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json } as never);
+    if (sendError) fail(sendError);
+    // We already know what it says — no need to decrypt our own message again.
+    const id = (sent as unknown as { id: string }[] | null)?.[0]?.id ?? messageId;
+    decrypted.set(id, { ok: true, payload, senderMismatch: false, unverifiedDevice: false });
+    changed();
+    opts.onSent?.(conversationId);
+    return { id };
+  }
+
   // ------------------------------------------------------------------ api
 
   const dmListen = (viewerId: string) => (ch: RealtimeChannel, refresh: () => void) =>
@@ -977,30 +1016,13 @@ export function createSupabaseMessages(
     subscribeConversation: (conversationId, viewerId, sub) =>
       live("conversation", viewerId, `dm:${conversationId}`, () => conversation(conversationId, viewerId), sub, dmListen(viewerId)),
 
-    async send(viewerId, conversationId, input) {
+    send(viewerId, conversationId, input) {
       const text = input.text.trim();
-      if (!text && !input.image) throw new MessageError("empty");
-      const { d, peerId } = await sender(viewerId, conversationId);
-      let image: MessagePayload["amigo.image"] = null;
-      if (input.image) {
-        const enc = d.encryptAttachment(new Uint8Array(await input.image.blob.arrayBuffer()));
-        let path = `${conversationId}/${crypto.randomUUID()}`;
-        // The media service returns the key it assigned (the path is a hint for the conversation).
-        path = (await backend.uploadAttachment!(path, enc.data)) || path;
-        image = { path, info: enc.info, width: input.image.width, height: input.image.height, mimetype: input.image.blob.type || "image/jpeg" };
-      }
-      const payload: MessagePayload = { msgtype: image ? "m.image" : "m.text", body: text, "amigo.reply_to": input.replyToId ?? null, "amigo.image": image };
-      const content = await d.encrypt(conversationId, peerId, payload).catch(translate);
-      // The id is chosen here, so a retry after a lost response can't store the message twice.
-      const messageId = input.clientId ?? globalThis.crypto.randomUUID();
-      const { data: sent, error: sendError } = await db.rpc("dm_send_v2" as never, { p_id: messageId, p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json } as never);
-      if (sendError) fail(sendError);
-      // We already know what it says — no need to decrypt our own message again.
-      const id = (sent as unknown as { id: string }[] | null)?.[0]?.id ?? messageId;
-      decrypted.set(id, { ok: true, payload, senderMismatch: false, unverifiedDevice: false });
-      changed();
-      opts.onSent?.(conversationId);
-      return { id };
+      if (!text && !input.image) return Promise.reject(new MessageError("empty"));
+      // One at a time per conversation, in the order they were written: sent side by side, quick
+      // messages reached the server (and got their timestamps) in whatever order the network
+      // delivered them, so the other person read them shuffled.
+      return inOrder(conversationId, () => sendNow(viewerId, conversationId, input, text));
     },
 
     async markRead(_viewerId, conversationId) {

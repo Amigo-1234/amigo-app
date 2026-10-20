@@ -93,7 +93,8 @@ const deadline = setTimeout(() => {
 
 const host = new URL(BASE).hostname;
 async function phone(p, name) {
-  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  // No service worker: in WebKit, requests passing through one can't be stubbed (the update check below).
+  const ctx = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers: "block" });
   await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 });
   await ctx.addCookies(
     p.cookies.map((raw) => {
@@ -121,9 +122,12 @@ async function phone(p, name) {
   });
   const page = await ctx.newPage();
   page.setDefaultTimeout(20000);
+  // The app's change checks (app_pulse): how many, and what they answered (statuses only).
+  const pulses = [];
+  page.on("response", (r) => r.url().includes("/rpc/app_pulse") && pulses.push(r.status()));
   const problems = [];
   page.on("pageerror", (e) => !/access control checks|^Load failed$/i.test(e.message) && problems.push(`${name}: ${e.message.slice(0, 160)}`));
-  return { ctx, page, problems };
+  return { ctx, page, problems, pulses };
 }
 async function agreeIfAsked(page) {
   const agree = page.getByRole("button", { name: "I agree" });
@@ -205,14 +209,14 @@ try {
   // ------------------------------------------------------------ 2. a like
   await b.page.goto(`${BASE}/`, { waitUntil: "networkidle" });
   await sleep(5000);
-  const badge = b.page.locator('.bottom-nav a[href="/notifications"] .nav-badge');
+  const badge = b.page.locator('a.mobile-only[href="/notifications"] .nav-badge');
   const badgeBefore = (await badge.textContent().catch(() => null)) ?? "";
   const tl = Date.now();
   const liked = await rpc(A, "set_post_like", { p_post_id: bPost, p_liked: true });
   ok("A likes B's post (setup)", liked.status === 200 || liked.status === 204, String(liked.status));
   const badgeAfter = await b.page
     .waitForFunction((before) => {
-      const t = document.querySelector('.bottom-nav a[href="/notifications"] .nav-badge')?.textContent ?? "";
+      const t = document.querySelector('a.mobile-only[href="/notifications"] .nav-badge')?.textContent ?? "";
       return t && t !== before ? t : null;
     }, badgeBefore, { timeout: 20000 })
     .then((h) => h.jsonValue(), () => null);
@@ -232,6 +236,7 @@ try {
   const fAfter = await b.page
     .waitForFunction((args) => Number(document.querySelector(`a[href="/u/${args.h}/followers"] strong`)?.textContent) === args.want, { h: B.handle, want: fBefore + 1 }, { timeout: 25000 })
     .then(() => true, () => false);
+  info("B's change checks so far", `${b.pulses.length} (statuses ${[...new Set(b.pulses)].join(",")})`);
   ok("3. B's own profile shows the new follower by itself", fAfter, `${fBefore} → ${await followers.textContent()} in ${((Date.now() - tf) / 1000).toFixed(1)} s`);
 
   // ------------------------------------------------------------ 4. offline and back
@@ -258,7 +263,7 @@ try {
   const tv = Date.now();
   await setVisible(b.page, true);
   const msgBadge = await b.page
-    .waitForFunction(() => document.querySelector('.bottom-nav a[href="/messages"] .nav-badge')?.textContent ?? null, null, { timeout: 15000 })
+    .waitForFunction(() => document.querySelector('a.mobile-only[href="/messages"] .nav-badge')?.textContent ?? null, null, { timeout: 15000 })
     .then((h) => h.jsonValue(), () => null);
   const awayBanner = await waitBanner(b.page, awayText, 15000);
   ok("5. coming back to the app, the missed message shows at once", !!awayBanner || !!msgBadge, `${awayBanner ? "banner" : "no banner"}, messages badge ${msgBadge ?? "none"}, ${((Date.now() - tv) / 1000).toFixed(1)} s`);

@@ -1,5 +1,5 @@
 import { RouteError } from "./ui/ErrorBoundary";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { Bell, Compass, Mail } from "lucide-react";
 import { MediaViewerProvider } from "./features/posts/MediaViewer";
@@ -19,6 +19,7 @@ import { ThemeProvider } from "./state/theme";
 import { ToastProvider } from "./state/toast";
 import { LoadingScreen } from "./ui/Loader";
 import { LegalGate } from "./features/legal/LegalGate";
+import { onboardingFor, onboardingSteps } from "./features/onboarding/state";
 
 const PostScreen = lazy(() => import("./screens/PostScreen"));
 const ProfileScreen = lazy(() => import("./screens/ProfileScreen"));
@@ -39,6 +40,7 @@ const AuthScreen = lazy(() => import("./screens/AuthScreen"));
 const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
 const LegalScreen = lazy(() => import("./screens/LegalScreen"));
+const Onboarding = lazy(() => import("./features/onboarding/Onboarding").then((m) => ({ default: m.Onboarding })));
 const CreatorProgrammeScreen = lazy(() => import("./screens/CreatorProgrammeScreen"));
 const BookmarksScreen = lazy(() => import("./screens/BookmarksScreen"));
 const BlockedScreen = lazy(() => import("./screens/BlockedScreen"));
@@ -74,7 +76,7 @@ function Root() {
             <SecurityProvider>
               <MediaViewerProvider>
                 <MomentsProvider>
-                  <AppShell />
+                  <ShellOrOnboarding />
                 </MomentsProvider>
               </MediaViewerProvider>
             </SecurityProvider>
@@ -84,6 +86,19 @@ function Root() {
     </ComposerProvider>
     </LegalGate>
   );
+}
+
+/** A new account's joining steps (see features/onboarding), then the app. */
+function ShellOrOnboarding() {
+  const viewer = useViewer();
+  const [progress, setProgress] = useState(() => onboardingFor(viewer.id, onboardingSteps(viewer.emailVerified)[0]));
+  if (progress)
+    return (
+      <Suspense fallback={<Splash />}>
+        <Onboarding initial={progress} onDone={() => setProgress(null)} />
+      </Suspense>
+    );
+  return <AppShell />;
 }
 
 /** "/profile" is your own profile (or settings on backends without profiles). */
