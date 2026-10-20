@@ -193,6 +193,18 @@ jobs:
           OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
         timeout-minutes: 12
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; mkdir -p shots && SHOTS=shots node scripts/test/live-mobile.test.mjs
+      - name: "Official address: photo Moments, 24 MP and EXIF (WebKit)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-media')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=webkit node scripts/test/live-moment-photo.test.mjs
+      - name: "Official address: viewers and sheets (Chromium)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-media')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=chromium node scripts/test/live-viewers.test.mjs
       - name: "Official address: viewers and sheets (WebKit)"
         if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-media')
         env:
