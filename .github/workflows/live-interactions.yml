@@ -13,7 +13,7 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | sync | admin (default: all except admin)"
+        description: "all | likes | moments | follow | creator | messages | media | sync | auth | admin (default: all except admin)"
         required: false
       admin_nonce:
         description: "admin suite: tag of the temporary admin account an operator grants"
@@ -114,6 +114,11 @@ jobs:
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-sync.test.mjs
+      - name: Google sign-in probe (no sign-in)
+        if: always() && inputs.suite == 'auth'
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; node scripts/test/live-oauth-probe.mjs
       - name: Admin control centre (needs an operator to grant the temporary admin)
         if: always() && inputs.suite == 'admin'
         env:
