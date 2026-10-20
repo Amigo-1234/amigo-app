@@ -9,8 +9,10 @@
  *   back on the feed from a post it's shown; other screens never hide it;
  *   reduced motion has no slide.
  *
- * Scrolling is done by the page in small steps (with slowing steps standing in
- * for momentum): automated browsers, not a physical iPhone.
+ * Scrolling is done by the page in small steps, each with a touch event as a
+ * swipe sends (slowing steps stand in for momentum): automated browsers, not a
+ * physical iPhone. The page moving by itself (restoring the position on
+ * return, content loading above) must never hide the bar.
  *
  *   BASE=https://<domain> VERCEL_BYPASS=… [ENGINE=webkit] node scripts/test/live-bottom-nav.test.mjs
  *
@@ -129,7 +131,11 @@ try {
       for (const s of ws) {
         const d = Math.round((by * s) / total);
         w += d;
-        await page.evaluate((d) => window.scrollBy(0, d), d);
+        // A finger on the screen (touch events, as a swipe sends), then the page moves.
+        await page.evaluate((d) => {
+          document.dispatchEvent(new Event("touchmove", { bubbles: true }));
+          window.scrollBy(0, d);
+        }, d);
         await page.waitForTimeout(24);
       }
       await page.waitForTimeout(450);
@@ -155,6 +161,13 @@ try {
     ok(`${L} hidden after a flick that slows down (momentum)`, (await bar()) === "hidden", await bar());
     await scroll(-300, 14, true);
     ok(`${L} shown after a flick up`, (await bar()) === "shown", await bar());
+    // The page moving by itself (no finger: content loading above, a restore) leaves it alone.
+    await page.waitForTimeout(1400);
+    await page.evaluate(() => window.scrollBy(0, 300));
+    await page.waitForTimeout(450);
+    ok(`${L} the page moving by itself doesn't hide it`, (await bar()) === "shown", await bar());
+    await page.evaluate(() => window.scrollBy(0, -300));
+    await page.waitForTimeout(300);
 
     // The long post: scrolling through it hides the bar; its text isn't covered once at the end.
     const longCard = page.locator("article", { hasText: `Long post ${tag}` }).first();
