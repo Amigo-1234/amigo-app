@@ -24,6 +24,9 @@ marked *needs iPhone check* are confirmed by test, not yet on the owner's phone.
 | 12 | Medium | Messages | Composer leaked its photo preview memory on each send | URL not released | Released on send | Code review |
 | 13 | Medium | Messaging setup | (earlier) first device stuck unapproved after an interrupted setup | see b12c7ec | — | In production |
 | 14 | Info | Highlights | No separate Highlights feature exists; the circles row is Moments | — | Fixes apply to Moments | — |
+| 15 | Critical | Moments | Tapping right to advance sometimes opened the photo or post underneath (owner's iPhone). Reproduced in WebKit: a Moment opened from the feed over a photo post; tapping right on the last Moment opened the feed photo's viewer | Steps ran on `pointerup`. On the last Moment that closed the viewer at once, and the same tap's `click`, which the browser sends after `pointerup`, landed on the feed now underneath | Steps run on the tap's own `click` (still aimed at the open viewer); any Moment or photo viewer closing swallows clicks still on their way for 450 ms | Live test `live-moment-taps` (fails on the old code in WebKit, passes on the fix in Chromium + WebKit): taps left/right, through the last Moment, rapid taps, hold, close; zero clicks reached the feed; *needs iPhone check* |
+| 16 | Medium | Settings | Every interest listed inline in Settings | — | "Interests" row → its own screen (same `user_interests` storage), Save only when changed, saved / error message | Live test `live-onboarding`, both engines |
+| 17 | Feature | Home | Bottom bar always took space while reading the feed | — | On Home only: hides scrolling down, returns on scrolling up, near the top, on other screens and on keyboard focus; small movements and bounce ignored; fixed, so nothing moves; reduced motion: no slide | Live test `live-bottom-nav`, four iPhone sizes, both engines; *needs iPhone check* |
 
 ## How "live" each part is
 
