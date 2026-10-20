@@ -13,7 +13,7 @@ import { Sheet } from "../../ui/Sheet";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
 import { MomentVisual, type PhotoState } from "./MomentVisual";
 import { mediaSrc, primeMedia } from "../../lib/mediaLinks";
-import { capturePointer } from "../../lib/visualViewport";
+import { capturePointer, swallowClicks } from "../../lib/visualViewport";
 import "./Moments.css";
 
 /** How long each Moment shows before moving on. */
@@ -50,6 +50,8 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
   const panFrom = useRef<{ x: number; y: number; zx: number; zy: number } | null>(null);
   /** Two fingers were down during this gesture: lifting them never closes, skips or advances. */
   const multi = useRef(false);
+  /** A tap seen at pointerup, stepped on its click. */
+  const tap = useRef<{ side: "prev" | "next"; at: number } | null>(null);
   const closedBy = useRef<"popstate" | "navigate" | null>(null);
 
   const group = pos ? queue[pos.gi] : null;
@@ -82,6 +84,9 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
 
   useEffect(() => {
     if (pos) return;
+    // Whatever closed it (the last Moment ending, a swipe, a tap that finished the sequence), the
+    // click of a tap still on its way must not land on the feed that's now underneath.
+    swallowClicks();
     ref.current?.close();
     if (!closedBy.current && history.state?.momentViewer) history.back();
     onClose();
@@ -246,11 +251,21 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
     const dt = performance.now() - p.t;
     if (dy > 90 && Math.abs(dy) > Math.abs(dx)) return close();
     if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) return skipPerson(dx < 0 ? 1 : -1);
+    // A tap: which side is decided here, but the step happens on the tap's own click (below). The
+    // click is aimed at the viewer while it's still open; stepping here instead closed the viewer
+    // after the last Moment before that click arrived, and the click then hit the feed underneath.
     if (dt < 350 && Math.abs(dx) < 12 && Math.abs(dy) < 12) {
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-      if (e.clientX - rect.left < rect.width / 3) prev();
-      else next();
+      tap.current = { side: e.clientX - rect.left < rect.width / 3 ? "prev" : "next", at: performance.now() };
     }
+  }
+  function onFrameClick(e: React.MouseEvent) {
+    const t = tap.current;
+    tap.current = null;
+    e.stopPropagation();
+    if (!t || interactive(e.target) || performance.now() - t.at > 700) return;
+    if (t.side === "prev") prev();
+    else next();
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -342,6 +357,7 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onClick={onFrameClick}
           onPointerCancel={(e) => {
             pointers.current.delete(e.pointerId);
             if (pointers.current.size < 2) pinch.current = null;

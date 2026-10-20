@@ -5,7 +5,7 @@ import { saveImage } from "./saveImage";
 import type { MediaItem } from "../../data";
 import "./MediaViewer.css";
 import { MediaImg, mediaSrc } from "../../lib/mediaLinks";
-import { capturePointer } from "../../lib/visualViewport";
+import { capturePointer, swallowClicks } from "../../lib/visualViewport";
 
 type Open = (items: MediaItem[], index?: number) => void;
 const ViewerContext = createContext<Open>(() => {});
@@ -53,6 +53,8 @@ export function MediaViewerProvider({ children }: { children: ReactNode }) {
     return () => {
       d.removeEventListener("gesturestart", stop);
       d.removeEventListener("gesturechange", stop);
+      // A swipe-down's or a tap's click may still be on its way: it mustn't land on the feed now underneath.
+      swallowClicks();
       if (d.open) d.close();
       unlock();
       returnFocus.current?.focus?.({ preventScroll: true });

@@ -63,3 +63,29 @@ export function capturePointer(el: Element, pointerId: number) {
     /* pointer already gone */
   }
 }
+
+let swallowUntil = 0;
+let swallowing = false;
+/**
+ * Ignores clicks anywhere for a moment. A tap's click arrives after its
+ * pointerup; when the pointerup closes an overlay, that click would land on
+ * whatever was underneath (iOS fires it at the point of the tap). Call this
+ * whenever an overlay closes from anything but its own click.
+ */
+export function swallowClicks(ms = 450) {
+  swallowUntil = Math.max(swallowUntil, Date.now() + ms);
+  if (swallowing || typeof window === "undefined") return;
+  swallowing = true;
+  const stop = (e: Event) => {
+    if (Date.now() > swallowUntil) return;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  window.addEventListener("click", stop, true);
+  const done = () => {
+    if (Date.now() < swallowUntil) return void setTimeout(done, swallowUntil - Date.now() + 10);
+    window.removeEventListener("click", stop, true);
+    swallowing = false;
+  };
+  setTimeout(done, ms + 10);
+}

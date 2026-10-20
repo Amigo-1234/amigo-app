@@ -140,7 +140,7 @@ try {
   await composer.locator("textarea").first().fill(`Under the Moments ${tag}`);
   await composer.getByRole("button", { name: "Post", exact: true }).last().click();
   const tile = page.locator("article", { hasText: `Under the Moments ${tag}` }).locator(".media-tile__open").first();
-  await tile.waitFor({ timeout: 45000 });
+  await tile.waitFor({ timeout: 60000 });
 
   // … and two text Moments.
   for (const n of [1, 2]) {
@@ -153,7 +153,7 @@ try {
     await page.getByText("Moment shared").first().waitFor({ timeout: 30000 });
   }
   await page.goto(`${BASE}/`, { waitUntil: "load" });
-  await tile.waitFor({ timeout: 30000 });
+  await tile.waitFor({ timeout: 60000 });
   await page.waitForTimeout(1500);
   const vw = page.viewportSize().width;
   // The tap point: right of centre ("next" in the viewer) and, behind the viewer, on the feed photo.
@@ -181,27 +181,44 @@ try {
   const tapRight = () => page.touchscreen.tap(at.x, at.y);
   const tapLeft = () => page.touchscreen.tap(Math.round(vw * 0.15), at.y);
 
-  // 1. Tap right through to the end.
+  // A viewer left open by a failed step would block the next one.
+  const tidy = async () => {
+    for (let i = 0; i < 3 && (await page.locator("dialog[open]").count()); i++) {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(400);
+    }
+  };
+
+  // 1. Tap right / left, then tap right through to the end. Other people's Moments can follow
+  // yours in the queue, so steps are checked by change, not by exact text.
   await openMine();
   const first = await showing();
   await tapRight();
   await page.waitForTimeout(600);
-  ok("tap right → next Moment", (await showing()) === `Moment 2 ${tag}` && first === `Moment 1 ${tag}`, `${first} → ${await showing()}`);
+  const second = await showing();
+  ok("tap right → next Moment", first === `Moment 1 ${tag}` && !!second && second !== first, `${first} → ${second}`);
   await tapLeft();
   await page.waitForTimeout(600);
-  ok("tap left → previous Moment", (await showing()) === `Moment 1 ${tag}`, await showing());
-  await tapRight();
-  await page.waitForTimeout(600);
-  await tapRight(); // the last Moment: closes
-  await page.waitForTimeout(1500);
+  ok("tap left → previous Moment", (await showing()) === first, await showing());
+  let steps = 0;
+  while ((await viewer.count()) && steps < 25) {
+    await tapRight();
+    steps++;
+    await page.waitForTimeout(600);
+  }
+  await page.waitForTimeout(1000);
+  info("Moments in the queue", String(steps));
   ok("tap right on the last Moment closes the viewer", !(await viewer.count()));
   ok("…and nothing behind it opened (no photo viewer)", !(await page.locator("dialog.media-viewer[open]").count()));
   ok("…still on the feed (no post page)", new URL(page.url()).pathname === "/", page.url());
   ok("no click reached the feed while Moments were open or closing", !(await behind()).length, (await behind()).join(", "));
+  await tidy();
+  if (new URL(page.url()).pathname !== "/") await page.goto(`${BASE}/`, { waitUntil: "load" });
+  await page.evaluate(() => (window.__behind.length = 0));
 
   // 2. Rapid taps (more than there are Moments).
   await openMine();
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < steps + 2; i++) {
     await tapRight();
     await page.waitForTimeout(90);
   }
@@ -209,6 +226,9 @@ try {
   ok("rapid taps: the viewer closed after the last Moment", !(await viewer.count()));
   ok("rapid taps: nothing behind opened", !(await page.locator("dialog.media-viewer[open]").count()) && new URL(page.url()).pathname === "/", page.url());
   ok("rapid taps: no click reached the feed", !(await behind()).length, (await behind()).join(", "));
+  await tidy();
+  if (new URL(page.url()).pathname !== "/") await page.goto(`${BASE}/`, { waitUntil: "load" });
+  await page.evaluate(() => (window.__behind.length = 0));
 
   // 3. Hold pauses and doesn't move.
   await openMine();

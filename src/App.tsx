@@ -41,6 +41,7 @@ const NotFoundScreen = lazy(() => import("./screens/NotFoundScreen"));
 const SetPasswordScreen = lazy(() => import("./screens/SetPasswordScreen"));
 const LegalScreen = lazy(() => import("./screens/LegalScreen"));
 const Onboarding = lazy(() => import("./features/onboarding/Onboarding").then((m) => ({ default: m.Onboarding })));
+const InterestsScreen = lazy(() => import("./screens/InterestsScreen"));
 const CreatorProgrammeScreen = lazy(() => import("./screens/CreatorProgrammeScreen"));
 const BookmarksScreen = lazy(() => import("./screens/BookmarksScreen"));
 const BlockedScreen = lazy(() => import("./screens/BlockedScreen"));
@@ -127,6 +128,7 @@ const router = createBrowserRouter([
       { path: "profile", element: <MeRedirect /> },
       { path: "settings", element: <SettingsScreen /> },
       ...(dataSource.creatorProgramme ? [{ path: "settings/monetization", element: <CreatorProgrammeScreen /> }] : []),
+      ...(dataSource.interests ? [{ path: "settings/interests", element: <InterestsScreen /> }] : []),
       ...(dataSource.postTools ? [{ path: "bookmarks", element: <BookmarksScreen /> }] : []),
       ...(dataSource.blocking ? [{ path: "settings/blocked", element: <BlockedScreen /> }] : []),
       ...(dataSource.messages?.security

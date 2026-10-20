@@ -344,29 +344,21 @@ label.settings-row {
   border-radius: 6px;
 }
 
-/* Account → Interests */
-.settings-interests {
+/* Settings → Interests (cards from onboarding) */
+.interests-intro {
+  margin: 0 var(--space-1);
+}
+
+.interests-actions {
+  position: sticky;
+  bottom: calc(env(safe-area-inset-bottom) + var(--space-3));
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.settings-chip {
-  padding: 7px 13px;
-  border: 1.5px solid var(--border);
-  border-radius: 999px;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   background: var(--surface);
-  color: var(--text);
-  font: inherit;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 150ms ease, border-color 150ms ease;
-}
-
-.settings-chip[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
+  box-shadow: var(--shadow-sm);
 }

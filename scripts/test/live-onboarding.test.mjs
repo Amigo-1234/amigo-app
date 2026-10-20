@@ -133,9 +133,22 @@ try {
   ok("the steps don't come back afterwards", !(await page.locator(".onb").count()));
 
   // Saved to the account.
-  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
-  const chips = await page.locator(".settings-chip[aria-pressed=true]").allTextContents();
-  ok("interests are saved to the account (Settings shows them)", ["Music", "Football", "Photography"].every((n) => chips.includes(n)), chips.join(", "));
+  // Settings → Interests (a row, then its own screen) shows them and edits them.
+  await page.goto(`${BASE}/settings`, { waitUntil: "load" });
+  const row = page.getByRole("link", { name: /Interests/ });
+  ok("Settings has an Interests row (not every topic inline)", await row.isVisible().catch(() => false) && !(await page.locator(".onb-interest").count()));
+  await row.click();
+  await page.locator(".onb-interest").first().waitFor({ timeout: 15000 });
+  const chips = (await page.locator(".onb-interest.is-on").allTextContents()).map((t) => t.trim());
+  ok("interests are saved to the account (the Interests screen shows them)", ["Music", "Football", "Photography"].every((n) => chips.includes(n)), chips.join(", "));
+  const save = page.getByRole("button", { name: "Save", exact: true });
+  ok("…Save stays off until something changes", await save.isDisabled());
+  await page.getByRole("button", { name: "Gaming", exact: true }).click();
+  await save.click();
+  ok("…saving says so", await page.getByText("Interests saved").first().waitFor({ timeout: 10000 }).then(() => true, () => false));
+  await page.reload({ waitUntil: "load" });
+  await page.locator(".onb-interest").first().waitFor({ timeout: 15000 });
+  ok("…and the change is kept", (await page.locator(".onb-interest.is-on").allTextContents()).map((t) => t.trim()).includes("Gaming"));
   await page.goto(`${BASE}/u/onb_${tag}`, { waitUntil: "networkidle" });
   ok("the new username and bio are saved", await page.getByText("Hello from the onboarding test").isVisible().catch(() => false));
   ok("no uncaught errors", !problems.length, problems.slice(0, 3).join(" | "));
