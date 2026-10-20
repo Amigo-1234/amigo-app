@@ -142,7 +142,16 @@ try {
       c.height = 24;
       const x = c.getContext("2d");
       x.drawImage(img, 0, 0, 24, 24);
-      const d = x.getImageData(0, 0, 24, 24).data;
+      let d = x.getImageData(0, 0, 24, 24).data;
+      // WebKit can still hand back a blank copy of an on-screen image: read a fresh decode of the same file instead.
+      if (d.every((v, i) => i % 4 === 3 || v === d[0])) {
+        const fresh = new Image();
+        fresh.src = img.currentSrc || img.src;
+        await fresh.decode().catch(() => undefined);
+        x.clearRect(0, 0, 24, 24);
+        x.drawImage(fresh, 0, 0, 24, 24);
+        d = x.getImageData(0, 0, 24, 24).data;
+      }
       let min = 765, max = 0;
       const edge = { top: 0, bottom: 0, left: 0, right: 0 };
       for (let i = 0; i < d.length; i += 4) {
