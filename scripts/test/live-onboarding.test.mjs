@@ -41,7 +41,8 @@ const deadline = setTimeout(() => {
 let created = false;
 
 try {
-  const ctx = await browser.newContext({ ...devices["iPhone 13"] });
+  // No service worker: in WebKit, requests passing through one can't be stubbed (the Google check).
+  const ctx = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers: "block" });
   await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 });
   await ctx.addInitScript(() => {
     const hide = () => {
@@ -86,6 +87,8 @@ try {
   ok("…six boxes", (await page.locator(".onb-code__box").count()) === 6);
   ok("…the code input supports the phone's autofill (one-time-code)", (await page.locator(".onb-code__input").getAttribute("autocomplete")) === "one-time-code");
   const resend = page.getByRole("button", { name: /Send a new code/ });
+  // The first code is sent as the step opens; the countdown starts once the server has accepted it.
+  await page.getByRole("button", { name: /Send a new code in \d+s/ }).waitFor({ timeout: 15000 }).catch(() => undefined);
   ok("…a code was sent and resending counts down", /in \d+s/.test((await resend.textContent()) ?? ""), (await resend.textContent()) ?? "");
   await page.locator(".onb-code__input").fill("000000");
   ok("…a wrong code is refused with a message", await page.locator(".onb__error").waitFor({ timeout: 15000 }).then(() => true, () => false), (await page.locator(".onb__error").textContent().catch(() => "")) ?? "");
