@@ -637,6 +637,8 @@ export function createSupabaseMessages(
 
   if (!realtime && typeof document !== "undefined") {
     document.addEventListener("visibilitychange", () => visible() && void pulse(true));
+    // Back online: catch up at once (messages sent meanwhile, read receipts), not at the next tick.
+    window.addEventListener("online", () => void pulse(true));
   }
 
   /** After our own writes: refresh now instead of waiting for the next pulse. */

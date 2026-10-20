@@ -24,6 +24,7 @@ import { makePreview } from "../lib/image";
 import { createPlatform } from "./supabase/platform";
 import { cached, dropPrefetches, prefetch, remember, setCacheOwner, takePrefetch } from "./supabase/viewCache";
 import * as q from "./supabase/queries";
+import { announceSync } from "../lib/sync";
 import { AuthError, ProfileError, type AuthErrorCode, type DataSource, type FeedScope, type Subscription, type Viewer } from "./types";
 
 const REFRESH_DEBOUNCE_MS = 250;
@@ -38,11 +39,13 @@ const CHAT_POLL_MS = 4_000;
 // After our own writes, refresh open views immediately instead of waiting for
 // the realtime round trip.
 
-const invalidators = new Set<() => void>();
+/** Open views' refresh functions, by view name (so a change can refresh just the views it affects). */
+const invalidators = new Map<() => void, string>();
 const invalidate = () => {
   dropPrefetches();
-  invalidators.forEach((fn) => fn());
+  invalidators.forEach((_, fn) => fn());
 };
+const invalidateWhere = (match: (name: string) => boolean) => invalidators.forEach((name, fn) => match(name) && fn());
 
 // Nobody has touched the app for a while (phone on the table, tab left open):
 // open views refresh 4× less often; the first touch afterwards refreshes them at once.
@@ -104,7 +107,7 @@ function liveQuery<T>(
   const last = cached<T>(name);
   if (last !== undefined) sub.onData(last, { cached: true });
   void run();
-  invalidators.add(refresh);
+  invalidators.set(refresh, name);
   if (isNeon) {
     let ticks = 0;
     const poll = setInterval(() => {
@@ -129,6 +132,70 @@ function liveQuery<T>(
     invalidators.delete(refresh);
     void supabase.removeChannel(channel);
   };
+}
+
+// ------------------------------------------------------------- app pulse
+//
+// Neon has no Realtime, so instead of every open view polling on its own, one
+// tiny read (app_pulse: a few counts and timestamps, see its migration) asks
+// what changed for the signed-in person every few seconds while the app is on
+// screen, and only the views it affects refresh. Messages have their own
+// equivalent (dm_pulse, see supabase/messages.ts). Nothing runs while the app
+// is hidden (iOS suspends it anyway): coming back, or the connection
+// returning, checks at once and refreshes every open view.
+//
+// Other screens that load once (a profile) listen for it (src/lib/sync.ts).
+
+const PULSE_ACTIVE_MS = 4_000;
+const PULSE_IDLE_MS = 20_000;
+let pulseTimer: ReturnType<typeof setTimeout> | undefined;
+let pulseRunning = false;
+let lastPulse: Record<string, string> | null = null;
+
+async function appPulse() {
+  clearTimeout(pulseTimer);
+  if (pulseRunning) return;
+  if (!currentUser || document.visibilityState !== "visible") return schedulePulse();
+  pulseRunning = true;
+  try {
+    const { data, error } = await supabase.rpc("app_pulse" as never);
+    if (error || !data) return;
+    const now = Object.fromEntries(Object.entries(data as Record<string, unknown>).map(([k, v]) => [k, JSON.stringify(v)]));
+    const before = lastPulse;
+    lastPulse = now;
+    if (!before) return; // the first answer is the baseline: views have just loaded
+    const changed = Object.keys(now).filter((k) => now[k] !== before[k]);
+    if (!changed.length) return;
+    // New activity on your posts (a like, a reply) also changes the counts shown with them.
+    if (changed.includes("n")) invalidateWhere((n) => /^(notifications|feed:|post:|replies:|profile:)/.test(n));
+    if (changed.includes("p")) invalidateWhere((n) => n.startsWith("feed:"));
+    if (changed.includes("mo")) invalidateWhere((n) => n === "moments");
+    announceSync(changed);
+  } catch {
+    // Offline or a hiccup: the next check tries again.
+  } finally {
+    pulseRunning = false;
+    schedulePulse();
+  }
+}
+
+function schedulePulse() {
+  clearTimeout(pulseTimer);
+  if (!currentUser) return;
+  pulseTimer = setTimeout(() => void appPulse(), userIdle() ? PULSE_IDLE_MS : PULSE_ACTIVE_MS);
+}
+
+if (isNeon && typeof window !== "undefined") {
+  // Back on screen, or back online: everything open refreshes, then the regular checks resume.
+  const catchUp = () => {
+    if (document.visibilityState !== "visible" || !currentUser) return;
+    invalidate();
+    announceSync(["all"]);
+    void appPulse();
+  };
+  document.addEventListener("visibilitychange", catchUp);
+  window.addEventListener("online", catchUp);
+  window.addEventListener("pageshow", (e) => (e as PageTransitionEvent).persisted && catchUp());
 }
 
 // --------------------------------------------------------------------- auth
@@ -227,6 +294,12 @@ async function emitViewer() {
   const generation = ++emitGeneration;
   const v = currentUser ? await loadViewer(currentUser) : null;
   if (generation === emitGeneration) viewerListeners.forEach((cb) => cb(v));
+  // Someone (else) signed in, or out: start the change checks afresh, or stop them.
+  lastPulse = null;
+  if (isNeon) {
+    if (currentUser) void appPulse();
+    else clearTimeout(pulseTimer);
+  }
 }
 
 /**

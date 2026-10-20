@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { dataSource, type Post, type Profile, type ProfileTab } from "../../data";
 import { cached, remember } from "../../data/supabase/viewCache";
 import { useViewer } from "../../state/session";
+import { useSync } from "../../lib/sync";
 
 type Load<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; error: unknown };
 
@@ -35,6 +36,9 @@ export function useProfile(handle: string) {
   }, [handle, viewer.id, viewer.handle, viewer.name, viewer.avatarUrl, key]);
 
   const reload = useCallback(() => setKey((k) => k + 1), []);
+  // Follower counts and Follow / Follow Back change when other people act: look again when
+  // your own counts change, and when the app comes back on screen or back online.
+  useSync(["f"], reload);
   /** Local patch (e.g. follower count after following) without a round trip. */
   const patch = useCallback((fn: (p: Profile) => Profile) => {
     setState((s) => (s.status === "ready" && s.data ? { status: "ready", data: fn(s.data) } : s));

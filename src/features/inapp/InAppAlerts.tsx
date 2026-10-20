@@ -4,7 +4,6 @@ import { AtSign, Heart, MessageCircle, Reply, UserPlus, HandHeart, X } from "luc
 import { dataSource, type AppNotification, type Conversation } from "../../data";
 import { timeAgo } from "../../lib/time";
 import { useUnread } from "../../state/notifications";
-import { useUnreadMessages } from "../../state/messages";
 import { useViewer } from "../../state/session";
 import { Avatar } from "../../ui/Avatar";
 import { actionText, groupHref, groupNotifications } from "../notifications/group";
@@ -52,24 +51,26 @@ function once<T>(subscribe: (sub: { onData: (v: T, info?: { cached: true }) => v
 /**
  * In-app banners for new activity while the app is open (the service worker
  * already skips system notifications when the app is focused, so nothing is
- * shown twice). No extra polling: it watches the unread counts the app already
- * keeps, and only when one goes up does it read the newest items once.
- * Messages: when a conversation becomes unread (the badge counts conversations,
- * so a second message in an already-unread conversation doesn't raise one).
- * Nothing shows for the conversation you're reading. Times are when it
- * happened, so a late arrival says so.
+ * shown twice).
+ *
+ * Messages: a live inbox (the messaging layer checks for changes every few
+ * seconds and reads the inbox only when something changed). Every new message
+ * from someone else shows, including more messages in a conversation that's
+ * already unread; previews are decrypted on this device only. Nothing shows
+ * for the conversation you're reading, or while you're in Messages.
+ * Notifications: when the unread count goes up (it refreshes within seconds of
+ * the change, see the app pulse in supabaseSource), the newest are read once.
+ * Times are when it happened, so a late arrival says so.
  */
 export function InAppAlerts() {
   const viewer = useViewer();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { unread } = useUnread();
-  const unreadMessages = useUnreadMessages();
   const [queue, setQueue] = useState<Banner[]>([]);
   const seen = useRef(new Set<string>());
   const since = useRef(Date.now() - 60_000);
   const prevNotif = useRef<number | null>(null);
-  const prevMsg = useRef<number | null>(null);
   const path = useRef(pathname);
   path.current = pathname;
 
@@ -112,34 +113,47 @@ export function InAppAlerts() {
     );
   }, [unread, viewer.id, viewer.handle, push]);
 
-  // Messages: a conversation became unread → read the inbox once (decrypted on this device only).
+  // Messages: a live inbox. The first answer is the baseline; after that, each conversation
+  // whose newest message is newer than before (and from someone else) gets a banner.
   useEffect(() => {
-    const prev = prevMsg.current;
-    prevMsg.current = unreadMessages;
     const api = dataSource.messages;
-    if (!api || prev === null || unreadMessages === null || unreadMessages <= prev) return;
-    void once<Conversation[]>((sub) => api.subscribeConversations(viewer.id, sub)).then(
-      (convs) => {
-        const reading = path.current.startsWith("/messages");
-        push(
-          convs
-            .filter((c) => c.unreadCount > 0 && c.lastMessage && !c.lastMessage.fromViewer && c.lastMessage.createdAt.getTime() > since.current)
-            .filter((c) => !(reading && path.current === `/messages/${c.id}`) && !(reading && path.current === "/messages"))
-            .slice(0, MAX_QUEUE)
-            .map((c) => ({
-              key: `m:${c.id}:${c.lastMessage!.createdAt.getTime()}`,
-              kind: "message" as const,
-              who: { id: c.peer.id, name: c.peer.name, avatarUrl: c.peer.avatarUrl },
-              title: c.peer.name,
-              text: c.lastMessage!.undecryptable ? "New message" : c.lastMessage!.text || (c.lastMessage!.hasImage ? "📷 Photo" : "New message"),
-              at: c.lastMessage!.createdAt,
-              href: `/messages/${c.id}`,
-            })),
-        );
-      },
-      () => undefined,
-    );
-  }, [unreadMessages, viewer.id, push]);
+    if (!api) return;
+    let stop: (() => void) | null = null;
+    let newest: Map<string, number> | null = null;
+    // Not before the first screen is up: the inbox starts the encryption library.
+    const start = setTimeout(() => {
+      stop = api.subscribeConversations(viewer.id, {
+        onData: (convs, info) => {
+          if (info?.cached) return;
+          const at = (c: Conversation) => c.lastMessage?.createdAt.getTime() ?? 0;
+          const before = newest;
+          newest = new Map(convs.map((c) => [c.id, Math.max(at(c), before?.get(c.id) ?? 0)]));
+          if (!before) return;
+          const p = path.current;
+          push(
+            convs
+              .filter((c) => c.lastMessage && !c.lastMessage.fromViewer && at(c) > (before.get(c.id) ?? 0) && at(c) > since.current)
+              .filter((c) => p !== `/messages/${c.id}` && p !== "/messages")
+              .slice(0, MAX_QUEUE)
+              .map((c) => ({
+                key: `m:${c.id}:${at(c)}`,
+                kind: "message" as const,
+                who: { id: c.peer.id, name: c.peer.name, avatarUrl: c.peer.avatarUrl },
+                title: c.unreadCount > 1 ? `${c.peer.name} · ${c.unreadCount} new` : c.peer.name,
+                text: c.lastMessage!.undecryptable ? "New message" : c.lastMessage!.text || (c.lastMessage!.hasImage ? "📷 Photo" : "New message"),
+                at: c.lastMessage!.createdAt,
+                href: `/messages/${c.id}`,
+              })),
+          );
+        },
+        onError: () => undefined,
+      });
+    }, 2500);
+    return () => {
+      clearTimeout(start);
+      stop?.();
+    };
+  }, [viewer.id, push]);
 
   // Leaving for the conversation a banner is about clears it.
   useEffect(() => {
