@@ -159,6 +159,30 @@ try {
       return { w: img.naturalWidth, h: img.naturalHeight, range: max - min, darkest, opacity: getComputedStyle(img).opacity };
     }, sel);
 
+  /** What the screen actually shows in an element (a screenshot, not the image data). */
+  const onScreenRange = async (sel) => {
+    const png = await page.locator(sel).first().screenshot().catch(() => null);
+    if (!png) return null;
+    return page.evaluate(async (src) => {
+      const img = new Image();
+      img.src = src;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = 24;
+      c.height = 24;
+      const x = c.getContext("2d");
+      x.drawImage(img, 0, 0, 24, 24);
+      const d = x.getImageData(0, 0, 24, 24).data;
+      let min = 765, max = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        const v = d[i] + d[i + 1] + d[i + 2];
+        min = Math.min(min, v);
+        max = Math.max(max, v);
+      }
+      return max - min;
+    }, `data:image/png;base64,${png.toString("base64")}`);
+  };
+
   const cases = [
     { name: "24 MP landscape JPEG", w: 5712, h: 4284, rotate: false },
     { name: "12 MP iPhone portrait (EXIF rotate 90°)", w: 4032, h: 3024, rotate: true },
@@ -166,8 +190,13 @@ try {
   for (const c of cases) {
     let bytes = await makeJpeg(c.w, c.h);
     if (c.rotate) bytes = withOrientation6(bytes);
-    await page.getByRole("button", { name: "Add a Moment" }).first().click();
+    // The previous composer closes with an animation: open the next one only once it's gone.
+    await page.locator(".moment-composer").waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
     const sheet = page.locator(".moment-composer");
+    for (let attempt = 0; attempt < 3 && !(await sheet.isVisible().catch(() => false)); attempt++) {
+      await page.getByRole("button", { name: "Add a Moment", exact: true }).first().click();
+      await sheet.waitFor({ timeout: 5000 }).catch(() => undefined);
+    }
     await sheet.waitFor();
     const share = sheet.locator(".moment-composer__head").getByRole("button", { name: "Share" });
     await sheet.locator('input[type="file"]').setInputFiles({ name: "IMG_0001.JPG", mimeType: "image/jpeg", buffer: bytes });
@@ -179,7 +208,9 @@ try {
     // The photo fades in (180 ms) once loaded.
     await page.waitForFunction(() => getComputedStyle(document.querySelector(".moment-composer__frame .moment-visual__photo") ?? document.body).opacity === "1", null, { timeout: 5000 }).catch(() => undefined);
     const shown = await inspect(".moment-composer__frame .moment-visual__photo");
-    ok(`${c.name}: the preview is a real picture, not a black frame`, !!shown && shown.range > 60 && shown.opacity === "1", JSON.stringify(shown));
+    // Judged from a screenshot of the preview: what the person actually sees.
+    const seen = await onScreenRange(".moment-composer__frame");
+    ok(`${c.name}: the preview is a real picture, not a black frame`, seen !== null && seen > 60 && shown?.opacity === "1", `on screen: contrast ${seen} · ${JSON.stringify(shown)}`);
     // The dark band is along the photo's top edge as stored; "rotate 90° clockwise" puts it on the right.
     ok(`${c.name}: upright and in its own shape`, !!shown && (shown.h > shown.w) === c.rotate && shown.darkest === (c.rotate ? "right" : "top"), JSON.stringify(shown));
     ok(`${c.name}: kept at high resolution (longest edge ≥ 2000 px)`, !!shown && Math.max(shown.w, shown.h) >= 2000, shown ? `${shown.w}×${shown.h}` : "");

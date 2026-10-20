@@ -265,7 +265,16 @@ try {
       const submit = page.locator("form.reply-composer button[type=submit]");
       const samples = [];
       let requests = 0;
-      const count = (rq) => isData(new URL(rq.url())) && requests++;
+      const seen = {};
+      // A new account's one-time messaging setup (e2e_*: keys, device) can land in this window now
+      // that the live inbox starts it early; the check is about repeated traffic, so it's listed, not counted.
+      const count = (rq) => {
+        const u = new URL(rq.url());
+        if (!isData(u)) return;
+        const name = dataPath(u).split("?")[0];
+        seen[name] = (seen[name] ?? 0) + 1;
+        if (!/^rpc\/e2e_/.test(name)) requests++;
+      };
       page.on("request", count);
       for (let i = 0; i < 20; i++) {
         const box = await submit.boundingBox().catch(() => null);
@@ -274,7 +283,7 @@ try {
       }
       page.off("request", count);
       info("reply button before tapping (D=disabled e=enabled, y position, typed length)", samples.join(" "));
-      info("database requests in those 5 s", String(requests));
+      info("database requests in those 5 s", `${requests} — ${Object.entries(seen).map(([k, v]) => `${k}×${v}`).join(", ")}`);
       ok("the page is quiet before tapping Reply (no request storm)", requests <= 10, String(requests));
       // Is the page still drawing frames, and what is under the button's centre?
       const frames = await page.evaluate(() => new Promise((res) => {
