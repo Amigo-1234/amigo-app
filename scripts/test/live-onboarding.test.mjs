@@ -58,6 +58,14 @@ try {
   page.on("pageerror", (e) => !/access control checks|^Load failed$/i.test(e.message) && problems.push(e.message.slice(0, 160)));
   await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
 
+  // ------------------------------------------------------------ Google, misconfigured
+  // If the provider isn't set up (or refuses), the button must explain, not break the screen.
+  await page.route(/\/neon\/auth\/sign-in\/social/, (r) => r.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ code: "PROVIDER_NOT_FOUND", message: "Provider not found" }) }));
+  await page.getByRole("button", { name: "Continue with Google" }).click();
+  const googleError = await page.locator(".auth__error, [role=alert]").first().waitFor({ timeout: 10000 }).then(() => true, () => false);
+  ok("Google sign-in that the provider refuses shows a message (no crash, still on the sign-in screen)", googleError && (await page.getByRole("button", { name: "Continue with Google" }).isVisible()), (await page.locator(".auth__error, [role=alert]").first().textContent().catch(() => "")) ?? "");
+  await page.unroute(/\/neon\/auth\/sign-in\/social/);
+
   // ------------------------------------------------------------ create account
   await page.getByRole("button", { name: "Create account" }).first().click();
   ok("“Continue with Google” is offered", await page.getByRole("button", { name: "Continue with Google" }).isVisible().catch(() => false));
