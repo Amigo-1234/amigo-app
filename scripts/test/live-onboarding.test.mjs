@@ -117,7 +117,7 @@ try {
   ok("…your interests are shown for review", (await page.locator(".onb-chip").count()) >= 3);
   const handle = page.getByLabel("Username");
   await handle.fill("ab");
-  ok("…a too-short username is explained", await page.getByText(/3–24 characters/).isVisible());
+  ok("…a too-short username is explained", await page.getByText(/3–24 characters/).first().waitFor({ timeout: 5000 }).then(() => true, () => false));
   await handle.fill(`onb_${tag}`);
   ok("…a free username is confirmed", await page.getByText("Available").waitFor({ timeout: 10000 }).then(() => true, () => false));
   await page.getByLabel(/Bio/).fill("Hello from the onboarding test");
