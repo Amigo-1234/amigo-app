@@ -187,21 +187,25 @@ try {
     });
     info(`${L} near the end with the bar shown`, JSON.stringify(last));
 
-    // Back from another screen: shown.
+    // Back from a post (its own full screen) while hidden: shown again on the feed.
     await scroll(-200, 6);
     await scroll(400, 10);
     ok(`${L} (hidden before leaving)`, (await bar()) === "hidden", await bar());
     await page.locator("article", { hasText: `Nav post 1 ${tag}` }).first().locator("p, .post-card__body").first().click().catch(() => undefined);
     await page.waitForURL((u) => u.pathname !== "/", { timeout: 8000 }).catch(() => undefined);
-    if (new URL(page.url()).pathname === "/") await page.goto(`${BASE}/notifications`, { waitUntil: "load" });
-    await page.waitForTimeout(600);
-    ok(`${L} another screen shows it`, (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar()}`);
-    await page.evaluate(() => window.scrollBy(0, 400));
-    await page.waitForTimeout(500);
-    ok(`${L} other screens never hide it`, (await bar()) === "shown", await bar());
+    info(`${L} opened`, new URL(page.url()).pathname);
     await page.goBack();
+    await page.waitForURL((u) => u.pathname === "/", { timeout: 8000 }).catch(() => undefined);
+    await page.locator(".bottom-nav").waitFor({ timeout: 8000 }).catch(() => undefined);
     await page.waitForTimeout(1200);
-    ok(`${L} back on the feed: shown`, new URL(page.url()).pathname === "/" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar()}`);
+    ok(`${L} back on the feed: shown`, new URL(page.url()).pathname === "/" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar().catch(() => "no bar")}`);
+
+    // Another tab in the bar: scrolling there never hides it.
+    await page.locator(".bottom-nav a[href='/notifications']").tap();
+    await page.waitForURL((u) => u.pathname === "/notifications", { timeout: 8000 }).catch(() => undefined);
+    await page.waitForTimeout(800);
+    await scroll(400, 10);
+    ok(`${L} other screens never hide it`, new URL(page.url()).pathname === "/notifications" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar()}`);
 
     if (n === 0) {
       const dur = await page.evaluate(() => getComputedStyle(document.querySelector(".bottom-nav")).transitionDuration);
