@@ -140,13 +140,22 @@ try {
   await composer.locator("textarea").first().fill(`Under the Moments ${tag}`);
   await composer.getByRole("button", { name: "Post", exact: true }).last().click();
   const tile = page.locator("article", { hasText: `Under the Moments ${tag}` }).locator(".media-tile__open").first();
-  await tile.waitFor({ timeout: 60000 });
+  // The feed may not show it until it's caught up: reload once if it hasn't appeared.
+  if (!(await tile.waitFor({ timeout: 40000 }).then(() => true, () => false))) {
+    info("photo post", "not in the feed after 40 s; reloading");
+    await page.reload({ waitUntil: "load" });
+    await tile.waitFor({ timeout: 40000 });
+  }
 
   // … and two text Moments.
   for (const n of [1, 2]) {
     await page.locator(".moment-composer").waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
-    await page.getByRole("button", { name: "Add a Moment", exact: true }).first().click();
     const mc = page.locator(".moment-composer");
+    // As in the photo Moment test: the first press can land while the page is still settling.
+    for (let attempt = 0; attempt < 3 && !(await mc.isVisible().catch(() => false)); attempt++) {
+      await page.getByRole("button", { name: "Add a Moment", exact: true }).first().click();
+      await mc.waitFor({ timeout: 5000 }).catch(() => undefined);
+    }
     await mc.waitFor();
     await mc.locator("textarea").fill(`Moment ${n} ${tag}`);
     await mc.locator(".moment-composer__head").getByRole("button", { name: "Share" }).click();
