@@ -55,13 +55,14 @@ export function MomentVisual({
   children?: ReactNode;
 }) {
   const [frameRef, frame] = useSize<HTMLDivElement>();
-  const [state, setState] = useState<PhotoState>(media ? "loading" : "ready");
-  const [natural, setNatural] = useState<{ w: number; h: number } | null>(null);
   const url = media?.url;
-  useEffect(() => {
-    setState(url ? "loading" : "ready");
-    setNatural(null);
-  }, [url]);
+  // What happened to which photo. Kept with its URL (not reset by an effect after render): a
+  // photo already in memory, such as one just picked, can finish loading before such an effect
+  // runs, and resetting it to "loading" afterwards left it invisible for good — a black frame.
+  const [photo, setPhoto] = useState<{ url: string; state: PhotoState; natural?: { w: number; h: number } } | null>(null);
+  const mine = url && photo?.url === url ? photo : null;
+  const state: PhotoState = !url ? "ready" : (mine?.state ?? "loading");
+  const natural = mine?.natural ?? null;
   useEffect(() => onPhotoState?.(state), [state, onPhotoState]);
 
   // Stored dimensions place the photo before it arrives (no jump); the decoded size wins if they differ.
@@ -98,14 +99,15 @@ export function MomentVisual({
           style={style}
           onLoad={(e) => {
             const img = e.currentTarget;
+            let shape: { w: number; h: number } | undefined;
             if (img.naturalWidth && (img.naturalWidth !== media.width || img.naturalHeight !== media.height)) {
               // A smaller copy has the same shape; only the shape matters for framing.
               const r = img.naturalWidth / img.naturalHeight;
-              if (!media.width || !media.height || Math.abs(r - media.width / media.height) > 0.01) setNatural({ w: img.naturalWidth, h: img.naturalHeight });
+              if (!media.width || !media.height || Math.abs(r - media.width / media.height) > 0.01) shape = { w: img.naturalWidth, h: img.naturalHeight };
             }
-            setState("ready");
+            setPhoto({ url: media.url, state: "ready", natural: shape });
           }}
-          onError={() => setState("failed")}
+          onError={() => setPhoto({ url: media.url, state: "failed" })}
         />
       )}
       {text && (

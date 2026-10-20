@@ -183,7 +183,10 @@ try {
   await tile.tap();
   ok("tapping the photo opens the viewer", await page.waitForFunction(() => document.querySelector("dialog.media-viewer")?.open, null, { timeout: 10000 }).then(() => true, () => false));
   const full = await page.waitForFunction(() => document.querySelector(".media-viewer__img.is-loaded")?.naturalWidth || 0, null, { timeout: 30000 }).then((h) => h.jsonValue(), () => 0);
-  ok("the full-size photo loads (not the feed copy)", full >= 2000, `${full} px wide`);
+  const imgs = await page.evaluate(() =>
+    [...document.querySelectorAll(".media-viewer__img")].map((i) => `${i.className} ${i.src.split(":")[0]}${i.src.includes("size=sm") ? "(sm)" : ""} complete=${i.complete} w=${i.naturalWidth}`),
+  );
+  ok("the full-size photo loads (not the feed copy)", full >= 2000, `${full} px wide · ${imgs.join(" | ")}`);
   ok("Save is offered", await viewer.getByRole("button", { name: "Save photo" }).isVisible());
 
   await viewer.getByRole("button", { name: "Zoom in" }).tap();
@@ -213,8 +216,9 @@ try {
 
   // ------------------------------------------------------------ sheets
   await page.locator("article", { hasText: `Viewer test ${tag}` }).getByRole("button", { name: "Post options" }).tap();
-  const sheet = page.locator('dialog[aria-label="Post options"]');
-  await page.waitForFunction(() => document.querySelector('dialog[aria-label="Post options"]')?.open, null, { timeout: 10000 }).catch(() => undefined);
+  await page.waitForFunction(() => document.querySelector('dialog[open][aria-label="Post options"]'), null, { timeout: 10000 }).catch(() => undefined);
+  // Every post has its own (closed) options sheet: this is the open one.
+  const sheet = page.locator('dialog[open][aria-label="Post options"]');
   const panel = await sheet.locator(".sheet__panel").boundingBox();
   if (panel) {
     await page.mouse.move(panel.x + panel.width / 2, panel.y + 20);
@@ -223,10 +227,10 @@ try {
     await page.mouse.up();
   }
   await sleep(400);
-  ok("a press that starts in a sheet and ends on the backdrop keeps it open", await sheet.evaluate((d) => d.open));
+  ok("a press that starts in a sheet and ends on the backdrop keeps it open", (await sheet.count()) === 1);
   await page.mouse.click(20, 40);
   await sleep(400);
-  ok("a tap on the backdrop closes the sheet", !(await sheet.evaluate((d) => d.open)));
+  ok("a tap on the backdrop closes the sheet", (await page.locator('dialog[open][aria-label="Post options"]').count()) === 0);
 
   // ------------------------------------------------------------ Moment viewer
   await page.getByRole("button", { name: "Add a Moment" }).first().click();
