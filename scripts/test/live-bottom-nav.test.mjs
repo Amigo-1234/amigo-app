@@ -210,6 +210,9 @@ try {
     await page.locator(".bottom-nav").waitFor({ timeout: 8000 }).catch(() => undefined);
     await page.waitForTimeout(1200);
     ok(`${L} back on the feed: shown`, new URL(page.url()).pathname === "/" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar().catch(() => "no bar")}`);
+    await scroll(300, 10);
+    ok(`${L} …and after coming back, scrolling down hides it again`, (await bar()) === "hidden", await bar());
+    await scroll(-80, 8);
 
     // Another tab in the bar (Explore): scrolling there never hides it.
     await page.locator(".bottom-nav a[href='/explore']").tap();

@@ -28,7 +28,7 @@ export function AppShell() {
   const viewer = useViewer();
   const composer = useComposer();
   const composerRef = useRef<ComposerHandle>(null);
-  const { pathname } = useLocation();
+  const { pathname, key: visit } = useLocation();
   const { unread } = useUnread();
   const isAdmin = useIsAdmin();
   const badge = badgeText(unread);
@@ -40,7 +40,7 @@ export function AppShell() {
   const inConversation = pathname.startsWith("/messages/");
 
   useScrollMemory();
-  const [navHidden, showNav] = useAutoHideNav(pathname === "/");
+  const [navHidden, showNav] = useAutoHideNav(pathname === "/", visit);
 
   // "n" opens the composer, like most social apps on desktop.
   useEffect(() => {

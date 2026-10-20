@@ -7,14 +7,17 @@ const HIDE_AFTER = 28;
 const SHOW_AFTER = 14;
 /** A jump bigger than this in one frame is the page moving by itself (restore, scroll lock), not a scroll. */
 const JUMP = 600;
+/** After arriving on the feed, the page may still be put back where you were (useScrollMemory): not a scroll. */
+const SETTLE_MS = 1200;
 
 /**
  * The phone tab bar on the Home feed: slides away while scrolling down through
  * posts and comes back on any deliberate scroll up, near the top, on leaving
- * the feed, or when something in it gets keyboard focus. Small movements and
+ * or coming back to the feed (where the page being put back to where you were
+ * isn't a scroll), or when something in it gets keyboard focus. Small movements and
  * the page bouncing past its ends are ignored. Elsewhere it never hides.
  */
-export function useAutoHideNav(enabled: boolean) {
+export function useAutoHideNav(enabled: boolean, visit: string) {
   const [hidden, setHidden] = useState(false);
 
   useEffect(() => {
@@ -23,6 +26,7 @@ export function useAutoHideNav(enabled: boolean) {
     let last = window.scrollY;
     let run = 0; // distance scrolled in the current direction
     let frame = 0;
+    const settleUntil = performance.now() + SETTLE_MS;
     const set = setHidden; // same value: React skips the render
     const check = () => {
       frame = 0;
@@ -30,6 +34,7 @@ export function useAutoHideNav(enabled: boolean) {
       const max = document.documentElement.scrollHeight - window.innerHeight;
       const d = y - last;
       last = y;
+      if (performance.now() < settleUntil) return void (run = 0);
       // A sheet or viewer locks the page (and may move it): leave the bar as it is until it closes.
       if (document.querySelector("dialog[open]")) return void (run = 0);
       if (y <= NEAR_TOP) {
@@ -51,7 +56,7 @@ export function useAutoHideNav(enabled: boolean) {
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
     };
-  }, [enabled]);
+  }, [enabled, visit]);
 
   return [hidden, () => setHidden(false)] as const;
 }
