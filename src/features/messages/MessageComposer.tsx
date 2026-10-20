@@ -134,7 +134,8 @@ export function MessageComposer({
     onSend({ text: trimmed, image: image?.media ?? null, replyToId: replyTo?.id ?? null });
     writeDraft(key, "");
     setText("");
-    // The pending bubble keeps its own preview URL.
+    // The pending bubble makes its own preview URL from the photo: this one isn't needed any more.
+    if (image) URL.revokeObjectURL(image.url);
     setImage(null);
     onCancelReply();
     inputRef.current?.focus();
