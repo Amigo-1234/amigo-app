@@ -200,12 +200,12 @@ try {
     await page.waitForTimeout(1200);
     ok(`${L} back on the feed: shown`, new URL(page.url()).pathname === "/" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar().catch(() => "no bar")}`);
 
-    // Another tab in the bar: scrolling there never hides it.
-    await page.locator(".bottom-nav a[href='/notifications']").tap();
-    await page.waitForURL((u) => u.pathname === "/notifications", { timeout: 8000 }).catch(() => undefined);
+    // Another tab in the bar (Explore): scrolling there never hides it.
+    await page.locator(".bottom-nav a[href='/explore']").tap();
+    await page.waitForURL((u) => u.pathname === "/explore", { timeout: 8000 }).catch(() => undefined);
     await page.waitForTimeout(800);
     await scroll(400, 10);
-    ok(`${L} other screens never hide it`, new URL(page.url()).pathname === "/notifications" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar()}`);
+    ok(`${L} other screens never hide it`, new URL(page.url()).pathname === "/explore" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar()}`);
 
     if (n === 0) {
       const dur = await page.evaluate(() => getComputedStyle(document.querySelector(".bottom-nav")).transitionDuration);
