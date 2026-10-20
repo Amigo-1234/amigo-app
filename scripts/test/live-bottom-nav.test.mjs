@@ -161,6 +161,16 @@ try {
     await longCard.scrollIntoViewIfNeeded();
     await scroll(200, 8);
     ok(`${L} scrolling through a long post hides it`, (await bar()) === "hidden", await bar());
+    // Expanding its caption ("Show more") makes the page taller under the finger: no jump, still works.
+    await scroll(-80, 8);
+    const more = longCard.locator(".post__more");
+    if (await more.count()) {
+      await more.tap();
+      await page.waitForTimeout(400);
+      ok(`${L} expanding a caption leaves the bar shown`, (await bar()) === "shown", await bar());
+      await scroll(200, 8);
+      ok(`${L} …and scrolling through it hides the bar`, (await bar()) === "hidden", await bar());
+    } else info(`${L} long post`, "not shortened at this width");
 
     // Create works once it's back.
     await scroll(-80, 8);
@@ -191,10 +201,11 @@ try {
     await scroll(-200, 6);
     await scroll(400, 10);
     ok(`${L} (hidden before leaving)`, (await bar()) === "hidden", await bar());
-    await page.locator("article", { hasText: `Nav post 1 ${tag}` }).first().locator("p, .post-card__body").first().click().catch(() => undefined);
+    await page.locator("article", { hasText: `Nav post 1 ${tag}` }).first().locator(".post__time").click();
     await page.waitForURL((u) => u.pathname !== "/", { timeout: 8000 }).catch(() => undefined);
-    info(`${L} opened`, new URL(page.url()).pathname);
-    await page.goBack();
+    const opened = new URL(page.url()).pathname;
+    ok(`${L} a post opens (its own screen)`, opened.startsWith("/post/"), opened);
+    if (opened !== "/") await page.goBack();
     await page.waitForURL((u) => u.pathname === "/", { timeout: 8000 }).catch(() => undefined);
     await page.locator(".bottom-nav").waitFor({ timeout: 8000 }).catch(() => undefined);
     await page.waitForTimeout(1200);
