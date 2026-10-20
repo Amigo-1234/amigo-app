@@ -117,8 +117,16 @@ try {
     const vp = page.viewportSize();
     const L = `[${size} ${vp.width}×${vp.height}]`;
 
-    /** Where the bar is: fully on screen, fully off, or moving. */
-    const bar = () =>
+    /** Where the bar is: fully on screen, fully off, or (still sliding after 1 s) moving. */
+    const bar = async () => {
+      let at = await barNow();
+      for (let i = 0; i < 10 && at.startsWith("moving"); i++) {
+        await page.waitForTimeout(100);
+        at = await barNow();
+      }
+      return at;
+    };
+    const barNow = () =>
       page.evaluate(() => {
         const nav = document.querySelector(".bottom-nav");
         if (!nav) return `no bar on ${location.pathname}: ${document.body.innerText.slice(0, 120).replace(/\s+/g, " ")}`;
