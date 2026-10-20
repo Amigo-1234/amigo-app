@@ -136,6 +136,7 @@ try {
   // Settings → Interests (a row, then its own screen) shows them and edits them.
   await page.goto(`${BASE}/settings`, { waitUntil: "load" });
   const row = page.getByRole("link", { name: /Interests/ });
+  await row.waitFor({ timeout: 15000 }).catch(() => undefined);
   ok("Settings has an Interests row (not every topic inline)", await row.isVisible().catch(() => false) && !(await page.locator(".onb-interest").count()));
   await row.click();
   await page.locator(".onb-interest").first().waitFor({ timeout: 15000 });

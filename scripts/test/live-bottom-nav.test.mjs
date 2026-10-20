@@ -1,7 +1,7 @@
 /**
  * The phone tab bar on the Home feed hides while scrolling down and comes back
- * on scrolling up, near the top and on other screens. iPhone SE / 13 / 15 Pro
- * Max sizes (Chromium or WebKit):
+ * on scrolling up, near the top and on other screens. iPhone SE (1st and 3rd
+ * gen) / 13 / 15 Pro Max sizes (Chromium or WebKit):
  *
  *   visible at the top; hidden after scrolling down; a few pixels up don't bring
  *   it back, a real scroll up does; nothing on the page moves when it hides or
@@ -70,13 +70,18 @@ try {
   await sleep(800);
   const tok = await token(person);
   // Enough of a feed to scroll through, including a long post.
-  const long = `Long post ${tag}. ` + "A caption that runs on and on to make a tall card. ".repeat(18);
-  for (let i = 0; i < 12; i++) await rpc(tok, "create_post", { p_body: i === 6 ? long : `Nav post ${i} ${tag}\n\nline two\n\nline three` });
+  const long = `Long post ${tag}. ` + "A caption that runs on to make a tall card. ".repeat(9);
+  for (let i = 0; i < 12; i++) {
+    const r = await rpc(tok, "create_post", { p_body: i === 6 ? long : `Nav post ${i} ${tag}\n\nline two\n\nline three` });
+    if (!r.ok) throw new Error(`create_post ${i}: ${r.status}`);
+  }
 
   const host = new URL(BASE).hostname;
-  const sizes = ["iPhone SE", "iPhone 13", "iPhone 15 Pro Max"].filter((d) => devices[d]);
-  for (const [n, size] of sizes.entries()) {
-    const ctx = await browser.newContext({ ...devices[size], serviceWorkers: "block", reducedMotion: n === 0 ? "reduce" : "no-preference" });
+  // iPhone SE 1st gen (320 wide), SE 2nd/3rd gen (375×667, no home indicator), 13, 15 Pro Max.
+  const se2 = { ...devices["iPhone 8"], viewport: { width: 375, height: 667 } };
+  const sizes = [["iPhone SE", devices["iPhone SE"]], ["iPhone SE 3", se2], ["iPhone 13", devices["iPhone 13"]], ["iPhone 15 Pro Max", devices["iPhone 15 Pro Max"]]].filter(([, d]) => d);
+  for (const [n, [size, device]] of sizes.entries()) {
+    const ctx = await browser.newContext({ ...device, serviceWorkers: "block", reducedMotion: n === 0 ? "reduce" : "no-preference" });
     await ctx.request.get(BASE, { headers: { ...BYPASS, "x-vercel-set-bypass-cookie": "true" }, maxRedirects: 0 });
     await ctx.addCookies(
       person.cookies.map((raw) => {
