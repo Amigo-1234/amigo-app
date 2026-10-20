@@ -11,6 +11,7 @@ import {
   type NewMediaInput,
 } from "../../data";
 import { ImageError, processImage } from "../../lib/image";
+import { capturePointer } from "../../lib/visualViewport";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Button, IconButton } from "../../ui/Button";
@@ -133,7 +134,7 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
   function onFrameDown(e: ReactPointerEvent<HTMLDivElement>) {
     const onCaption = (e.target as HTMLElement).closest(".moment-visual__text");
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-    e.currentTarget.setPointerCapture?.(e.pointerId);
+    capturePointer(e.currentTarget, e.pointerId);
     if (onCaption && pointers.current.size === 1) {
       const f = frameSize();
       if (f) gesture.current = { kind: "caption", id: e.pointerId, top: f.top, height: f.h };

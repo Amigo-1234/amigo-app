@@ -19,6 +19,8 @@ export function Sheet({
   fullscreenOnMobile?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  /** Where the current press started: only a press that starts and ends on the backdrop closes. */
+  const downOnBackdrop = useRef(false);
 
   useEffect(() => {
     const d = ref.current;
@@ -36,9 +38,16 @@ export function Sheet({
         e.preventDefault();
         onClose();
       }}
+      onPointerDown={(e) => {
+        downOnBackdrop.current = e.target === e.currentTarget;
+      }}
       onClick={(e) => {
-        // Click on the backdrop (the dialog element itself, outside the panel).
-        if (e.target === e.currentTarget) onClose();
+        // Click on the backdrop (the dialog element itself, outside the panel). A press that
+        // began inside the panel (dragging a slider, scrolling, selecting text) and ended out
+        // here also arrives as a click on the dialog: that one mustn't close it.
+        const fromBackdrop = downOnBackdrop.current;
+        downOnBackdrop.current = false;
+        if (e.target === e.currentTarget && fromBackdrop) onClose();
       }}
     >
       <div className="sheet__panel">{open && children}</div>

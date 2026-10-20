@@ -13,6 +13,7 @@ import { Sheet } from "../../ui/Sheet";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
 import { MomentVisual, type PhotoState } from "./MomentVisual";
 import { mediaSrc, primeMedia } from "../../lib/mediaLinks";
+import { capturePointer } from "../../lib/visualViewport";
 import "./Moments.css";
 
 /** How long each Moment shows before moving on. */
@@ -41,6 +42,14 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
   const [drag, setDrag] = useState(0);
   const elapsed = useRef(0);
   const press = useRef<{ x: number; y: number; t: number; timer?: ReturnType<typeof setTimeout> } | null>(null);
+  /** Pinch to look closer at a photo (the Moment pauses while zoomed); drag to look around. */
+  const [zoom, setZoom] = useState<{ s: number; x: number; y: number }>({ s: 1, x: 0, y: 0 });
+  const zoomed = zoom.s > 1.01;
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinch = useRef<{ dist: number; s: number } | null>(null);
+  const panFrom = useRef<{ x: number; y: number; zx: number; zy: number } | null>(null);
+  /** Two fingers were down during this gesture: lifting them never closes, skips or advances. */
+  const multi = useRef(false);
   const closedBy = useRef<"popstate" | "navigate" | null>(null);
 
   const group = pos ? queue[pos.gi] : null;
@@ -51,7 +60,7 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
   // A photo Moment's clock starts once its photo is on screen; a failed photo waits for Retry.
   const [photo, setPhoto] = useState<PhotoState>("ready");
   const [attempt, setAttempt] = useState(0);
-  const paused = held || typing || !!sheet || photo !== "ready";
+  const paused = held || typing || !!sheet || photo !== "ready" || zoomed;
 
   const close = useCallback(() => setPos(null), []);
 
@@ -113,6 +122,7 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
 
   // New Moment on screen: restart the clock and count the view.
   const momentId = snapshot?.id;
+  useEffect(() => setZoom({ s: 1, x: 0, y: 0 }), [momentId]);
   useEffect(() => {
     elapsed.current = 0;
     setProgress(0);
@@ -171,23 +181,66 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
 
   const interactive = (t: EventTarget) => !!(t as HTMLElement).closest("button, a, input, textarea, form");
 
+  const spread = () => {
+    const [a, b] = [...pointers.current.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y) || 1;
+  };
+  /** Keeps a zoomed photo covering the frame (no dragging it off into the dark). */
+  const clampZoom = (z: { s: number; x: number; y: number }, el: HTMLElement) => {
+    const s = Math.min(4, Math.max(1, z.s));
+    const mx = ((s - 1) * el.clientWidth) / 2;
+    const my = ((s - 1) * el.clientHeight) / 2;
+    return s <= 1.01 ? { s: 1, x: 0, y: 0 } : { s, x: Math.min(mx, Math.max(-mx, z.x)), y: Math.min(my, Math.max(-my, z.y)) };
+  };
+
   function onPointerDown(e: PointerEvent) {
     if (interactive(e.target)) return;
-    press.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+    if (pointers.current.size === 0) multi.current = false;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    capturePointer(e.currentTarget as HTMLElement, e.pointerId);
     setHeld(true);
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    if (pointers.current.size === 2 && moment?.media) {
+      multi.current = true;
+      press.current = null;
+      panFrom.current = null;
+      setDrag(0);
+      pinch.current = { dist: spread(), s: zoom.s };
+      return;
+    }
+    if (pointers.current.size === 1) {
+      press.current = { x: e.clientX, y: e.clientY, t: performance.now() };
+      panFrom.current = zoomed ? { x: e.clientX, y: e.clientY, zx: zoom.x, zy: zoom.y } : null;
+    }
   }
   function onPointerMove(e: PointerEvent) {
-    if (!press.current) return;
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const el = e.currentTarget as HTMLElement;
+    if (pinch.current && pointers.current.size >= 2) {
+      const s = (pinch.current.s * spread()) / pinch.current.dist;
+      setZoom((z) => clampZoom({ ...z, s }, el));
+      return;
+    }
+    if (panFrom.current) {
+      const f = panFrom.current;
+      setZoom((z) => clampZoom({ s: z.s, x: f.zx + e.clientX - f.x, y: f.zy + e.clientY - f.y }, el));
+      return;
+    }
+    if (!press.current || multi.current) return;
     const dy = e.clientY - press.current.y;
     setDrag(dy > 0 ? dy : 0);
   }
   function onPointerUp(e: PointerEvent) {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size < 2) pinch.current = null;
+    if (pointers.current.size > 0) return;
     const p = press.current;
     press.current = null;
+    panFrom.current = null;
     setHeld(false);
     setDrag(0);
-    if (!p) return;
+    // A pinch, or anything while zoomed, is about looking at the photo: never close, skip or advance.
+    if (!p || multi.current || zoomed) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
     const dt = performance.now() - p.t;
@@ -289,12 +342,20 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerCancel={() => {
+          onPointerCancel={(e) => {
+            pointers.current.delete(e.pointerId);
+            if (pointers.current.size < 2) pinch.current = null;
+            if (pointers.current.size > 0) return;
             press.current = null;
+            panFrom.current = null;
             setHeld(false);
             setDrag(0);
           }}
         >
+          <div
+            className={`moment-viewer__zoom${zoomed ? " is-zoomed" : ""}`}
+            style={zoomed ? { transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.s})` } : undefined}
+          >
           <MomentVisual
             key={`${moment.id}:${attempt}`}
             text={moment.text}
@@ -303,6 +364,12 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
             layout={moment.layout}
             onPhotoState={setPhoto}
           />
+          </div>
+          {zoomed && (
+            <button type="button" className="moment-viewer__unzoom" onClick={() => setZoom({ s: 1, x: 0, y: 0 })}>
+              Done
+            </button>
+          )}
           {photo === "loading" && <span className="moment-viewer__loading" role="status" aria-label="Loading photo" />}
           {photo === "failed" && (
             <div className="moment-viewer__failed" role="alert">

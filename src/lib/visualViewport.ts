@@ -50,3 +50,16 @@ export function useVisualViewportFit(active: boolean, onChange?: () => void, { l
     };
   }, [active, lock]);
 }
+
+/**
+ * Keeps a gesture's later events on this element. Browsers throw when they no
+ * longer know the pointer (iOS can cancel a touch first): the gesture still
+ * works, just without capture.
+ */
+export function capturePointer(el: Element, pointerId: number) {
+  try {
+    el.setPointerCapture?.(pointerId);
+  } catch {
+    /* pointer already gone */
+  }
+}

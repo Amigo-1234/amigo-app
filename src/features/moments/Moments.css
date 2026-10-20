@@ -237,6 +237,29 @@
   }
 }
 
+/* Pinch-zoom layer (photo Moments): the caption and photo zoom together. */
+.moment-viewer__zoom {
+  position: absolute;
+  inset: 0;
+  transform-origin: center;
+  will-change: transform;
+}
+
+.moment-viewer__unzoom {
+  position: absolute;
+  right: 12px;
+  bottom: calc(env(safe-area-inset-bottom) + 84px);
+  z-index: 3;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+
 .moment-viewer__top {
   position: absolute;
   inset: 0 0 auto 0;

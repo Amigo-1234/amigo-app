@@ -5,6 +5,7 @@ import { saveImage } from "./saveImage";
 import type { MediaItem } from "../../data";
 import "./MediaViewer.css";
 import { MediaImg, mediaSrc } from "../../lib/mediaLinks";
+import { capturePointer } from "../../lib/visualViewport";
 
 type Open = (items: MediaItem[], index?: number) => void;
 const ViewerContext = createContext<Open>(() => {});
@@ -198,7 +199,9 @@ function Stage({
   const [fullLoaded, setFullLoaded] = useState(false);
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ startDist: number; startScale: number; startView: View; mid: { x: number; y: number } } | null>(null);
-  const panStart = useRef<{ x: number; y: number; view: View; moved: boolean } | null>(null);
+  const panStart = useRef<{ x: number; y: number; view: View; moved: boolean; mouse: boolean } | null>(null);
+  /** This gesture used two fingers at some point: lifting them is never a tap or a swipe. */
+  const multi = useRef(false);
   const lastTap = useRef(0);
   const tapTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(tapTimer.current), []);
@@ -230,15 +233,19 @@ function Stage({
 
   const onPointerDown = (e: React.PointerEvent) => {
     if (item.type === "video") return;
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    // The zoom buttons sit inside the stage: capturing their press would turn the tap into a tap on the stage.
+    if ((e.target as HTMLElement).closest("button")) return;
+    if (pointers.current.size === 0) multi.current = false;
+    capturePointer(e.currentTarget as HTMLElement, e.pointerId);
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
+      multi.current = true;
       const [a, b] = [...pointers.current.values()];
       gesture.current = { startDist: Math.hypot(a.x - b.x, a.y - b.y), startScale: view.scale, startView: view, mid: center((a.x + b.x) / 2, (a.y + b.y) / 2) };
       panStart.current = null;
       setDrag(null);
     } else if (pointers.current.size === 1) {
-      panStart.current = { x: e.clientX, y: e.clientY, view, moved: false };
+      panStart.current = { x: e.clientX, y: e.clientY, view, moved: false, mouse: e.pointerType === "mouse" };
     }
   };
 
@@ -269,7 +276,7 @@ function Stage({
     panStart.current = null;
     const d = drag;
     setDrag(null);
-    if (!p) return;
+    if (!p || multi.current) return;
     if (!p.moved) {
       // Double tap: zoom in at the tap, or back out. A single tap outside the photo closes.
       const now = Date.now();
@@ -281,11 +288,15 @@ function Stage({
       } else {
         lastTap.current = now;
         const { clientX: x, clientY: y } = e;
-        tapTimer.current = setTimeout(() => {
-          const img = stageRef.current?.querySelector(".media-viewer__img:last-child")?.getBoundingClientRect();
-          const onPhoto = img && x >= img.left && x <= img.right && y >= img.top && y <= img.bottom;
-          if (!onPhoto && !zoomed) onClose();
-        }, 300);
+        // Only a mouse click beside the photo closes (as on desktop sites). On a phone the
+        // space around a photo is easy to touch by accident: there, the close button or a
+        // swipe down closes.
+        if (p.mouse)
+          tapTimer.current = setTimeout(() => {
+            const img = stageRef.current?.querySelector(".media-viewer__img:last-child")?.getBoundingClientRect();
+            const onPhoto = img && x >= img.left && x <= img.right && y >= img.top && y <= img.bottom;
+            if (!onPhoto && !zoomed) onClose();
+          }, 300);
       }
       return;
     }

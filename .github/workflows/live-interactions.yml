@@ -21,7 +21,7 @@ on:
 jobs:
   live-interactions:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -94,6 +94,16 @@ jobs:
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-moment-photo.test.mjs
+      - name: Viewers and sheets (Chromium)
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'media')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=chromium node scripts/test/live-viewers.test.mjs
+      - name: Viewers and sheets (WebKit)
+        if: always() && (inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'media')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-viewers.test.mjs
       - name: Admin control centre (needs an operator to grant the temporary admin)
         if: always() && inputs.suite == 'admin'
         env:
