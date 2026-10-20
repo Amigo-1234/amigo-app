@@ -54,3 +54,15 @@ where Web Push (Settings → Notifications) takes over for messages and activity
   (unchanged server rule).
 - Interests are stored only; nothing ranks or filters by them yet (the app says so).
 - A Google sign-in can't be completed by automated tests (needs a real Google account): *needs iPhone check*.
+
+## Production release (owner-approved, controlled — not a public launch)
+
+- Production: `dpl_FJv9CkuTpmAKfMGLnkGRvLUHx2qd`, commit `b8e76ed` (app code identical to `4a66b4e`;
+  later commits are tests and docs). Rollback target: `dpl_4oP1FjsDuH32EFTXJ8kEZ2C4NNsk` (`b12c7ec`).
+- Full live suite on production: every step passed in Chromium and WebKit (likes/replies, Moment
+  reactions, Follow Back, Creator Programme, direct messages, photo Moments, viewers and sheets, live sync,
+  joining Amigo incl. Google refusing gracefully).
+- Unchanged by the release (checked before and after): Creator Programme settings (applications open,
+  programme open — set by the owner), the owner's encryption identity and 13 device records, account,
+  post and message counts; no test accounts left.
+- app_pulse: ~1 call per 3–4 s per open app, ~1.1 ms each (max 3.6 ms); none while the app is hidden.
