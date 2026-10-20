@@ -201,12 +201,16 @@ try {
     const u = new URL(rq.url());
     if (isData(u)) mark(`✗ ${dataPath(u)} (${rq.failure()?.errorText ?? "failed"})`);
   });
+  // A live app checks for changes every few seconds, so "network idle" may never come: wait for the
+  // page itself, then give background loading a moment (best effort, never a failure on its own).
+  const settle = () => page.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => undefined);
   const open = async (path) => {
-    await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" });
+    await page.goto(`${BASE}${path}`, { waitUntil: "load" });
+    await settle();
     const agree = page.getByRole("button", { name: "I agree" });
     if (await agree.isVisible().catch(() => false)) {
       await agree.click();
-      await page.waitForLoadState("networkidle");
+      await settle();
     }
   };
   const likeButton = (scope) => scope.locator("button.action--like").first();
@@ -236,7 +240,8 @@ try {
     ok(`UI: …and it stays liked (count 1)`, stayed && /\b1 like\b/.test((await btn.getAttribute("aria-label")) ?? ""), `${JSON.stringify(await state(btn))} · ${recent()}`);
     const p = await readPost(B, id);
     ok(`UI: the ${kind} like reached the database`, p?.like_count === 1 && p?.liked === true, JSON.stringify({ count: p?.like_count, liked: p?.liked }));
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "load" });
+    await settle();
     const card2 = page.locator("#feed-panel article", { hasText: text }).first();
     await card2.waitFor({ timeout: 20000 }).catch(() => undefined);
     btn = likeButton(card2);
@@ -245,7 +250,8 @@ try {
     await waitFor(async () => (await btn.getAttribute("aria-pressed")) === "false");
     await page.waitForTimeout(2500);
     ok(`UI: unliking a ${kind} post shows 0 likes`, (await btn.getAttribute("aria-pressed")) === "false" && /\b0 likes\b/.test((await btn.getAttribute("aria-label")) ?? ""), `${JSON.stringify(await state(btn))} · ${recent()}`);
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "load" });
+    await settle();
     const card3 = page.locator("#feed-panel article", { hasText: text }).first();
     await card3.waitFor({ timeout: 20000 }).catch(() => undefined);
     ok(`UI: after a reload the ${kind} post is still unliked`, (await likeButton(card3).getAttribute("aria-pressed").catch(() => null)) === "false");
@@ -324,7 +330,8 @@ try {
     ok("UI: …within 5 s of tapping Reply", appeared && replyMs <= 5000, `${(replyMs / 1000).toFixed(1)} s`);
     info("requests after tapping Reply", timeline.slice(0, 14).join(", "));
     ok("UI: the reply box is cleared after sending", (await input.inputValue()) === "");
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "load" });
+    await settle();
     const kept = await page.getByRole("region", { name: "Replies" }).getByText(replyText).first().waitFor({ timeout: 15000 }).then(() => true, () => false);
     ok("UI: the reply is still there after a reload", kept);
     // Interact with an existing reply (the one made through the API).
@@ -338,7 +345,8 @@ try {
       ok("UI: liking a reply shows it liked", /^Unlike reply\. 1 like/.test((await replyLike.getAttribute("aria-label")) ?? ""), (await replyLike.getAttribute("aria-label")) ?? "");
       const db = await readPost(B, apiReply);
       ok("UI: the reply like reached the database", db?.like_count === 1 && db?.liked === true, JSON.stringify({ count: db?.like_count, liked: db?.liked }));
-      await page.reload({ waitUntil: "networkidle" });
+      await page.reload({ waitUntil: "load" });
+    await settle();
       const again = page.getByRole("region", { name: "Replies" }).locator('button[aria-label^="Unlike reply"]').first();
       ok("UI: the reply like survives a reload", await again.waitFor({ timeout: 10000 }).then(() => true, () => false));
     }
