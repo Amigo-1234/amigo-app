@@ -133,8 +133,15 @@ try {
       return { status: r.status, url: j.url ? new URL(j.url) : null };
     };
     const g = await google(BASE, `${BASE}/`);
-    ok("“Continue with Google” on the new address gets a Google sign-in address", g.status === 200 && g.url?.host === "accounts.google.com", `${g.status} ${g.url?.host ?? ""}`);
-    if (g.url) info("Google returns to", g.url.searchParams.get("redirect_uri") ?? "?");
+    // With Neon's shared Google credentials the address first goes through the auth service, which forwards to Google.
+    let hop = g.url;
+    for (let i = 0; i < 3 && hop && hop.host !== "accounts.google.com"; i++) {
+      const r = await fetch(hop, { redirect: "manual" });
+      const next = r.headers.get("location");
+      hop = next ? new URL(next, hop) : null;
+    }
+    ok("“Continue with Google” on the new address leads to Google's sign-in", g.status === 200 && hop?.host === "accounts.google.com", `${g.status} ${g.url?.host ?? ""} → ${hop?.host ?? "?"}`);
+    if (hop) info("Google returns to", hop.searchParams.get("redirect_uri") ?? "?");
     const gEvil = await google(BASE, `${evil}/`);
     ok("…but not for a callback to another website", gEvil.status >= 400 || !gEvil.url, String(gEvil.status));
   }

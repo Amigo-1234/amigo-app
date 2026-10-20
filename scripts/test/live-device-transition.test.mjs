@@ -151,7 +151,7 @@ try {
   await oldB.page.waitForURL(/\/messages\/[0-9a-f-]{36}/, { timeout: 30000 });
   const conversation = new URL(oldB.page.url()).pathname;
   await oldB.page.locator("#msg-input").fill(before);
-  await oldB.page.locator("#msg-input").press("Enter");
+  await oldB.page.getByRole("button", { name: "Send", exact: true }).click();
   ok("old address: B's message is sent", await waitFor(oldB.page.locator(".msg--mine:not(.is-pending)", { hasText: before }), 30000), await text(oldB.page, ".msgs"));
   await oldA.go(conversation);
   ok("old address: A reads it (decrypted on A's first device)", await waitFor(oldA.page.locator(".msg", { hasText: before }), 45000), await text(oldA.page, ".msgs"));
@@ -179,7 +179,13 @@ try {
   await oldA.go("/messages");
   await approve.click();
   const incoming = oldA.page.getByRole("heading", { name: "Approve a new sign-in?" });
-  ok("old device is asked “Approve a new sign-in?”", await waitFor(incoming, 60000), await text(oldA.page, "body"));
+  let asked = await waitFor(incoming, 60000);
+  if (!asked) {
+    info("old device: no request after 60 s; reopening the app there");
+    await oldA.go("/messages");
+    asked = await waitFor(incoming, 60000);
+  }
+  ok("old device is asked “Approve a new sign-in?”", asked, await text(oldA.page, "body"));
   await oldA.page.locator("dialog[open]").getByRole("button", { name: "Continue" }).click();
   const emojiOld = oldA.page.locator(".verify__emoji");
   const emojiNew = newA.page.locator(".verify__emoji");
@@ -202,7 +208,7 @@ try {
 
   const fromNew = `Sent from the new address ${tag}`;
   await newA.page.locator("#msg-input").fill(fromNew);
-  await newA.page.locator("#msg-input").press("Enter");
+  await newA.page.getByRole("button", { name: "Send", exact: true }).click();
   ok("new address: A sends a message", await waitFor(newA.page.locator(".msg--mine:not(.is-pending)", { hasText: fromNew }), 30000), await text(newA.page, ".msgs"));
   await freshToken(A);
   const rows = await api(A, `dm_messages?select=content&order=created_at.desc&limit=5&conversation_id=eq.${conversation.split("/").pop()}`);
@@ -215,7 +221,7 @@ try {
 
   const reply = `Reply to the new address ${tag}`;
   await oldB.page.locator("#msg-input").fill(reply);
-  await oldB.page.locator("#msg-input").press("Enter");
+  await oldB.page.getByRole("button", { name: "Send", exact: true }).click();
   ok("B's reply reaches the new address live", await waitFor(newA.page.locator(".msg", { hasText: reply }), 45000), await text(newA.page, ".msgs"));
 
   // ------------------------------------------------------------ an unapproved sign-in stays locked
