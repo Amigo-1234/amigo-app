@@ -17,6 +17,7 @@ import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 import { NAV } from "./nav";
 import { useScrollMemory } from "./useScrollMemory";
+import { useAutoHideNav } from "./useAutoHideNav";
 import { RightRail } from "./RightRail";
 import { SuspensionBanner } from "../features/moderation/SuspensionBanner";
 import { UpdateBanner } from "../features/update/UpdateBanner";
@@ -39,6 +40,7 @@ export function AppShell() {
   const inConversation = pathname.startsWith("/messages/");
 
   useScrollMemory();
+  const [navHidden, showNav] = useAutoHideNav(pathname === "/");
 
   // "n" opens the composer, like most social apps on desktop.
   useEffect(() => {
@@ -135,7 +137,7 @@ export function AppShell() {
 
       <RightRail />
 
-      <nav className="bottom-nav" aria-label="Primary">
+      <nav className={`bottom-nav${navHidden ? " bottom-nav--hidden" : ""}`} aria-label="Primary" onFocus={showNav}>
         {mobileItems.slice(0, 2).map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} end={to === "/"} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={labelFor(to) ?? label}>
             {({ isActive }) => <Icon size={25} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />}

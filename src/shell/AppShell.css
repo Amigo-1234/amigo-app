@@ -36,6 +36,14 @@
   backdrop-filter: saturate(180%) blur(18px);
   -webkit-backdrop-filter: saturate(180%) blur(18px);
   border-top: 1px solid var(--border);
+  transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Home feed, scrolling down: out of the way (fixed, so nothing below moves). Reduced motion: no slide. */
+.bottom-nav--hidden {
+  transform: translateY(calc(100% + 1px));
+  transition-duration: 200ms;
+  transition-timing-function: ease-in;
 }
 
 .bottom-link {
