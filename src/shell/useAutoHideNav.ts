@@ -55,12 +55,21 @@ export function useAutoHideNav(enabled: boolean, visit: string) {
     const onInput = () => {
       input = performance.now();
     };
+    // Back / forward always shows it — also when the screen left never finished loading (so the
+    // shell never re-rendered for it) and the person is back on the feed straight away.
+    const onHistory = () => {
+      run = 0;
+      input = -Infinity;
+      set(false);
+    };
     const inputs = ["touchstart", "touchmove", "touchend", "wheel", "keydown"] as const;
     window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("popstate", onHistory);
     for (const t of inputs) window.addEventListener(t, onInput, { passive: true, capture: true });
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("popstate", onHistory);
       for (const t of inputs) window.removeEventListener(t, onInput, { capture: true });
     };
   }, [enabled, visit]);
