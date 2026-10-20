@@ -4,6 +4,7 @@ import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { limitText } from "../feed/errors";
 import { reportActionFailure } from "../../lib/errorReport";
+import { publicUrl } from "../../lib/publicUrl";
 
 /** Optimistic like toggle that reconciles with the live post snapshot. */
 export function useLike(post: Post) {
@@ -42,7 +43,7 @@ export function useSharePost() {
   const toast = useToast();
   return useCallback(
     async (post: Post) => {
-      const url = `${location.origin}/post/${post.id}`;
+      const url = publicUrl(`/post/${post.id}`);
       const data = { title: `${post.author.name} on Amigo`, text: post.text.slice(0, 120), url };
       try {
         if (navigator.share && matchMedia("(pointer: coarse)").matches) {

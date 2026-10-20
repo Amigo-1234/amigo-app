@@ -13,7 +13,10 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin)"
+        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push"
+        required: false
+      old:
+        description: "domain suites: the old address, kept working (default: https://amigo-app-one.vercel.app)"
         required: false
       admin_nonce:
         description: "admin suite: tag of the temporary admin account an operator grants"
@@ -28,6 +31,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Project dependencies (the media API test uses the app's own client)
+        if: startsWith(inputs.suite, 'domain') || inputs.suite == 'transition' || inputs.suite == 'push'
+        run: npm ci
       - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
       - name: Fresh sign-in token probe
         if: inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'likes'
@@ -144,6 +150,92 @@ jobs:
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; ENGINE=webkit node scripts/test/live-onboarding.test.mjs
+      - name: "Official address: redirects, metadata, auth service, sign-in (Chromium)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-auth')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=chromium node scripts/test/live-domain.test.mjs
+      - name: "Official address: sign-in (WebKit)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-auth')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=webkit node scripts/test/live-domain.test.mjs
+      - name: "Official address: exposure checks (read-only)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-auth')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; node scripts/test/prod-exposure.test.mjs
+      - name: "Official address: moving with encrypted messages (Chromium)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'transition')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=chromium node scripts/test/live-device-transition.test.mjs
+      - name: "Official address: moving with encrypted messages (WebKit)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'transition')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=webkit node scripts/test/live-device-transition.test.mjs
+      - name: "Official address: photos, Moments, avatars, message photos, R2 CORS (API)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-media')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; node scripts/test/live-media.test.mjs
+      - name: "Official address: photos in an iPhone browser"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-media')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        timeout-minutes: 12
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; mkdir -p shots && SHOTS=shots node scripts/test/live-mobile.test.mjs
+      - name: "Official address: viewers and sheets (WebKit)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-media')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=webkit node scripts/test/live-viewers.test.mjs
+      - name: "Official address: direct messages (Chromium)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-messages')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=chromium node scripts/test/live-messages.test.mjs
+      - name: "Official address: direct messages (WebKit)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-messages')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=webkit node scripts/test/live-messages.test.mjs
+      - name: "Official address: likes and replies (WebKit)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-sync')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=webkit node scripts/test/live-interactions.test.mjs
+      - name: "Official address: live sync and in-app notifications (Chromium)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-sync')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=chromium node scripts/test/live-sync.test.mjs
+      - name: "Official address: live sync and in-app notifications (WebKit)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'domain-sync')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; ENGINE=webkit node scripts/test/live-sync.test.mjs
+      - name: "Official address: push notifications (real push service)"
+        if: always() && (inputs.suite == 'domain' || inputs.suite == 'push')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+          OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
+        timeout-minutes: 8
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; xvfb-run -a node scripts/test/live-push.test.mjs
       - name: Google sign-in probe (no sign-in)
         if: always() && inputs.suite == 'auth'
         env:

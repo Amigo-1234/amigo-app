@@ -15,12 +15,20 @@
     <meta property="og:site_name" content="Amigo World" />
     <meta property="og:title" content="Amigo World" />
     <meta property="og:description" content="Posts, Moments, Worlds and end-to-end encrypted conversations with your people." />
-    <meta property="og:image" content="/icons/icon-512.png" />
+    <meta property="og:url" content="https://amigoworld.com.ng/" />
+    <meta property="og:image" content="https://amigoworld.com.ng/icons/icon-512.png" />
+    <meta property="og:image:alt" content="Amigo World" />
     <meta name="twitter:card" content="summary" />
+    <!-- The official address. Every copy of the app (the old Vercel address included) points search engines here; the path is filled in below. -->
+    <link rel="canonical" href="https://amigoworld.com.ng/" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Amigo" />
     <script>
+      // Canonical: the official address with this page's path (no query: nothing private ends up in it).
+      try {
+        document.querySelector('link[rel="canonical"]').href = "https://amigoworld.com.ng" + location.pathname;
+      } catch (e) {}
       // Apply a saved theme before first paint to avoid a flash.
       try {
         var t = localStorage.getItem("amigo:theme");

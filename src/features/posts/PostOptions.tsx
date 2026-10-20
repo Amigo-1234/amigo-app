@@ -7,6 +7,7 @@ import { useToast } from "../../state/toast";
 import { Button, IconButton } from "../../ui/Button";
 import { Sheet } from "../../ui/Sheet";
 import { REPORT_REASONS } from "../reports/reasons";
+import { publicUrl } from "../../lib/publicUrl";
 
 /** Optimistic bookmark toggle (backends with post tools only). */
 export function useBookmark(post: Post) {
@@ -48,7 +49,7 @@ export function PostOptions({ post, focus }: { post: Post; focus: boolean }) {
   const copyLink = async () => {
     close();
     try {
-      await navigator.clipboard.writeText(`${location.origin}/post/${post.id}`);
+      await navigator.clipboard.writeText(publicUrl(`/post/${post.id}`));
       toast("Link copied");
     } catch {
       toast("Couldn't copy the link", "error");
@@ -283,7 +284,7 @@ export function ProfileOptions({ id, handle, onBlocked }: { id: string; handle: 
             onClick={async () => {
               close();
               try {
-                await navigator.clipboard.writeText(`${location.origin}/u/${handle}`);
+                await navigator.clipboard.writeText(publicUrl(`/u/${handle}`));
                 toast("Link copied");
               } catch {
                 toast("Couldn't copy the link", "error");

@@ -4,3 +4,5 @@ User-agent: *
 Allow: /$
 Allow: /legal
 Disallow: /
+
+Sitemap: https://amigoworld.com.ng/sitemap.xml
