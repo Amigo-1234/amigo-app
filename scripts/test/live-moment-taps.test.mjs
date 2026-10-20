@@ -147,6 +147,13 @@ try {
     await tile.waitFor({ timeout: 40000 });
   }
 
+  // Published (not just shown from this device) before anything reloads the page.
+  const posted = await page
+    .locator("article.post--pending", { hasText: `Under the Moments ${tag}` })
+    .waitFor({ state: "detached", timeout: 60000 })
+    .then(() => true, () => false);
+  info("photo post published", String(posted));
+
   // … and two text Moments.
   for (const n of [1, 2]) {
     await page.locator(".moment-composer").waitFor({ state: "detached", timeout: 10000 }).catch(() => undefined);
@@ -162,7 +169,11 @@ try {
     await page.getByText("Moment shared").first().waitFor({ timeout: 30000 });
   }
   await page.goto(`${BASE}/`, { waitUntil: "load" });
-  await tile.waitFor({ timeout: 60000 });
+  if (!(await tile.waitFor({ timeout: 60000 }).then(() => true, () => false))) {
+    const card = page.locator("article", { hasText: `Under the Moments ${tag}` }).first();
+    info("photo post after reload", (await card.count()) ? ((await card.evaluate((a) => `${a.className} · ${[...a.querySelectorAll("[class*=media]")].map((e) => e.className).join(" | ")}`)) ?? "") : "not in the feed");
+    throw new Error("the photo post's tile isn't in the feed after a reload");
+  }
   await page.waitForTimeout(1500);
   const vw = page.viewportSize().width;
   // The tap point: right of centre ("next" in the viewer) and, behind the viewer, on the feed photo.
