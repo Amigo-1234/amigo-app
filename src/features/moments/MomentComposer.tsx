@@ -15,7 +15,7 @@ import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Button, IconButton } from "../../ui/Button";
 import { Sheet } from "../../ui/Sheet";
-import { MomentVisual } from "./MomentVisual";
+import { MomentVisual, type PhotoState } from "./MomentVisual";
 import { DEFAULT_LAYOUT, initialLayout, MAX_ZOOM, MIN_ZOOM, pan, TEXT_Y_MAX, TEXT_Y_MIN, withTextY, withZoom } from "./framing";
 import "./Moments.css";
 
@@ -52,6 +52,8 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
   const [image, setImage] = useState<{ media: NewMediaInput; url: string } | null>(null);
   const [layout, setLayout] = useState<MomentLayout>(DEFAULT_LAYOUT);
   const [processing, setProcessing] = useState(false);
+  /** Whether the chosen photo's preview actually displays: nothing is shared until it does. */
+  const [photoState, setPhotoState] = useState<PhotoState>("ready");
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState(false);
@@ -79,6 +81,7 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       const p = await processImage(file);
+      setPhotoState("loading");
       setImage({ media: { kind: "image", blob: p.blob, width: p.width, height: p.height }, url: URL.createObjectURL(p.blob) });
       setLayout((l) => ({ ...initialLayout(p.width, p.height), textY: l.textY === 0.5 ? 0.72 : l.textY }));
       setHint(true);
@@ -92,12 +95,13 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
 
   function removePhoto() {
     setImage(null);
+    setPhotoState("ready");
     setLayout((l) => ({ ...DEFAULT_LAYOUT, textY: l.textY }));
   }
 
   const trimmed = text.trim();
   const tooLong = text.length > MOMENT_TEXT_MAX_LENGTH;
-  const canPost = (!!trimmed || !!image) && !tooLong && !processing;
+  const canPost = (!!trimmed || !!image) && !tooLong && !processing && (!image || photoState === "ready");
 
   async function share() {
     if (!canPost) return;
@@ -213,8 +217,20 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
             background={background}
             media={image ? { url: image.url, width: image.media.width, height: image.media.height } : null}
             layout={layout}
+            onPhotoState={setPhotoState}
             captionProps={{ className: "is-draggable", title: "Drag to move the caption" }}
           />
+          {(processing || (image && photoState === "loading")) && (
+            <span className="moment-composer__status" role="status">
+              <span className="moment-composer__spinner" aria-hidden="true" />
+              Preparing your photo…
+            </span>
+          )}
+          {image && photoState === "failed" && (
+            <span className="moment-composer__status moment-composer__status--error" role="alert">
+              This photo couldn't be shown on this device. Remove it and try another one.
+            </span>
+          )}
           {hint && image && (
             <span className="moment-composer__hint" aria-hidden="true">
               Drag to move · Pinch to zoom · Drag the caption

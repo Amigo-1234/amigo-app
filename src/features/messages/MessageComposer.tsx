@@ -189,7 +189,14 @@ export function MessageComposer({
       )}
       {image && (
         <div className="msg-composer__image">
-          <img src={image.url} alt="Photo to send" />
+          <img
+            src={image.url}
+            alt="Photo to send"
+            onError={() => {
+              clearImage();
+              setError("That photo couldn't be shown on this device. Try another one.");
+            }}
+          />
           <IconButton label="Remove photo" size="sm" type="button" onClick={clearImage} className="msg-composer__image-remove">
             <X size={16} />
           </IconButton>

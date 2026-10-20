@@ -555,6 +555,48 @@
   .moment-composer__hint { animation: none; }
 }
 
+/* Over the preview: the photo is being prepared, or couldn't be shown (never a silent black frame). */
+.moment-composer__status {
+  position: absolute;
+  inset: 50% 16px auto;
+  z-index: 2;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: var(--radius-lg, 14px);
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: var(--text-sm, 0.875rem);
+  font-weight: 600;
+  text-align: center;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.moment-composer__status--error {
+  background: rgba(150, 30, 20, 0.85);
+}
+
+.moment-composer__spinner {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: moment-spin 0.8s linear infinite;
+}
+
+@keyframes moment-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-composer__spinner { animation-duration: 2.4s; }
+}
+
 .moment-composer__tools {
   display: flex;
   align-items: center;
