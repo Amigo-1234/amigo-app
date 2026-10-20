@@ -120,7 +120,9 @@ try {
     /** Where the bar is: fully on screen, fully off, or moving. */
     const bar = () =>
       page.evaluate(() => {
-        const r = document.querySelector(".bottom-nav").getBoundingClientRect();
+        const nav = document.querySelector(".bottom-nav");
+        if (!nav) return `no bar on ${location.pathname}: ${document.body.innerText.slice(0, 120).replace(/\s+/g, " ")}`;
+        const r = nav.getBoundingClientRect();
         return r.top >= window.innerHeight - 1 ? "hidden" : Math.abs(r.bottom - window.innerHeight) < 1 ? "shown" : `moving ${Math.round(r.top)}`;
       });
     /** Scroll by `by` in steps, like a finger (or slowing, like momentum). */
@@ -230,6 +232,7 @@ try {
     // Another tab in the bar (Explore): scrolling there never hides it.
     await page.locator(".bottom-nav a[href='/explore']").tap();
     await page.waitForURL((u) => u.pathname === "/explore", { timeout: 8000 }).catch(() => undefined);
+    await page.locator(".bottom-nav").waitFor({ timeout: 10000 }).catch(() => undefined);
     await page.waitForTimeout(800);
     await scroll(400, 10);
     ok(`${L} other screens never hide it`, new URL(page.url()).pathname === "/explore" && (await bar()) === "shown", `${new URL(page.url()).pathname}: ${await bar()}`);
