@@ -33,7 +33,7 @@ function isStatement(post: Post) {
   return !post.replyTo && post.media.length === 0 && post.text.length > 0 && post.text.length <= 90 && !post.text.includes("\n");
 }
 
-const INTERACTIVE = "a, button, video, input, textarea, [role='button']";
+const INTERACTIVE = "a, button, video, input, textarea, [role='button'], dialog";
 
 export interface PendingState {
   status: "sending" | "failed" | "sent";

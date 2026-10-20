@@ -199,8 +199,11 @@ export const Composer = forwardRef<ComposerHandle, { variant?: "inline" | "sheet
       e?.preventDefault();
       if (!canPost) return;
       const media: NewMediaInput[] = ready.map((i) => ({ kind: "image", blob: i.blob!, width: i.width, height: i.height }));
-      // Hand the previews to the publishing queue (it frees them when done).
+      // Hand the previews to the publishing queue (it frees them when done). They're no longer
+      // the composer's: closing unmounts it in the same render, before `items` is cleared, and its
+      // clean-up would otherwise free the previews the new post is showing.
       publish({ text: trimmed, media, ...(world ? { world: { id: world.id, entry: world.entry } } : {}) }, ready.map((i) => i.previewUrl!));
+      itemsRef.current = [];
       if (!world) clearDraft(viewer.id);
       setDraft(null);
       setText("");

@@ -42,6 +42,9 @@ export function Sheet({
         downOnBackdrop.current = e.target === e.currentTarget;
       }}
       onClick={(e) => {
+        // A sheet sits inside whatever opened it (a post's options inside the post): nothing
+        // in it — a tap on the backdrop, the end of a drag — may reach the screen behind.
+        e.stopPropagation();
         // Click on the backdrop (the dialog element itself, outside the panel). A press that
         // began inside the panel (dragging a slider, scrolling, selecting text) and ended out
         // here also arrives as a click on the dialog: that one mustn't close it.

@@ -174,6 +174,8 @@ try {
     const ready = await sheet.locator(".moment-composer__frame .moment-visual.is-ready.has-photo").waitFor({ timeout: 30000 }).then(() => true, () => false);
     ok(`${c.name}: the preview loads`, ready, (await sheet.innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 160));
     if (preparing) ok(`${c.name}: Share is disabled while the photo is prepared`, disabledWhilePreparing === true);
+    // The photo fades in (180 ms) once loaded.
+    await page.waitForFunction(() => getComputedStyle(document.querySelector(".moment-composer__frame .moment-visual__photo") ?? document.body).opacity === "1", null, { timeout: 5000 }).catch(() => undefined);
     const shown = await inspect(".moment-composer__frame .moment-visual__photo");
     ok(`${c.name}: the preview is a real picture, not a black frame`, !!shown && shown.range > 60 && shown.opacity === "1", JSON.stringify(shown));
     // The dark band is along the photo's top edge as stored; "rotate 90° clockwise" puts it on the right.
