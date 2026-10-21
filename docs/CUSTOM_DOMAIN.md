@@ -14,10 +14,10 @@ Status (2026-10-20, checked against production by the `domain*`, `transition` an
 | Google | Starts and reaches Google's sign-in (Neon's shared credentials; callback on Neon's host, then back to the new address). Completing a Google sign-in needs a real Google account: *check by hand* |
 | Messages | Work on the new address; moving from the old address works (new device, emoji approval from the old device, history decrypts, both directions) |
 | Push / live sync / likes | Work on the new address |
-| **Photos (posts, Moments, avatars, message photos)** | **Broken on the new address until R2 CORS is updated (below)** |
+| Photos (posts, Moments, avatars, message photos) | Work on both addresses since the owner added the new origin to R2 CORS (2026-10-20): preflight 204, allow-origin per address, other websites refused |
 | Neon Data API CORS | New origin added (only used if a build lists it in `VITE_NEON_DATA_API_ORIGINS`; otherwise the `/neon` proxy is used) |
 
-## Owner action 1 — Cloudflare R2 CORS (required for photos)
+## Done — Cloudflare R2 CORS (for reference)
 
 Photos upload straight from the browser to the private R2 bucket (the one in the `R2_BUCKET` Vercel
 variable, shared by Production and Preview). Measured from the new address: the upload preflight is
