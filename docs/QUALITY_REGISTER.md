@@ -70,3 +70,18 @@ where Web Push (Settings → Notifications) takes over for messages and activity
   programme open — set by the owner), the owner's encryption identity and 13 device records, account,
   post and message counts; no test accounts left.
 - app_pulse: ~1 call per 3–4 s per open app, ~1.1 ms each (max 3.6 ms); none while the app is hidden.
+
+## Production release 2 (owner-approved, controlled — not a public launch)
+
+- Production: `dpl_Gd8PA7NwK9MYesuuk32PcJpDWqe8`, commit `4092f8b` (Moments tap fix, Interests screen, auto-hiding
+  Home bar, official-address metadata / sitemap / manifest). No database changes. Rollback target:
+  `dpl_FJv9CkuTpmAKfMGLnkGRvLUHx2qd` (`b8e76ed`). Served on amigoworld.com.ng (www → apex) and on
+  amigo-app-one.vercel.app (no redirect). `VITE_PUBLIC_ORIGIN` not set: shared links keep the current address.
+- After deploying, on production: the full suite on amigoworld.com.ng (all suites, both engines, incl. Moments taps,
+  bottom bar, Interests); the official-address suites (address, auth, moving with encrypted messages, media, messages,
+  sync, push); media, messages and sync on the Vercel address — all passed (Creator Programme UI and one WebKit sync
+  run passed on re-run; see below).
+- Unchanged (checked before and after): Creator Programme open / applications open; the owner's identity (3 keys) and
+  14 device records; profiles 9, posts 29, messages 96, devices 29; the two old test accounts kept as asked.
+- Open: an intermittent WebKit "Out of bounds memory access" in the encryption library (seen 19 Oct on an older
+  version and once in testing after this release; the re-run passed) — not caused by this release, to investigate.
