@@ -13,7 +13,10 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push"
+        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; email: email-dns | email-send"
+        required: false
+      test_to:
+        description: "email-send suite: the inbox that receives the sample emails"
         required: false
       old:
         description: "domain suites: the old address, kept working (default: https://amigo-app-one.vercel.app)"
@@ -32,7 +35,7 @@ jobs:
           node-version: 22
           cache: npm
       - name: Project dependencies (the media API test uses the app's own client)
-        if: startsWith(inputs.suite, 'domain') || inputs.suite == 'transition' || inputs.suite == 'push'
+        if: startsWith(inputs.suite, 'domain') || inputs.suite == 'transition' || inputs.suite == 'push' || inputs.suite == 'email-send'
         run: npm ci
       - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
       - name: Fresh sign-in token probe
@@ -248,6 +251,15 @@ jobs:
           OLD: ${{ inputs.old || 'https://amigo-app-one.vercel.app' }}
         timeout-minutes: 8
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; xvfb-run -a node scripts/test/live-push.test.mjs
+      - name: "Email: what DNS says (SPF, DKIM, DMARC, return path)"
+        if: always() && (inputs.suite == 'email-dns' || inputs.suite == 'email-send')
+        run: DOMAIN=amigoworld.com.ng EXPECT="${{ inputs.suite == 'email-send' && 'resend' || '' }}" node scripts/test/email-dns.mjs
+      - name: "Email: sample branded emails through Resend"
+        if: always() && inputs.suite == 'email-send'
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TEST_TO: ${{ inputs.test_to }}
+        run: node scripts/test/email-send.mjs
       - name: Google sign-in probe (no sign-in)
         if: always() && inputs.suite == 'auth'
         env:
