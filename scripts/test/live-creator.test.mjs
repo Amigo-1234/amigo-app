@@ -111,15 +111,17 @@ try {
   // WebKit logs a cancelled in-flight cross-origin request (e.g. the background perf report when the page
   // changes) as "… due to access control checks"; that's the browser, not the app, so it's not counted.
   page.on("pageerror", (e) => !/due to access control checks/.test(e.message) && errs.push(e.message.slice(0, 160)));
-  await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
+  // Not "networkidle": the live app keeps checking for changes, so the network is never idle.
+  await page.goto(`${BASE}/`, { waitUntil: "load" });
   const agree = page.getByRole("button", { name: "I agree" });
   await agree.waitFor({ timeout: 8000 }).catch(() => undefined);
   if (await agree.isVisible().catch(() => false)) {
     await agree.click();
     await agree.waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
   }
-  await page.goto(`${BASE}/settings`, { waitUntil: "networkidle" });
+  await page.goto(`${BASE}/settings`, { waitUntil: "load" });
   const entry = page.getByRole("link", { name: /Creator Monetization/ });
+  await entry.waitFor({ timeout: 20000 }).catch(() => undefined);
   ok("Settings shows Creator Monetization", await entry.isVisible().catch(() => false));
   await entry.click();
   await page.getByText("Your creativity deserves opportunities.").waitFor().catch(() => undefined);
