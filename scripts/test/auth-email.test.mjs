@@ -99,8 +99,27 @@ try {
   ok("no images, scripts, iframes, forms or tracking pixels", !/<img|<script|<iframe|<form|<link\s/i.test(m.html ?? ""));
   ok("no remote resources (only a link to the official site)", [...(m.html ?? "").matchAll(/https?:\/\/[^"'\s<)]+/g)].every((x) => x[0] === "https://amigoworld.com.ng"));
   ok("the code is one unbroken string (copies in one go)", new RegExp(`>${CODE}<`).test(m.html ?? ""));
-  ok("the code is in the preview text (phones can offer it)", (m.html ?? "").includes(`Your verification code: ${CODE}`));
+  const preheader = (m.html ?? "").match(/<div style="display:none[^>]*>([^<]*)</)?.[1] ?? "";
+  ok("the code is not in the subject", !m.subject?.includes(CODE), m.subject);
+  ok("the code is not in the inbox preview line", !!preheader && !preheader.includes(CODE), preheader.slice(0, 60));
+  ok("the code appears only in the body (once in HTML, once in text)", (m.html.match(new RegExp(CODE, "g")) ?? []).length === 1 && (m.text.match(new RegExp(CODE, "g")) ?? []).length === 1);
   ok("the code never reaches the logs", !logs.join("\n").includes(CODE), logs.join(" | "));
+
+  // 1b. Expiry comes from Neon's own times in the event (issue → expiry), not from a fixed number.
+  for (const [mins, label] of [[10, "10 minutes"], [15, "15 minutes"], [60, "60 minutes"]]) {
+    const issued = new Date(Date.now() - 90_000); // Neon issued it a moment ago
+    const e = event({ timestamp: issued.toISOString(), event_data: { ...event().event_data, expires_at: new Date(issued.getTime() + mins * 60_000).toISOString() } });
+    const raw = JSON.stringify(e);
+    await call(raw, await sign(raw));
+    ok(`Neon expiry of ${mins} min → “expires in ${label}”`, sent.at(-1).body.text.includes(`expires in ${label}.`), sent.at(-1).body.text.match(/expires[^.]*\./)?.[0]);
+  }
+  {
+    const e = event({ event_data: { otp_code: CODE, otp_type: "email-verification" } });
+    const raw = JSON.stringify(e);
+    await call(raw, await sign(raw));
+    ok("no expiry from Neon → “expires soon” (never a guessed time)", sent.at(-1).body.text.includes("This code expires soon."));
+  }
+  sent = sent.slice(0, 1);
 
   // 2. Duplicate delivery (Neon retry with the same event id)
   ok("a repeated delivery of the same event is accepted…", (await call(raw1, await sign(raw1))) === 200);

@@ -30,16 +30,21 @@ const MONO = "'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', mon
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-/** Whole minutes until the code stops working (Neon's own expiry), at least 1. */
-export function minutesLeft(expiresAt: string | undefined, now: number): number | null {
-  const t = expiresAt ? Date.parse(expiresAt) : NaN;
-  if (!Number.isFinite(t)) return null;
-  return Math.max(1, Math.round((t - now) / 60_000));
+/**
+ * How long Neon made the code valid for, in whole minutes: its own expiry minus its own issue time
+ * (both from the event, so no clock but Neon's is involved). Unknown → null ("expires soon").
+ */
+export function validMinutes(expiresAt: string | undefined, issuedAt: string | undefined): number | null {
+  const end = expiresAt ? Date.parse(expiresAt) : NaN;
+  const start = issuedAt ? Date.parse(issuedAt) : NaN;
+  if (!Number.isFinite(end) || !Number.isFinite(start) || end <= start) return null;
+  return Math.max(1, Math.round((end - start) / 60_000));
 }
 
-const COPY: Record<AuthEmailKind, { subject: string; heading: string; intro: string[]; codeLabel: string; ignore: string }> = {
+const COPY: Record<AuthEmailKind, { subject: string; preview: string; heading: string; intro: string[]; codeLabel: string; ignore: string }> = {
   "email-verification": {
     subject: "Verify your email • Amigo World",
+    preview: "Confirm your email address to finish joining Amigo World.",
     heading: "Welcome to Amigo World!",
     intro: ["You're one step away from joining the community.", "Use the verification code below to confirm your email address."],
     codeLabel: "Your verification code",
@@ -47,6 +52,7 @@ const COPY: Record<AuthEmailKind, { subject: string; heading: string; intro: str
   },
   "forget-password": {
     subject: "Reset your password • Amigo World",
+    preview: "Here's how to choose a new password for Amigo World.",
     heading: "Reset your password",
     intro: ["Someone asked to reset the password for the Amigo World account that uses this email address.", "Enter the code below in the app to choose a new password."],
     codeLabel: "Your password reset code",
@@ -54,6 +60,7 @@ const COPY: Record<AuthEmailKind, { subject: string; heading: string; intro: str
   },
   "sign-in": {
     subject: "Your sign-in code • Amigo World",
+    preview: "Finish signing in to Amigo World.",
     heading: "Sign in to Amigo World",
     intro: ["Use the code below to finish signing in."],
     codeLabel: "Your sign-in code",
@@ -111,8 +118,9 @@ const p = (s: string, extra = "") => `<p style="margin:0 0 12px;font:16px/1.6 ${
 export function codeEmail(kind: AuthEmailKind, code: string, minutes: number | null): AuthEmail {
   const c = COPY[kind];
   const expiry = minutes ? `This code expires in ${minutes} minute${minutes === 1 ? "" : "s"}.` : "This code expires soon.";
+  // The code appears only in the body — never in the subject or the inbox preview line.
   const html = shell(
-    `${c.codeLabel}: ${code}`,
+    c.preview,
     `<h1 style="margin:0 0 16px;font:700 26px/1.25 ${FONT};color:${C.text};letter-spacing:-0.4px">${esc(c.heading)}</h1>
 ${c.intro.map((s) => p(esc(s))).join("\n")}
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:24px 0 8px">

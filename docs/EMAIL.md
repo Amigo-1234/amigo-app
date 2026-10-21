@@ -3,7 +3,7 @@
 ## Today
 
 Neon Auth (Managed Better Auth) sends them with its **shared** provider: sender "Neon Auth"
-`<auth@mail.myneon.app>`, Neon's template, application name "amigo-world". Codes are 6 digits
+`<auth@mail.myneon.app>`, Neon's template; application name "Amigo World" (renamed from "amigo-world" on 2026-10-21, owner-approved). Codes are 6 digits
 (Better Auth email OTP); verification is offered but not required to use the app.
 Neon's docs call the shared provider development-only.
 
@@ -19,10 +19,12 @@ only stops sending its own email and POSTs the code to us; we send the branded e
   code); 503 if not configured. Logs event type and outcome only — never codes, links or payloads.
 - `api/_authEmail.ts` — the emails: verification code, password-reset code, sign-in code, and link
   variants (email verification / change, reset). No images, web fonts, scripts or tracking; plain-text
-  twin; code as one copyable string, also in the preview text.
+  twin; code as one copyable string **in the body only** (never in the subject or inbox preview line);
+  the expiry shown is Neon's own (its expiry minus its issue time in the event — 15 minutes today),
+  or "expires soon" if Neon doesn't send one.
 - Provider: **Resend** (free: 3,000 emails/month, 100/day; Pro $20/month for 50,000). Neon's own
   example uses it; idempotency keys stop double sends.
-- Tests: `npm run test:auth-email` (offline, 37 checks); workflow suites `email-dns` and `email-send`.
+- Tests: `npm run test:auth-email` (offline, 43 checks); workflow suites `email-dns` and `email-send`.
 
 Because Preview and production share one Neon Auth branch, enabling the webhook switches **both** at
 once. Turning it off restores Neon's own emails immediately.
@@ -63,5 +65,3 @@ No quotes unless the form requires them; paste the DKIM key in one piece. DMARC 
    codes; resend.
 6. Rollback at any time: disable the webhook (Neon's own emails resume).
 
-Optional now: Neon Auth application name "amigo-world" → "Amigo World" (only changes the name in
-Neon's current emails).

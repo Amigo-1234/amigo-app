@@ -18,7 +18,7 @@
  * Environment: RESEND_API_KEY, EMAIL_FROM ("Amigo World <no-reply@amigoworld.com.ng>"),
  * optional EMAIL_REPLY_TO and NEON_AUTH_URL (defaults to this project's auth URL).
  */
-import { codeEmail, isKind, linkEmail, minutesLeft } from "./_authEmail";
+import { codeEmail, isKind, linkEmail, validMinutes } from "./_authEmail";
 
 export const config = { runtime: "edge" };
 
@@ -120,7 +120,7 @@ export default async function handler(req: Request): Promise<Response> {
   if (!id || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) return json(400, { error: "payload" });
   if (data.delivery_preference === "sms") return json(200, { ignored: "sms" });
 
-  const minutes = minutesLeft(data.expires_at, Date.now());
+  const minutes = validMinutes(data.expires_at, event.timestamp);
   let email;
   if (type === "send.otp") {
     if (!isKind(data.otp_type) || !/^\d{4,10}$/.test(data.otp_code ?? "")) return json(400, { error: "payload" });
