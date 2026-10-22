@@ -51,7 +51,7 @@ No quotes unless the form requires them; paste the DKIM key in one piece. DMARC 
 
 ## Steps
 
-1. Owner: Resend account (free) → Domains → Add `amigoworld.com.ng`, region **eu-west-1 (Ireland)**.
+1. Owner: Resend account (free) → Domains → Add `amigoworld.com.ng`, region **eu-west-1 (Ireland)** (done; verified 2026-10-22).
 2. Owner: add the four records above at HostAfrica; Resend → Verify. Then run suite `email-dns`
    (`EXPECT=resend` happens in `email-send`).
 3. Owner: Resend → API keys → **Sending access, domain amigoworld.com.ng only**. Add it as
