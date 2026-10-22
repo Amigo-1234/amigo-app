@@ -74,6 +74,19 @@ production's auth URL (or removed, so the handler's default applies).
 The handler also refuses (403) a validly signed event whose `context.endpoint_id` isn't the endpoint in
 `NEON_AUTH_URL`, since Neon branches copy their parent's signing keys.
 
+### Result (2026-10-22, run `r1022a`, Preview deployment `amigo-fyuq5nm11…`)
+
+All passed. Neon's real codes arrived as branded emails from `no-reply@amigoworld.com.ng` in the Gmail
+inbox (2 verification, 2 reset; none for the address without an account). Verification: the code from
+before a resend is refused, a wrong code is refused, the resent code verifies (emailVerified=true), reuse is
+refused. Reset: wrong code refused, the right one sets the new password, the old password stops working,
+reuse refused; a code past its expiry is refused (`OTP_EXPIRED`) and leaves the password unchanged. The reset
+request answers the same for an address with no account. Handler logs: one line per email (event type,
+kind, outcome), no codes, links or addresses; one delivery per event, no retries.
+
+Neon's OTP lifetime here is **5 minutes** (from the event's `expires_at`), which the emails state. The app's
+own screens say "15 minutes" (Onboarding, Settings) — to be corrected before switching production.
+
 ## Steps
 
 1. Owner: Resend account (free) → Domains → Add `amigoworld.com.ng`, region **eu-west-1 (Ireland)** (done; verified 2026-10-22).
