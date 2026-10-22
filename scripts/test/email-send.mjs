@@ -28,7 +28,7 @@ await vite.close();
 
 const run = new Date().toISOString().slice(0, 16).replace("T", " ");
 for (const [kind, sample] of [["email-verification", "135790"], ["forget-password", "246802"]]) {
-  const email = codeEmail(kind, sample, 15);
+  const email = codeEmail(kind, sample, 5) // Neon's OTP lifetime (5 minutes);
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { authorization: `Bearer ${RESEND_API_KEY}`, "content-type": "application/json" },

@@ -302,7 +302,7 @@ function VerifyEmailPanel({ email }: { email: string }) {
       <p className="settings-panel__text">
         {sent ? (
           <>
-            Enter the code we sent to <strong>{email}</strong>. It expires in 15 minutes.
+            Enter the code we sent to <strong>{email}</strong>. It expires in 5 minutes.
           </>
         ) : (
           "We'll email you a short code to confirm this address is yours."

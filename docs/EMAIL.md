@@ -20,7 +20,7 @@ only stops sending its own email and POSTs the code to us; we send the branded e
 - `api/_authEmail.ts` — the emails: verification code, password-reset code, sign-in code, and link
   variants (email verification / change, reset). No images, web fonts, scripts or tracking; plain-text
   twin; code as one copyable string **in the body only** (never in the subject or inbox preview line);
-  the expiry shown is Neon's own (its expiry minus its issue time in the event — 15 minutes today),
+  the expiry shown is Neon's own (its expiry minus its issue time in the event — 5 minutes, confirmed on production and the test project),
   or "expires soon" if Neon doesn't send one.
 - Provider: **Resend** (free: 3,000 emails/month, 100/day; Pro $20/month for 50,000). Neon's own
   example uses it; idempotency keys stop double sends.
@@ -54,7 +54,8 @@ Both samples (verification, password reset) were accepted by Resend and arrived 
 from `Amigo World <no-reply@amigoworld.com.ng>`, over TLS 1.3. Gmail's Authentication-Results:
 DKIM **pass** (`d=amigoworld.com.ng`, selector `resend`, aligned), SPF **pass** (return path
 `rsend.amigoworld.com.ng`, relaxed-aligned), DMARC **pass**. Subject and preview line carry no code;
-the code appears once in each of the HTML and plain-text parts; "expires in 15 minutes" in both.
+the code appears once in each of the HTML and plain-text parts. (These samples said "15 minutes", a
+fixed sample value; Neon's real lifetime is 5 minutes — see below — and the sample now uses 5.)
 
 ## Real Neon codes, isolated (test project `amigo-email-test`)
 
@@ -85,7 +86,8 @@ request answers the same for an address with no account. Handler logs: one line 
 kind, outcome), no codes, links or addresses; one delivery per event, no retries.
 
 Neon's OTP lifetime here is **5 minutes** (from the event's `expires_at`), which the emails state. The app's
-own screens say "15 minutes" (Onboarding, Settings) — to be corrected before switching production.
+own screens said "15 minutes" (Onboarding, Settings); corrected to 5 minutes on 2026-10-22. Production's
+current codes also last 5 minutes (checked read-only: expiresAt − createdAt of its code records).
 
 ## Steps
 

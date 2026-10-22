@@ -68,7 +68,7 @@ const event = (over = {}) => ({
   timestamp: new Date().toISOString(),
   context: { endpoint_id: "ep-test", project_name: "amigo-world" },
   user: { email: "new.member@example.com", name: "New Member" },
-  event_data: { otp_code: CODE, otp_type: "email-verification", expires_at: new Date(Date.now() + 15 * 60_000).toISOString(), ip_address: "192.0.2.1", user_agent: "test" },
+  event_data: { otp_code: CODE, otp_type: "email-verification", expires_at: new Date(Date.now() + 5 * 60_000).toISOString(), ip_address: "192.0.2.1", user_agent: "test" },
   ...over,
 });
 async function call(body, headers) {
@@ -93,7 +93,7 @@ try {
   ok("…subject “Verify your email • Amigo World”", m.subject === "Verify your email • Amigo World", m.subject);
   ok("…the HTML shows Neon's code", m.html?.includes(`>${CODE}<`));
   ok("…the plain-text part shows Neon's code", m.text?.includes(`Your verification code: ${CODE}`));
-  ok("…and says when it expires (15 minutes)", m.text?.includes("expires in 15 minutes") && m.html?.includes("expires in 15 minutes"));
+  ok("…and says when it expires (5 minutes, Neon's lifetime)", m.text?.includes("expires in 5 minutes") && m.html?.includes("expires in 5 minutes"));
   ok("…idempotency key is the Neon event id", sent[0]?.headers["idempotency-key"] === `neon-${e1.event_id}`);
   ok("…API key only in the Authorization header", sent[0]?.headers.authorization === "Bearer re_test_not_a_real_key" && !JSON.stringify(m).includes("re_test"));
   ok("no images, scripts, iframes, forms or tracking pixels", !/<img|<script|<iframe|<form|<link\s/i.test(m.html ?? ""));
@@ -106,7 +106,7 @@ try {
   ok("the code never reaches the logs", !logs.join("\n").includes(CODE), logs.join(" | "));
 
   // 1b. Expiry comes from Neon's own times in the event (issue → expiry), not from a fixed number.
-  for (const [mins, label] of [[10, "10 minutes"], [15, "15 minutes"], [60, "60 minutes"]]) {
+  for (const [mins, label] of [[5, "5 minutes"], [10, "10 minutes"], [15, "15 minutes"], [60, "60 minutes"]]) {
     const issued = new Date(Date.now() - 90_000); // Neon issued it a moment ago
     const e = event({ timestamp: issued.toISOString(), event_data: { ...event().event_data, expires_at: new Date(issued.getTime() + mins * 60_000).toISOString() } });
     const raw = JSON.stringify(e);

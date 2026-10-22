@@ -202,7 +202,7 @@ function VerifyStep({ progress, update, onNext }: { progress: OnboardingProgress
       </span>
       <h1 className="onb__title">Check your email</h1>
       <p className="onb__lead">
-        We sent a 6-digit code to <strong>{viewer.email}</strong>. It expires in 15 minutes.
+        We sent a 6-digit code to <strong>{viewer.email}</strong>. It expires in 5 minutes.
       </p>
       <CodeBoxes inputRef={inputRef} value={code} onChange={setCode} disabled={busy} invalid={!!error} />
       {error && (
@@ -277,7 +277,7 @@ function CodeBoxes({ value, onChange, disabled, invalid, inputRef }: { value: st
 function codeError(e: unknown, fallback: string): string {
   const err = e as { code?: string; message?: string } | null;
   const s = `${err?.code ?? ""} ${err?.message ?? ""}`.toLowerCase();
-  if (/expired/.test(s)) return "That code has expired. Send a new one and use it within 15 minutes.";
+  if (/expired/.test(s)) return "That code has expired. Send a new one and use it within 5 minutes.";
   if (/too.?many|rate|429/.test(s)) return "Too many tries. Wait a minute, then send a new code.";
   if (/invalid|incorrect|otp/.test(s)) return "That code isn't right. Check the latest email and try again.";
   if (/network|fetch|load failed/.test(s)) return "You seem to be offline. Check your connection and try again.";
