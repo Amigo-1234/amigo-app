@@ -5,9 +5,12 @@
  * from here — that is tested offline (auth-email.test.mjs) and, once enabled,
  * by real sign-ups.
  *
- *   BASE=https://<preview> VERCEL_BYPASS=… node scripts/test/email-handler-probe.mjs
+ * Also reads GET ?check (yes/no readiness: sender exactly as expected, provider key set,
+ * which Neon Auth endpoint is trusted). With EXPECT_ENDPOINT set, readiness is required.
+ *
+ *   BASE=https://<deployment> [VERCEL_BYPASS=…] [EXPECT_ENDPOINT=ep-…] node scripts/test/email-handler-probe.mjs
  */
-const { BASE, VERCEL_BYPASS } = process.env;
+const { BASE, VERCEL_BYPASS, EXPECT_ENDPOINT } = process.env;
 if (!BASE) throw new Error("Set BASE");
 const H = VERCEL_BYPASS ? { "x-vercel-protection-bypass": VERCEL_BYPASS } : {};
 let failures = 0;
@@ -27,5 +30,13 @@ const forged = await fetch(url, {
   body,
 });
 ok("a forged signature is refused (401)", forged.status === 401, String(forged.status));
+const check = await fetch(`${url}?check`, { headers: H });
+const status = await check.json().catch(() => ({}));
+console.log(`info readiness — ${JSON.stringify(status)}`);
+if (EXPECT_ENDPOINT) {
+  ok("sender is exactly “Amigo World <no-reply@amigoworld.com.ng>”", status.sender === "matches", status.sender);
+  ok("provider key is set", status.provider_key === "present", status.provider_key);
+  ok(`trusts the production Neon Auth endpoint (${EXPECT_ENDPOINT})`, status.auth_endpoint === EXPECT_ENDPOINT, status.auth_endpoint);
+}
 console.log(failures ? `${failures} FAILED` : "HANDLER PROBE PASSED");
 process.exit(failures ? 1 : 0);

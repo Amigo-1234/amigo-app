@@ -140,6 +140,19 @@ try {
   const eW = event({ context: { endpoint_id: "ep-another-branch", project_name: "amigo-world" } });
   const rawW = JSON.stringify(eW);
   ok("validly signed but from another Neon Auth endpoint (e.g. a branch that copied the keys) → refused", (await call(rawW, await sign(rawW))) === 403 && sent.length === before);
+  const check = async () => {
+    const res = await handler(new Request("https://amigoworld.com.ng/api/auth-email?check"));
+    return { status: res.status, text: await res.text() };
+  };
+  const c1 = await check();
+  const j1 = JSON.parse(c1.text);
+  ok("GET ?check → ready: sender matches, provider key present, trusted endpoint named", c1.status === 200 && j1.ready === true && j1.sender === "matches" && j1.provider_key === "present" && j1.auth_endpoint === "ep-test", c1.text);
+  ok("…and it never shows a value (no key, no sender address)", !/re_test|no-reply|amigoworld/.test(c1.text));
+  const savedFrom = process.env.EMAIL_FROM;
+  process.env.EMAIL_FROM = "Someone Else <no-reply@example.com>";
+  const j2 = JSON.parse((await check()).text);
+  ok("a different sender → not ready (\"differs\"), still without showing it", j2.ready === false && j2.sender === "differs");
+  process.env.EMAIL_FROM = savedFrom;
   ok("GET → 405", (await handler(new Request("https://amigoworld.com.ng/api/auth-email"))).status === 405);
 
   // 4. Other kinds
@@ -181,7 +194,7 @@ try {
   // 7. Previews
   const OUT = process.env.OUT ?? "email-previews";
   mkdirSync(OUT, { recursive: true });
-  const exp = 15;
+  const exp = 5;
   for (const [name, email] of [
     ["verify-email", codeEmail("email-verification", CODE, exp)],
     ["reset-password", codeEmail("forget-password", CODE, exp)],

@@ -18,6 +18,10 @@
  * - A provider failure answers 502, so Neon retries (3 attempts within 15 s);
  *   if all fail the person sees an error in the app and can ask for a new code.
  *
+ * GET ?check answers whether this deployment is ready to send — the sender is exactly
+ * EXPECTED_FROM, a provider key is set, and which Neon Auth endpoint it trusts — as
+ * yes/no only, never a value. Any other GET is 405.
+ *
  * Environment: RESEND_API_KEY, EMAIL_FROM ("Amigo World <no-reply@amigoworld.com.ng>"),
  * optional EMAIL_REPLY_TO and NEON_AUTH_URL (defaults to this project's auth URL).
  */
@@ -28,6 +32,7 @@ export const config = { runtime: "edge" };
 const ENV = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 const DEFAULT_AUTH_URL = "https://ep-dry-mode-zano9y8g.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth";
 const MAX_AGE_MS = 5 * 60_000;
+const EXPECTED_FROM = "Amigo World <no-reply@amigoworld.com.ng>";
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 const log = (outcome: string, extra: Record<string, unknown> = {}) => console.log(JSON.stringify({ at: "auth-email", outcome, ...extra }));
@@ -97,9 +102,15 @@ type Payload = {
 };
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method !== "POST") return json(405, { error: "method" });
   const { RESEND_API_KEY, EMAIL_FROM, EMAIL_REPLY_TO } = ENV;
   const authUrl = (ENV.NEON_AUTH_URL || DEFAULT_AUTH_URL).replace(/\/+$/, "");
+  if (req.method === "GET" && new URL(req.url).searchParams.has("check")) {
+    const sender = !EMAIL_FROM ? "missing" : EMAIL_FROM.trim() === EXPECTED_FROM ? "matches" : "differs";
+    const providerKey = RESEND_API_KEY ? "present" : "missing";
+    const endpoint = new URL(authUrl).hostname.split(".")[0];
+    return json(200, { ready: sender === "matches" && providerKey === "present", sender, provider_key: providerKey, auth_endpoint: endpoint });
+  }
+  if (req.method !== "POST") return json(405, { error: "method" });
   const raw = await req.text();
   if (raw.length > 64_000) return json(413, { error: "too-large" });
   if (!(await verifyNeonSignature(raw, req.headers, authUrl))) {
@@ -113,8 +124,8 @@ export default async function handler(req: Request): Promise<Response> {
     return json(400, { error: "body" });
   }
   // "ep-…" is the first label of the auth host.
-  const endpoint = new URL(authUrl).hostname.split(".")[0];
-  if (event.context?.endpoint_id && event.context.endpoint_id !== endpoint) {
+  const endpointId = new URL(authUrl).hostname.split(".")[0];
+  if (event.context?.endpoint_id && event.context.endpoint_id !== endpointId) {
     log("rejected-endpoint");
     return json(403, { error: "endpoint" });
   }

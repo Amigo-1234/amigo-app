@@ -91,6 +91,13 @@ Neon's OTP lifetime here is **5 minutes** (from the event's `expires_at`), which
 own screens said "15 minutes" (Onboarding, Settings); corrected to 5 minutes on 2026-10-22. Production's
 current codes also last 5 minutes (checked read-only: expiresAt − createdAt of its code records).
 
+## Readiness check
+
+`GET /api/auth-email?check` answers yes/no only (never a value): `sender` matches / differs / missing
+(compared with exactly `Amigo World <no-reply@amigoworld.com.ng>`), `provider_key` present / missing, and
+`auth_endpoint` (the Neon Auth endpoint id it trusts). Workflow suite `email-probe` checks a deployment:
+GET 405, unsigned and forged POSTs 401, ready, endpoint `ep-dry-mode-zano9y8g`.
+
 ## Steps
 
 1. Owner: Resend account (free) → Domains → Add `amigoworld.com.ng`, region **eu-west-1 (Ireland)** (done; verified 2026-10-22).
