@@ -12,6 +12,10 @@ import { createServer } from "vite";
 const { RESEND_API_KEY, TEST_TO } = process.env;
 const FROM = process.env.EMAIL_FROM || "Amigo World <no-reply@amigoworld.com.ng>";
 if (!RESEND_API_KEY || !TEST_TO) throw new Error("Set RESEND_API_KEY and TEST_TO");
+// The sender must be on the domain verified in Resend (amigoworld.com.ng).
+const fromAddress = FROM.match(/<([^>]+)>/)?.[1] ?? FROM;
+if (!/@amigoworld\.com\.ng$/i.test(fromAddress)) throw new Error(`EMAIL_FROM must be an @amigoworld.com.ng address (got ${fromAddress})`);
+console.log(`info sender — ${FROM}`);
 let failures = 0;
 const ok = (label, cond, extra = "") => {
   console.log(`${cond ? "ok  " : "FAIL"} ${label}${extra ? ` — ${extra}` : ""}`);

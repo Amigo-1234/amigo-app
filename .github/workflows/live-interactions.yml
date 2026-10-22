@@ -253,11 +253,17 @@ jobs:
         run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-https://amigoworld.com.ng}"; xvfb-run -a node scripts/test/live-push.test.mjs
       - name: "Email: what DNS says (SPF, DKIM, DMARC, return path)"
         if: always() && (inputs.suite == 'email-dns' || inputs.suite == 'email-send')
-        run: DOMAIN=amigoworld.com.ng EXPECT="${{ inputs.suite == 'email-send' && 'resend' || '' }}" node scripts/test/email-dns.mjs
+        run: DOMAIN=amigoworld.com.ng EXPECT=resend node scripts/test/email-dns.mjs
+      - name: "Email: the webhook handler on Preview refuses anything Neon didn't sign"
+        if: always() && (inputs.suite == 'email-dns' || inputs.suite == 'email-send')
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: BASE="https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app" node scripts/test/email-handler-probe.mjs
       - name: "Email: sample branded emails through Resend"
         if: always() && inputs.suite == 'email-send'
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM: ${{ vars.EMAIL_FROM }}
           TEST_TO: ${{ inputs.test_to }}
         run: node scripts/test/email-send.mjs
       - name: Google sign-in probe (no sign-in)
