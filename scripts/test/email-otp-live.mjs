@@ -23,7 +23,10 @@ const PROD_AUTH = "https://ep-dry-mode-zano9y8g.neonauth.c-2.eu-west-2.aws.neon.
 const STATE_DIR = process.env.STATE_DIR ?? ".otp-state";
 const STATE = `${STATE_DIR}/state.json`;
 if (!AUTH) throw new Error("Set AUTH_URL");
-if (AUTH === PROD_AUTH) throw new Error("AUTH_URL is production's — this test only runs against the test project");
+// Production only with the owner's approval of the switch (workflow suites email-otp-prod-*), and only
+// ever with fresh "+amigo-<session>-…" test accounts this run creates.
+if (AUTH === PROD_AUTH && process.env.ALLOW_PRODUCTION !== "owner-approved") throw new Error("AUTH_URL is production's — set by the email-otp-prod-* suites only");
+if (AUTH === PROD_AUTH && STEP === "keys") throw new Error("keys compares the test project with production");
 
 let failures = 0;
 const ok = (label, cond, extra = "") => {

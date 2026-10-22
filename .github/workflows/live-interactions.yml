@@ -13,7 +13,7 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; email: email-dns | email-send | email-probe (BASE: unsigned/forged refused + readiness, production endpoint expected) | email-otp-keys | email-otp-start | email-otp-verify | email-otp-reset | email-otp-expired"
+        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; email: email-dns | email-send | email-probe (BASE: unsigned/forged refused + readiness, production endpoint expected) | email-otp-keys | email-otp-start | email-otp-verify | email-otp-reset | email-otp-expired | email-otp-prod-{start,verify,reset,expired} (production, owner-approved)"
         required: false
       test_to:
         description: "email-send / email-otp-start: the inbox that receives the emails"
@@ -282,24 +282,28 @@ jobs:
       # Real Neon codes against the isolated test project amigo-email-test only (own Neon Auth,
       # keys and test accounts; no production data). Codes come back sealed to the job's key.
       - name: "Email codes: restore this test run's state"
-        if: startsWith(inputs.suite, 'email-otp-') && inputs.suite != 'email-otp-keys' && inputs.suite != 'email-otp-start'
+        if: startsWith(inputs.suite, 'email-otp-') && inputs.suite != 'email-otp-keys' && inputs.suite != 'email-otp-start' && inputs.suite != 'email-otp-prod-start'
         uses: actions/cache/restore@v4
         with:
           path: .otp-state
           key: email-otp-${{ inputs.session }}
           fail-on-cache-miss: true
-      - name: "Email codes: real Neon codes on the test project"
+      - name: "Email codes: real Neon codes (test project, or production with email-otp-prod-*)"
         if: startsWith(inputs.suite, 'email-otp-')
         env:
-          AUTH_URL: https://ep-orange-shadow-zaw0o0sl.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth
           STATE_DIR: .otp-state
           SUITE: ${{ inputs.suite }}
           SESSION: ${{ inputs.session }}
           TEST_TO: ${{ inputs.test_to }}
           BLOB: ${{ inputs.blob }}
-        run: STEP="${SUITE#email-otp-}" node scripts/test/email-otp-live.mjs
+        run: |
+          case "$SUITE" in
+            email-otp-prod-*) export AUTH_URL=https://ep-dry-mode-zano9y8g.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth ALLOW_PRODUCTION=owner-approved STEP="${SUITE#email-otp-prod-}" ;;
+            *) export AUTH_URL=https://ep-orange-shadow-zaw0o0sl.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth STEP="${SUITE#email-otp-}" ;;
+          esac
+          node scripts/test/email-otp-live.mjs
       - name: "Email codes: keep this test run's state for the next steps"
-        if: inputs.suite == 'email-otp-start'
+        if: inputs.suite == 'email-otp-start' || inputs.suite == 'email-otp-prod-start'
         uses: actions/cache/save@v4
         with:
           path: .otp-state
