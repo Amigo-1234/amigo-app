@@ -48,6 +48,14 @@ Enter only the host part (`send`, `resend._domainkey`, `_dmarc`) — HostAfrica 
 No quotes unless the form requires them; paste the DKIM key in one piece. DMARC starts at `p=none`
 (monitor); after a few weeks of passing mail it can move to `p=quarantine`.
 
+## Delivery test (2026-10-22, suite `email-send`, sample codes)
+
+Both samples (verification, password reset) were accepted by Resend and arrived in a Gmail **inbox**, not spam,
+from `Amigo World <no-reply@amigoworld.com.ng>`, over TLS 1.3. Gmail's Authentication-Results:
+DKIM **pass** (`d=amigoworld.com.ng`, selector `resend`, aligned), SPF **pass** (return path
+`rsend.amigoworld.com.ng`, relaxed-aligned), DMARC **pass**. Subject and preview line carry no code;
+the code appears once in each of the HTML and plain-text parts; "expires in 15 minutes" in both.
+
 ## Steps
 
 1. Owner: Resend account (free) → Domains → Add `amigoworld.com.ng`, region **eu-west-1 (Ireland)** (done; verified 2026-10-22).
