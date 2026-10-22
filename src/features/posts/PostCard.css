@@ -1,0 +1,423 @@
+/* ---------- Post ----------
+   Full-bleed on phones, separated by hairlines. Text runs the full column
+   width under the byline (not indented beside the avatar). */
+
+.post {
+  position: relative;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+  border-bottom: 1px solid var(--border);
+  transition: background-color var(--dur-fast) ease;
+}
+
+.post--feed {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .post--feed:hover {
+    background: var(--surface-hover);
+  }
+}
+
+.post__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.post__byline {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.post__name {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post__name--link:hover {
+  text-decoration: underline;
+}
+
+.post__avatar-link {
+  display: inline-flex;
+  border-radius: 50%;
+}
+
+.post__reply-to {
+  margin-top: var(--space-2);
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+.post__reply-to a {
+  color: var(--accent-text);
+  font-weight: 550;
+}
+
+.post__meta {
+  color: var(--text-3);
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.post__time:hover {
+  color: var(--text-2);
+  text-decoration: underline;
+}
+
+.post__text {
+  margin-top: var(--space-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.post--focus .post__text {
+  font-size: var(--text-lg);
+  line-height: 1.45;
+}
+
+.post__text--statement {
+  font-family: var(--font-display);
+  font-size: 1.375rem;
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.025em;
+}
+
+.post--focus .post__text--statement {
+  font-size: 1.75rem;
+}
+
+/* A caption belongs to its photos: a little closer to them, comfortable line height. */
+.post__text--caption {
+  line-height: 1.45;
+}
+
+.post__text--caption + .post-media {
+  margin-top: var(--space-2);
+}
+
+.post__more {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.rich-link {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+.rich-link:hover {
+  text-decoration: underline;
+}
+
+.post__timestamp {
+  margin-top: var(--space-4);
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+/* ---------- Media ----------
+   One layout for every screen (see MediaLayout). Multi-image posts use a
+   fixed 4:3 frame so nothing jumps while images load. */
+
+.post-media {
+  position: relative;
+  margin-top: var(--space-3);
+  display: grid;
+  gap: 3px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface-2);
+  isolation: isolate;
+}
+
+.post-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--border);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.post-media--2,
+.post-media--3,
+.post-media--4 {
+  aspect-ratio: 4 / 3;
+  grid-template-columns: 1fr 1fr;
+}
+
+.post-media--3,
+.post-media--4 {
+  grid-template-rows: 1fr 1fr;
+}
+
+.post-media--3 > :first-child {
+  grid-row: span 2;
+}
+
+.media-tile {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface-2);
+}
+
+.media-tile__open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: zoom-in;
+}
+
+.media-tile__open:focus-visible {
+  box-shadow: inset 0 0 0 3px var(--coral-500);
+}
+
+.media-tile img,
+.media-tile video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity var(--dur-med) ease;
+}
+
+/* The tiny blurred preview under the image while it loads. */
+.media-tile__preview {
+  position: absolute;
+  inset: -12px;
+  background-size: cover;
+  background-position: center;
+  filter: blur(14px);
+  pointer-events: none;
+}
+
+.media-tile.is-loaded img,
+.media-tile.is-loaded video {
+  opacity: 1;
+}
+
+.post-media--natural {
+  min-height: 200px;
+}
+
+.post-media--natural img {
+  height: auto;
+  max-height: 560px;
+}
+
+.media-tile__more {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  pointer-events: none;
+}
+
+.media-tile__failed {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 120px;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+/* ---------- Actions ---------- */
+
+.post__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: var(--space-2) calc(-1 * var(--space-2)) 0;
+}
+
+.post--focus .post__actions {
+  margin-top: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  height: 40px;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: 550;
+  font-variant-numeric: tabular-nums;
+  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease;
+}
+
+.action:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.action--share {
+  margin-left: auto;
+}
+
+.action--like.is-active {
+  color: var(--accent);
+}
+
+.action--like.is-active svg {
+  animation: like-pop 320ms var(--ease-out);
+}
+
+.action__count:empty {
+  display: none;
+}
+
+@keyframes like-pop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.28); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- Tablet / desktop ---------- */
+
+@media (min-width: 768px) {
+  .post {
+    padding: var(--space-5) var(--space-5) var(--space-2);
+  }
+
+  /* Keep tall portraits from swallowing the desktop column; crop centred. */
+  .post--feed .post-media--1 {
+    max-height: 560px;
+  }
+}
+
+/* ---------- Optimistic (publishing) ---------- */
+
+.post--sending .post-media,
+.post--sending .post__text {
+  opacity: 0.75;
+}
+
+.post__pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 40px;
+  margin-top: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+
+.post__pending-text--error {
+  color: var(--danger);
+  flex: 1;
+}
+
+.post__pending-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+
+.post--sent .post__pending-spinner {
+  display: none;
+}
+
+.post__pending-btn {
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: 10px;
+  font-weight: 620;
+  color: var(--text-2);
+}
+
+.post__pending-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.post__pending-btn--primary {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.post__pending-btn--primary:hover {
+  background: var(--coral-400);
+  color: var(--on-accent);
+}
+
+.post__world {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 2px 0 var(--space-1);
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+
+.post__world a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent-text);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.post__world a:hover {
+  text-decoration: underline;
+}
+
+.post__world-entry {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.post__options {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: flex-start;
+  color: var(--text-3);
+}
+
+.post__edited {
+  color: var(--text-3);
+}
+
+.action--save.is-active {
+  color: var(--text);
+}

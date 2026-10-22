@@ -1,0 +1,187 @@
+.media-viewer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background: rgba(0, 0, 0, 0.97);
+  color: #fff;
+}
+
+.media-viewer:not([open]) {
+  display: none;
+}
+
+.media-viewer::backdrop {
+  background: transparent;
+}
+
+/* While the viewer is open the page behind stays put (see lockPageScroll). */
+html.media-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.media-viewer__stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  /* The viewer handles every touch itself (pinch, pan, swipe): nothing reaches the page. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  outline: none;
+}
+
+.media-viewer__frame {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  transform-origin: center;
+  transition: transform var(--dur-med) var(--ease-out);
+  will-change: transform;
+}
+
+.media-viewer__stage.is-dragging .media-viewer__frame {
+  transition: none;
+}
+
+.media-viewer__stage.is-zoomed {
+  cursor: grab;
+}
+
+.media-viewer__img,
+.media-viewer__stage video {
+  grid-area: 1 / 1;
+  max-width: 100vw;
+  max-height: 100dvh;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.media-viewer__img--small {
+  filter: blur(0.5px);
+}
+
+.media-viewer__img:not(.media-viewer__img--small) {
+  opacity: 0;
+  transition: opacity var(--dur-fast) ease;
+}
+
+.media-viewer__img.is-loaded {
+  opacity: 1;
+}
+
+.media-viewer__stage video {
+  pointer-events: auto;
+}
+
+.media-viewer__btn {
+  position: fixed;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transition: background-color var(--dur-fast) ease, opacity var(--dur-fast) ease;
+}
+
+.media-viewer__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.media-viewer__btn:disabled {
+  opacity: 0.25;
+}
+
+.media-viewer__btn:focus-visible {
+  box-shadow: 0 0 0 3px var(--coral-500);
+}
+
+.media-viewer__close {
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 12px);
+}
+
+.media-viewer__prev,
+.media-viewer__next {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.media-viewer__prev {
+  left: calc(env(safe-area-inset-left) + 12px);
+}
+
+.media-viewer__next {
+  right: calc(env(safe-area-inset-right) + 12px);
+}
+
+.media-viewer__zoom {
+  position: fixed;
+  z-index: 1;
+  right: calc(env(safe-area-inset-right) + 12px);
+  bottom: calc(env(safe-area-inset-bottom) + 12px);
+  display: flex;
+  gap: 8px;
+}
+
+.media-viewer__zoom .media-viewer__btn {
+  position: static;
+}
+
+/* Phones: pinch is the natural zoom; the buttons stay for accessibility, smaller. */
+@media (pointer: coarse) {
+  .media-viewer__zoom .media-viewer__btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .media-viewer__prev,
+  .media-viewer__next {
+    display: none;
+  }
+}
+
+.media-viewer__count {
+  position: fixed;
+  z-index: 1;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom) + 16px);
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.5);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .media-viewer__frame,
+  .media-viewer__img {
+    transition: none;
+  }
+}
+
+/* Save: beside Close, out of the way of swipes and pinches (its own pointer events stop at the button). */
+.media-viewer__download {
+  top: calc(env(safe-area-inset-top) + 12px);
+  right: calc(env(safe-area-inset-right) + 64px);
+}
+
+.media-viewer__download.is-busy {
+  opacity: 0.7;
+}

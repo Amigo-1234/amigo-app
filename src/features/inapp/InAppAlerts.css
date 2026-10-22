@@ -1,0 +1,135 @@
+/* In-app notification banner: top of the screen, inside the safe area (notch / Dynamic Island). */
+
+.inapp-alerts {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 8px);
+  left: 50%;
+  z-index: 60;
+  width: min(440px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.inapp-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.08);
+  backdrop-filter: saturate(1.6) blur(18px);
+  -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  pointer-events: auto;
+  animation: inapp-in 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes inapp-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .inapp-banner {
+    animation: none;
+  }
+}
+
+.inapp-banner__main {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.inapp-banner__avatar {
+  position: relative;
+  flex: none;
+}
+
+.inapp-banner__kind {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+}
+
+.inapp-banner__kind--follow {
+  background: #2f6fde;
+}
+
+.inapp-banner__kind--message {
+  background: #1f9d55;
+}
+
+.inapp-banner__text {
+  display: grid;
+  min-width: 0;
+}
+
+.inapp-banner__title {
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inapp-banner__when {
+  color: var(--text-3);
+  font-weight: 400;
+}
+
+.inapp-banner__body {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inapp-banner__close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.inapp-banner__more {
+  position: absolute;
+  top: -6px;
+  right: 10px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--text);
+  color: var(--bg, #fff);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+}

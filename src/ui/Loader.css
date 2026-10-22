@@ -1,0 +1,89 @@
+.amigo-loader {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+}
+
+.amigo-loader svg {
+  overflow: visible;
+}
+
+.amigo-loader__bubble {
+  fill: var(--coral-500);
+  transform-origin: 16px 16px;
+  animation: amigo-pop 1.6s var(--ease-out) infinite;
+}
+
+.amigo-loader__ring {
+  fill: none;
+  stroke: var(--on-accent);
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  transform-origin: 14.6px 17.2px;
+  transform: rotate(-90deg);
+  animation: amigo-draw 1.6s var(--ease-out) infinite;
+}
+
+.amigo-loader__stem {
+  fill: var(--on-accent);
+  transform-origin: 21.25px 23px;
+  animation: amigo-stem 1.6s var(--ease-out) infinite;
+}
+
+@keyframes amigo-pop {
+  0%, 100% { transform: scale(1); }
+  45% { transform: scale(0.94); }
+  60% { transform: scale(1.03); }
+}
+
+@keyframes amigo-draw {
+  0% { stroke-dashoffset: 100; }
+  45%, 70% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -100; }
+}
+
+@keyframes amigo-stem {
+  0%, 30% { transform: scaleY(0.2); }
+  55%, 80% { transform: scaleY(1); }
+  100% { transform: scaleY(0.2); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .amigo-loader__bubble,
+  .amigo-loader__ring,
+  .amigo-loader__stem {
+    animation: none;
+  }
+  .amigo-loader__ring { stroke-dashoffset: 0; }
+  .amigo-loader__stem { transform: none; }
+  .amigo-loader { animation: amigo-fade 1.6s ease-in-out infinite; }
+}
+
+@keyframes amigo-fade {
+  50% { opacity: 0.6; }
+}
+
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  background: var(--bg);
+  /* Fast restores never flash the loader. */
+  animation: loading-in 240ms ease 160ms both;
+}
+
+.loading-screen__msg {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-weight: 550;
+}
+
+@keyframes loading-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

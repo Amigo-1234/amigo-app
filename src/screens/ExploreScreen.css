@@ -1,0 +1,119 @@
+.explore-header__row {
+  gap: var(--space-3);
+}
+
+.explore-section {
+  border-bottom: 1px solid var(--border);
+}
+
+.explore-section:last-child {
+  border-bottom: 0;
+}
+
+.explore-section__head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-4) var(--space-2);
+}
+
+.explore-section__title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.explore-section__subtitle {
+  margin-top: 1px;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+.explore-section__action {
+  flex: none;
+  padding: var(--space-1) var(--space-2);
+  margin-right: calc(-1 * var(--space-2));
+  border-radius: var(--radius-sm);
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+
+.explore-section__action:hover {
+  background: var(--surface-hover);
+}
+
+.explore-people {
+  margin: 0;
+  padding: 0 0 var(--space-2);
+}
+
+/* Post cards inside a section: the section provides the top rule. */
+.explore-posts > .post:last-child {
+  border-bottom: 0;
+}
+
+.explore-section .media-grid {
+  padding-bottom: 2px;
+}
+
+.recent-list {
+  margin: 0;
+  padding: 0 0 var(--space-2);
+  list-style: none;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+}
+
+.recent-item__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 44px;
+  padding: 0 var(--space-4);
+  color: var(--text-3);
+  text-align: left;
+}
+
+.recent-item__main span {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-item__main:hover {
+  background: var(--surface-hover);
+}
+
+.recent-item__remove {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  color: var(--text-3);
+}
+
+.recent-item__remove:hover {
+  color: var(--text);
+}
+
+@media (min-width: 768px) {
+  .explore-section__head {
+    padding-left: var(--space-5);
+    padding-right: var(--space-5);
+  }
+  .recent-item__main {
+    padding-left: var(--space-5);
+  }
+  .recent-item__remove {
+    margin-right: var(--space-2);
+  }
+}

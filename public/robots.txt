@@ -1,0 +1,8 @@
+# Amigo World: content is only visible to signed-in members, so only the
+# public legal pages are worth indexing.
+User-agent: *
+Allow: /$
+Allow: /legal
+Disallow: /
+
+Sitemap: https://amigoworld.com.ng/sitemap.xml
