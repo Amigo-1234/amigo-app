@@ -104,7 +104,17 @@ Production variables: `RESEND_API_KEY` and `EMAIL_FROM` set; no `NEON_AUTH_URL` 
 production endpoint). Deployed commit `1776e32` to production as `dpl_E7G4JxJu79WG7SdYuR5bXZXbWZr1`
 (rollback: `dpl_GYj7SJx3CDn2hEoiGQnaQG19rftg`, commit `4092f8b`). Probe on https://amigoworld.com.ng:
 GET 405, unsigned 401, forged 401; readiness: sender matches, provider key present, endpoint
-`ep-dry-mode-zano9y8g`. Production Neon webhook **not** enabled — awaiting the owner's approval.
+`ep-dry-mode-zano9y8g`.
+
+**Switched on 2026-10-22 (owner-approved).** Webhook in amigo-world: `https://amigoworld.com.ng/api/auth-email`,
+events `send.otp` + `send.magic_link`, timeout 5 s (entered by the owner in the Console). Production test run
+`p1022a` (two new "+amigo-p1022a-a/b" test accounts, kept): branded verification and reset emails from
+`Amigo World <no-reply@amigoworld.com.ng>` in the Gmail inbox, none from Neon's sender; code replaced by a
+resend refused, wrong code refused, right code verifies, reuse refused; reset: wrong code refused, new password
+works, old fails, reuse refused; expired code refused (`OTP_EXPIRED`), password unchanged; reset for an unknown
+address answers the same and sends nothing. Handler logs: four "sent" lines (type/kind/outcome only); no errors or
+warnings. Existing accounts: 9 users / 3 verified / last change 2026-10-20 and the credential fingerprint are
+identical before and after.
 
 ## Steps
 
