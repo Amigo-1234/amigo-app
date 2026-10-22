@@ -19,7 +19,7 @@ const ok = (label, cond, extra = "") => {
   if (!cond) failures++;
 };
 
-const AUTH = "https://auth.example.test/neondb/auth";
+const AUTH = "https://ep-test.neonauth.example.test/neondb/auth";
 process.env.RESEND_API_KEY = "re_test_not_a_real_key";
 process.env.EMAIL_FROM = "Amigo World <no-reply@amigoworld.com.ng>";
 process.env.NEON_AUTH_URL = AUTH;
@@ -137,6 +137,9 @@ try {
   ok("unknown key id → refused", (await call(raw2, await sign(raw2, { keyId: "kid-unknown" }))) === 401);
   ok("…and refused requests sent nothing", sent.length === before, String(sent.length - before));
   ok("the key list is fetched once and reused (an unknown key can refetch it at most every 30 s)", jwksFetches === 1, String(jwksFetches));
+  const eW = event({ context: { endpoint_id: "ep-another-branch", project_name: "amigo-world" } });
+  const rawW = JSON.stringify(eW);
+  ok("validly signed but from another Neon Auth endpoint (e.g. a branch that copied the keys) → refused", (await call(rawW, await sign(rawW))) === 403 && sent.length === before);
   ok("GET → 405", (await handler(new Request("https://amigoworld.com.ng/api/auth-email"))).status === 405);
 
   // 4. Other kinds
@@ -173,7 +176,7 @@ try {
   const e4 = event();
   const raw4 = JSON.stringify(e4);
   ok("without a provider key → 503 (never a silent drop)", (await call(raw4, await sign(raw4))) === 503);
-  ok("nothing in any log line contains a code or link", !logs.join("\n").match(/482913|token=|https:\/\/auth\.example/), logs.slice(0, 3).join(" | "));
+  ok("nothing in any log line contains a code or link", !logs.join("\n").match(/482913|token=|https:\/\/(ep-test|auth)\.[a-z.]*example/), logs.slice(0, 3).join(" | "));
 
   // 7. Previews
   const OUT = process.env.OUT ?? "email-previews";

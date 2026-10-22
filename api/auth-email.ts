@@ -7,6 +7,9 @@
  * - Every request is checked: Ed25519 detached-JWS signature against Neon
  *   Auth's JWKS (key looked up by kid), and a timestamp no older than 5
  *   minutes. Anything else gets 401 and nothing is sent.
+ * - Only events from this Neon Auth endpoint (the one NEON_AUTH_URL names): Neon
+ *   branches copy their parent's signing keys, so a valid signature alone doesn't
+ *   say which branch sent the event; context.endpoint_id does. Others get 403.
  * - Duplicates (Neon retries with the same event id): skipped here if seen
  *   recently, and Resend's Idempotency-Key (the event id) drops any that slip
  *   through on another instance.
@@ -88,6 +91,7 @@ type Payload = {
   event_id?: string;
   event_type?: string;
   timestamp?: string;
+  context?: { endpoint_id?: string };
   user?: { email?: string };
   event_data?: { otp_code?: string; otp_type?: string; link_type?: string; link_url?: string; expires_at?: string; delivery_preference?: string };
 };
@@ -107,6 +111,12 @@ export default async function handler(req: Request): Promise<Response> {
     event = JSON.parse(raw) as Payload;
   } catch {
     return json(400, { error: "body" });
+  }
+  // "ep-…" is the first label of the auth host.
+  const endpoint = new URL(authUrl).hostname.split(".")[0];
+  if (event.context?.endpoint_id && event.context.endpoint_id !== endpoint) {
+    log("rejected-endpoint");
+    return json(403, { error: "endpoint" });
   }
   const type = event.event_type;
   if (type !== "send.otp" && type !== "send.magic_link") return json(200, { ignored: true });
