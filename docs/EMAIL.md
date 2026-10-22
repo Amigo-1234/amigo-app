@@ -63,8 +63,8 @@ A separate Neon project (`blue-butterfly-38799257`, Free plan, eu-west-2) with i
 signing keys and only test accounts, no production data. (A branch of production would copy every user
 and production's signing keys, so it wasn't used.) Its webhook points at one Preview deployment, whose
 branch-scoped Preview variables (`NEON_AUTH_URL` = the test project's auth URL, `EMAIL_FROM`,
-`RESEND_API_KEY`) make the handler trust only the test project's keys. Workflow `email-otp-live`
-(steps keys → start → verify → reset → expired); codes are passed back sealed to the job's key.
+`RESEND_API_KEY`) make the handler trust only the test project's keys. Workflow `live-interactions`, suites `email-otp-…`
+(keys → start → verify → reset → expired); codes are passed back sealed to the job's key.
 
 The handler also refuses (403) a validly signed event whose `context.endpoint_id` isn't the endpoint in
 `NEON_AUTH_URL`, since Neon branches copy their parent's signing keys.

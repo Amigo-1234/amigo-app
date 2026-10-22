@@ -13,10 +13,16 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; email: email-dns | email-send"
+        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; email: email-dns | email-send | email-otp-keys | email-otp-start | email-otp-verify | email-otp-reset | email-otp-expired"
         required: false
       test_to:
-        description: "email-send suite: the inbox that receives the sample emails"
+        description: "email-send / email-otp-start: the inbox that receives the emails"
+        required: false
+      session:
+        description: "email-otp suites: a-z0-9 tag naming the test accounts and their cached state"
+        required: false
+      blob:
+        description: "email-otp-verify | -reset | -expired: codes sealed with scripts/test/email-otp-seal.mjs"
         required: false
       old:
         description: "domain suites: the old address, kept working (default: https://amigo-app-one.vercel.app)"
@@ -37,7 +43,8 @@ jobs:
       - name: Project dependencies (the media API test uses the app's own client)
         if: startsWith(inputs.suite, 'domain') || inputs.suite == 'transition' || inputs.suite == 'push' || inputs.suite == 'email-send'
         run: npm ci
-      - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
+      - if: "!startsWith(inputs.suite, 'email-otp')"
+        run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
       - name: Fresh sign-in token probe
         if: inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'likes'
         env:
@@ -266,6 +273,31 @@ jobs:
           EMAIL_FROM: ${{ vars.EMAIL_FROM }}
           TEST_TO: ${{ inputs.test_to }}
         run: node scripts/test/email-send.mjs
+      # Real Neon codes against the isolated test project amigo-email-test only (own Neon Auth,
+      # keys and test accounts; no production data). Codes come back sealed to the job's key.
+      - name: "Email codes: restore this test run's state"
+        if: startsWith(inputs.suite, 'email-otp-') && inputs.suite != 'email-otp-keys' && inputs.suite != 'email-otp-start'
+        uses: actions/cache/restore@v4
+        with:
+          path: .otp-state
+          key: email-otp-${{ inputs.session }}
+          fail-on-cache-miss: true
+      - name: "Email codes: real Neon codes on the test project"
+        if: startsWith(inputs.suite, 'email-otp-')
+        env:
+          AUTH_URL: https://ep-orange-shadow-zaw0o0sl.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth
+          STATE_DIR: .otp-state
+          SUITE: ${{ inputs.suite }}
+          SESSION: ${{ inputs.session }}
+          TEST_TO: ${{ inputs.test_to }}
+          BLOB: ${{ inputs.blob }}
+        run: STEP="${SUITE#email-otp-}" node scripts/test/email-otp-live.mjs
+      - name: "Email codes: keep this test run's state for the next steps"
+        if: inputs.suite == 'email-otp-start'
+        uses: actions/cache/save@v4
+        with:
+          path: .otp-state
+          key: email-otp-${{ inputs.session }}
       - name: Google sign-in probe (no sign-in)
         if: always() && inputs.suite == 'auth'
         env:
