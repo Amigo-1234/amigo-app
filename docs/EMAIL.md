@@ -68,7 +68,9 @@ branch-scoped Preview variables (`NEON_AUTH_URL` = the test project's auth URL, 
 (keys → start → verify → reset → expired); codes are passed back sealed to the job's key.
 
 Preview variables for the test (branch `claude/amigo-world-restart-7mrbrf` only): `NEON_AUTH_URL`
-(the test project's auth URL), `EMAIL_FROM`, `RESEND_API_KEY`. Remove `NEON_AUTH_URL` after testing.
+(the test project's auth URL), `EMAIL_FROM`, `RESEND_API_KEY`. After the test, the Preview `NEON_AUTH_URL`
+was set to production's auth URL (= the handler's default, so it behaves as if absent; the tools here can't
+delete variables — delete it in the dashboard when convenient). Evidence of the test is kept below.
 Before any production switch, Production needs `EMAIL_FROM` again and its `NEON_AUTH_URL` must be
 production's auth URL (or removed, so the handler's default applies).
 
