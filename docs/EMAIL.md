@@ -66,6 +66,11 @@ branch-scoped Preview variables (`NEON_AUTH_URL` = the test project's auth URL, 
 `RESEND_API_KEY`) make the handler trust only the test project's keys. Workflow `live-interactions`, suites `email-otp-…`
 (keys → start → verify → reset → expired); codes are passed back sealed to the job's key.
 
+Preview variables for the test (branch `claude/amigo-world-restart-7mrbrf` only): `NEON_AUTH_URL`
+(the test project's auth URL), `EMAIL_FROM`, `RESEND_API_KEY`. Remove `NEON_AUTH_URL` after testing.
+Before any production switch, Production needs `EMAIL_FROM` again and its `NEON_AUTH_URL` must be
+production's auth URL (or removed, so the handler's default applies).
+
 The handler also refuses (403) a validly signed event whose `context.endpoint_id` isn't the endpoint in
 `NEON_AUTH_URL`, since Neon branches copy their parent's signing keys.
 
