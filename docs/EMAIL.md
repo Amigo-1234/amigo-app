@@ -98,6 +98,14 @@ current codes also last 5 minutes (checked read-only: expiresAt − createdAt of
 `auth_endpoint` (the Neon Auth endpoint id it trusts). Workflow suite `email-probe` checks a deployment:
 GET 405, unsigned and forged POSTs 401, ready, endpoint `ep-dry-mode-zano9y8g`.
 
+## Production preparation (2026-10-22)
+
+Production variables: `RESEND_API_KEY` and `EMAIL_FROM` set; no `NEON_AUTH_URL` override (built-in
+production endpoint). Deployed commit `1776e32` to production as `dpl_E7G4JxJu79WG7SdYuR5bXZXbWZr1`
+(rollback: `dpl_GYj7SJx3CDn2hEoiGQnaQG19rftg`, commit `4092f8b`). Probe on https://amigoworld.com.ng:
+GET 405, unsigned 401, forged 401; readiness: sender matches, provider key present, endpoint
+`ep-dry-mode-zano9y8g`. Production Neon webhook **not** enabled — awaiting the owner's approval.
+
 ## Steps
 
 1. Owner: Resend account (free) → Domains → Add `amigoworld.com.ng`, region **eu-west-1 (Ireland)** (done; verified 2026-10-22).
