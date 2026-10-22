@@ -10,7 +10,7 @@
  *   STEP=start   TEST_TO=… SESSION=…           two test accounts; verification code, a resend, a reset code
  *   STEP=verify  SESSION=… BLOB=…  {a_v1,a_v2}  stale (resent) code, wrong code, right code, reuse; asks for a reset code
  *   STEP=reset   SESSION=… BLOB=…  {a_r}        wrong code, right code, new password works, old doesn't, reuse
- *   STEP=expired SESSION=… BLOB=…  {b_r}        a reset code older than Neon's expiry is refused
+ *   STEP=expired SESSION=… BLOB=…  {b_r}        a reset code past Neon's expiry is refused
  *
  * State (this job's private key, a seed for the test passwords, the addresses)
  * lives in STATE_DIR, kept between steps by the workflow's Actions cache.
@@ -141,7 +141,8 @@ if (STEP === "keys") {
   const s = load();
   const c = await codes();
   const mins = (Date.now() - s.startedAt) / 60_000;
-  ok("more than 15 minutes since B's code was sent", mins > 15, `${mins.toFixed(1)} min`);
+  // Neon's own expiry for the test project is 5 minutes (from the event's expires_at, shown in the email).
+  ok("past the code's expiry (5 minutes, as the email said)", mins > 6, `${mins.toFixed(1)} min`);
   const late = await auth("/email-otp/reset-password", { email: s.b, otp: c.b_r, password: await password(s.seed, "B2") });
   ok("an expired reset code is refused", !late.ok, show(late));
   const oldPw = await auth("/sign-in/email", { email: s.b, password: await password(s.seed, "B1") });
