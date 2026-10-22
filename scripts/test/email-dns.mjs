@@ -1,7 +1,7 @@
 /**
  * What the public DNS says about amigoworld.com.ng's email setup (read-only):
  * the apex's TXT (SPF) and MX records, DMARC, and the records a Resend domain
- * uses (send.<domain> MX + SPF, resend._domainkey DKIM). Flags the problems
+ * uses (send.<domain> MX + SPF or CNAME, resend._domainkey DKIM). Flags the problems
  * that break delivery: two SPF records on one name, a DKIM value that doesn't
  * look like a key, no DMARC.
  *
@@ -43,8 +43,14 @@ const dkimCname = await cname(`resend._domainkey.${DOMAIN}`);
 info(`resend._domainkey.${DOMAIN}`, dkimTxt.length ? `TXT ${dkimTxt[0].slice(0, 40)}… (${dkimTxt[0].length} chars)` : dkimCname.length ? `CNAME ${dkimCname.join(",")}` : "none");
 
 if (EXPECT === "resend") {
-  ok("Resend return path: send MX points at Amazon SES feedback", sendMx.some((m) => /^feedback-smtp\.[a-z0-9-]+\.amazonses\.com\.?$/i.test(m.exchange)), JSON.stringify(sendMx));
-  ok("Resend SPF on send.: includes amazonses.com", sendSpf.length === 1 && /include:amazonses\.com/i.test(sendSpf[0]), sendSpf.join(" | "));
+  // Resend's own network (forge.rmta.net, current) or its older Amazon SES setup: either is what
+  // Resend's Domains page hands out, as an MX + SPF pair or a single CNAME on send.
+  const sendCname = await cname(`send.${DOMAIN}`);
+  const forge = /(^|\.)forge\.rmta\.net\.?$/i;
+  const ses = /^feedback-smtp\.[a-z0-9-]+\.amazonses\.com\.?$/i;
+  info(`send.${DOMAIN} CNAME`, sendCname.join(",") || "none");
+  ok("Resend return path on send. (MX to forge.rmta.net / Amazon SES, or CNAME to forge.rmta.net)", sendCname.some((c) => forge.test(c)) || sendMx.some((m) => forge.test(m.exchange) || ses.test(m.exchange)), JSON.stringify(sendCname.length ? sendCname : sendMx));
+  ok("Resend SPF on send. (one record, ending ~all or -all)", sendCname.some((c) => forge.test(c)) || (sendSpf.length === 1 && /(ip4:|include:)/i.test(sendSpf[0]) && /[~-]all$/i.test(sendSpf[0])), sendSpf.join(" | ") || "none");
   ok("Resend DKIM published (a public key)", dkimCname.length > 0 || dkimTxt.some((t) => /p=[A-Za-z0-9+/=]{100,}/.test(t)));
   ok("DMARC published", dmarc.length === 1, dmarc.join(" | "));
 }

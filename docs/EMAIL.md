@@ -40,10 +40,10 @@ there is never a second SPF on one name). Copy the exact values from Resend's Do
 
 | Type | Host (HostAfrica "Name") | Value | Priority / TTL |
 |---|---|---|---|
-| MX | `send` | `feedback-smtp.eu-west-1.amazonses.com` (the region Resend shows) | 10 / 3600 |
-| TXT | `send` | `v=spf1 include:amazonses.com ~all` | 3600 |
+| MX | `send` | `feedback.forge.rmta.net` (as Resend showed — its own network, not Amazon SES) | 10 / 3600 |
+| TXT | `send` | `v=spf1 ip4:52.3.252.119 ip4:44.222.39.36 ip4:199.249.231.0/24 ~all` (as Resend showed) | 3600 |
 | TXT | `resend._domainkey` | `p=MIGf…` — the full DKIM key Resend shows, exactly | 3600 |
-| TXT | `_dmarc` | `v=DMARC1; p=none; adkim=r; aspf=r` | 3600 |
+| TXT | `_dmarc` | `v=DMARC1; p=none;` (published) | 3600 |
 
 Enter only the host part (`send`, `resend._domainkey`, `_dmarc`) — HostAfrica adds `.amigoworld.com.ng`.
 No quotes unless the form requires them; paste the DKIM key in one piece. DMARC starts at `p=none`
