@@ -4,9 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Amigo World</title>
-    <meta name="description" content="Amigo World — posts, moments and conversations with your people." />
+    <meta name="description" content="Amigo World is a social app for sharing posts and Moments, joining Worlds, and chatting with your people in end-to-end encrypted messages." />
     <meta name="theme-color" content="#f8f7f4" />
     <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="/icons/favicon-48.png" type="image/png" sizes="48x48" />
+    <link rel="icon" href="/icons/favicon-96.png" type="image/png" sizes="96x96" />
+    <link rel="icon" href="/icons/favicon-192.png" type="image/png" sizes="192x192" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -14,13 +18,35 @@
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Amigo World" />
     <meta property="og:title" content="Amigo World" />
-    <meta property="og:description" content="Posts, Moments, Worlds and end-to-end encrypted conversations with your people." />
+    <meta property="og:description" content="Amigo World is a social app for sharing posts and Moments, joining Worlds, and chatting with your people in end-to-end encrypted messages." />
     <meta property="og:url" content="https://amigoworld.com.ng/" />
     <meta property="og:image" content="https://amigoworld.com.ng/icons/icon-512.png" />
     <meta property="og:image:alt" content="Amigo World" />
     <meta name="twitter:card" content="summary" />
     <!-- The official address. Every copy of the app (the old Vercel address included) points search engines here; the path is filled in below. -->
     <link rel="canonical" href="https://amigoworld.com.ng/" />
+    <!-- Who this site is, for search engines. Only facts that are true today: no social profiles, contact details or site search. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://amigoworld.com.ng/#organization",
+            "name": "Amigo World",
+            "url": "https://amigoworld.com.ng/",
+            "logo": "https://amigoworld.com.ng/icons/icon-512.png"
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://amigoworld.com.ng/#website",
+            "name": "Amigo World",
+            "url": "https://amigoworld.com.ng/",
+            "publisher": { "@id": "https://amigoworld.com.ng/#organization" }
+          }
+        ]
+      }
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Amigo" />

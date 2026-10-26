@@ -276,6 +276,7 @@ jobs:
         if: always() && inputs.suite == 'seo-probe'
         env:
           BASE: ${{ inputs.base }}
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
         run: node scripts/test/seo-probe.mjs
       - name: "Email: sample branded emails through Resend"
         if: always() && inputs.suite == 'email-send'

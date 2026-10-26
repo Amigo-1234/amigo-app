@@ -1,8 +1,15 @@
-# Amigo World: content is only visible to signed-in members, so only the
-# public legal pages are worth indexing.
+# Amigo World: content is only visible to signed-in members. Crawlable: the homepage,
+# the public legal pages, and the files Google needs to show and render them (app
+# scripts and styles, icons, manifest, sitemap). Everything else — every signed-in
+# screen, /api and /neon — stays blocked.
 User-agent: *
 Allow: /$
 Allow: /legal
+Allow: /assets/
+Allow: /icons/
+Allow: /favicon
+Allow: /manifest.webmanifest
+Allow: /sitemap.xml
 Disallow: /
 
 Sitemap: https://amigoworld.com.ng/sitemap.xml

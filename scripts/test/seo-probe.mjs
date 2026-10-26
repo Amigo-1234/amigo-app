@@ -93,6 +93,31 @@ ok("robots.txt allows the og:image", allowed(metaProp("og:image").replace(/^http
 for (const s of [...scripts, ...styles]) ok(`robots.txt allows ${s} (Google needs it to render the page)`, allowed(s.replace(/^https?:\/\/[^/]+/, "")));
 const ico = await get("/favicon.ico");
 ok("/favicon.ico is a real icon or a 404 (not the app's HTML)", ico.status === 404 || (/image/.test(ico.type) && !/html/.test(ico.type)), `${ico.status} ${ico.type}`);
+for (const p of ["/icons/favicon-48.png", "/icons/favicon-96.png", "/icons/favicon-192.png"]) {
+  const r = await get(p);
+  ok(`${p} is a PNG image`, r.status === 200 && r.type.startsWith("image/png") && r.buf.subarray(0, 4).toString("hex") === "89504e47", `${r.status} ${r.type}`);
+}
+for (const p of ["/icons/no-such-icon-seo-probe.png", "/favicon-no-such-seo-probe.png"]) {
+  const r = await get(p);
+  ok(`a missing icon file is a real 404 (${p})`, r.status === 404 && !/<div id="root">/.test(r.text), `${r.status} ${r.type}`);
+}
+for (const p of ["/legal", "/legal/terms", "/sitemap.xml", "/manifest.webmanifest"]) ok(`robots.txt allows ${p}`, allowed(p));
+for (const p of ["/messages", "/messages/abc", "/settings", "/u/someone", "/post/abc", "/explore", "/notifications", "/admin", "/support", "/bookmarks", "/api/media", "/api/auth-email", "/neon/auth/get-session"]) ok(`robots.txt still blocks ${p}`, !allowed(p));
+const EXPECT_DESC = "Amigo World is a social app for sharing posts and Moments, joining Worlds, and chatting with your people in end-to-end encrypted messages.";
+{
+  ok("meta description is the agreed text", metaName("description") === EXPECT_DESC);
+  ok("og:description is the same text", metaProp("og:description") === EXPECT_DESC);
+  ok("canonical is https://amigoworld.com.ng/", attr(/<link[^>]+rel="canonical"[^>]+href="([^"]*)"/i) === "https://amigoworld.com.ng/");
+  let graph = [];
+  try { graph = [].concat(JSON.parse(ld[0] ?? "null")?.["@graph"] ?? []); } catch {}
+  const org = graph.find((x) => x["@type"] === "Organization");
+  const site = graph.find((x) => x["@type"] === "WebSite");
+  ok("JSON-LD Organization: name, url, logo", org?.name === "Amigo World" && org?.url === "https://amigoworld.com.ng/" && org?.logo === "https://amigoworld.com.ng/icons/icon-512.png", JSON.stringify(org));
+  ok("JSON-LD WebSite: name, url", site?.name === "Amigo World" && site?.url === "https://amigoworld.com.ng/", JSON.stringify(site));
+  ok("JSON-LD has no invented extras (sameAs, contactPoint, SearchAction)", !/sameAs|contactPoint|SearchAction|potentialAction/.test(ld.join("")));
+  const logo = await get("/icons/icon-512.png");
+  ok("the logo is a crawlable PNG", logo.status === 200 && logo.type.startsWith("image/png") && allowed("/icons/icon-512.png"));
+}
 const missing = await get("/this-page-does-not-exist-seo-probe");
 info("unknown path", `${missing.status} ${missing.type}`);
 console.log(issues ? `${issues} ISSUE(S)` : "NO ISSUES");
