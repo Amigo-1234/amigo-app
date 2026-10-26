@@ -13,7 +13,7 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; email: email-dns | email-send | email-probe (BASE: unsigned/forged refused + readiness, production endpoint expected) | email-otp-keys | email-otp-start | email-otp-verify | email-otp-reset | email-otp-expired | email-otp-prod-{start,verify,reset,expired} (production, owner-approved)"
+        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; seo: seo-probe (BASE, read-only); email: email-dns | email-send | email-probe (BASE: unsigned/forged refused + readiness, production endpoint expected) | email-otp-keys | email-otp-start | email-otp-verify | email-otp-reset | email-otp-expired | email-otp-prod-{start,verify,reset,expired} (production, owner-approved)"
         required: false
       test_to:
         description: "email-send / email-otp-start: the inbox that receives the emails"
@@ -43,7 +43,7 @@ jobs:
       - name: Project dependencies (the media API test uses the app's own client)
         if: startsWith(inputs.suite, 'domain') || inputs.suite == 'transition' || inputs.suite == 'push' || inputs.suite == 'email-send'
         run: npm ci
-      - if: "!startsWith(inputs.suite, 'email')"
+      - if: "!startsWith(inputs.suite, 'email') && inputs.suite != 'seo-probe'"
         run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium webkit
       - name: Fresh sign-in token probe
         if: inputs.suite == '' || inputs.suite == 'all' || inputs.suite == 'likes'
@@ -272,6 +272,11 @@ jobs:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           BASE: ${{ inputs.base }}
         run: EXPECT_ENDPOINT=ep-dry-mode-zano9y8g node scripts/test/email-handler-probe.mjs
+      - name: "Search: what Googlebot gets (read-only)"
+        if: always() && inputs.suite == 'seo-probe'
+        env:
+          BASE: ${{ inputs.base }}
+        run: node scripts/test/seo-probe.mjs
       - name: "Email: sample branded emails through Resend"
         if: always() && inputs.suite == 'email-send'
         env:
