@@ -59,14 +59,33 @@ export const neonEmailCodes = {
   },
 };
 
+type SocialClient = {
+  signIn: {
+    social(args: { provider: string; callbackURL: string; newUserCallbackURL: string; errorCallbackURL: string }): OtpResult;
+  };
+};
+
 /**
- * "Continue with Google" (OAuth through Neon Auth). The browser leaves for Google and comes
- * back to the app, where the session is picked up as usual.
+ * "Continue with Google" (OAuth through Neon Auth). The browser leaves for Google; Google
+ * returns to Neon Auth, which sends the browser back here with a one-time session verifier
+ * that the next get-session (through /neon/auth) exchanges for this site's session cookie.
+ *
+ * If the person cancels or Google/Neon Auth refuses, the browser comes back to
+ * /?auth_error=google&error=<code> (the sign-in screen explains it). Without an error URL
+ * Neon Auth showed its own error page on its own domain, with no way back to the app.
+ * (signInWithOAuth on the Supabase adapter can't pass one, so Better Auth is called directly.)
  */
 export const neonSocial = {
   async start(provider: "google") {
-    const { error } = await client.auth.signInWithOAuth({ provider, options: { redirectTo: `${location.origin}/` } } as never);
-    if (error) throw error;
+    const back = `${location.origin}/`;
+    check(
+      await (betterAuth() as unknown as SocialClient).signIn.social({
+        provider,
+        callbackURL: back,
+        newUserCallbackURL: back,
+        errorCallbackURL: `${back}?auth_error=${provider}`,
+      }),
+    );
   },
 };
 

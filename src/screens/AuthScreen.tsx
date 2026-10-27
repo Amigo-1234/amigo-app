@@ -33,6 +33,31 @@ function GoogleMark() {
 
 const errorText = (err: unknown) => authMessage(err instanceof AuthError ? err.code : undefined);
 
+/**
+ * Back from Google without a session: Neon Auth sends the browser to /?auth_error=google&error=<code>
+ * (src/data/supabase/neonClient.ts). Read once per page load (it is one), then removed from the
+ * address bar.
+ */
+let socialError: string | null | undefined;
+function takeSocialError(): string | null {
+  if (socialError !== undefined) return socialError;
+  socialError = readSocialError();
+  // The same answer for this render (StrictMode asks twice), then never again this page load.
+  setTimeout(() => (socialError = null), 0);
+  return socialError;
+}
+function readSocialError(): string | null {
+  const url = new URL(location.href);
+  if (!url.searchParams.has("auth_error")) return null;
+  const code = url.searchParams.get("error") ?? "";
+  url.searchParams.delete("auth_error");
+  url.searchParams.delete("error");
+  url.searchParams.delete("error_description");
+  history.replaceState(history.state, "", url.pathname + url.search + url.hash);
+  if (code === "access_denied") return "Google sign-in was cancelled. You can try again, or sign in with email.";
+  return "Google sign-in didn't finish. Try again, or sign in with email.";
+}
+
 export default function AuthScreen() {
   const [step, setStep] = useState<Step>("signIn");
   const [name, setName] = useState("");
@@ -41,7 +66,7 @@ export default function AuthScreen() {
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [entering, setEntering] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(takeSocialError);
   const [notice, setNotice] = useState<string | null>(null);
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [agreePrivacy, setAgreePrivacy] = useState(false);
