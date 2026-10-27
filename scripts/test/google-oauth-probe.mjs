@@ -81,7 +81,12 @@ try {
     info("Google client", a.searchParams.get("client_id") ?? "?");
   } catch {}
   info("redirect_uri sent to Google", redirectUri || "(none)");
-  ok("redirect_uri is Neon Auth's Google callback", /^https:\/\/[^/]+\.neonauth\.[^/]+\/neondb\/auth\/callback\/google$/.test(redirectUri), redirectUri);
+  // Own Google credentials: the branch's {NEON_AUTH_BASE_URL}/callback/google. Neon's shared development
+  // credentials: one Neon-wide callback (and Google names neon.tech, not the app).
+  const own = /^https:\/\/[^/]+\.neonauth\.[^/]+\/neondb\/auth\/callback\/google$/.test(redirectUri);
+  const shared = /^https:\/\/neonauth\.[^/]+\/auth\/oauth\/callback\/google$/.test(redirectUri);
+  ok("redirect_uri is a Neon Auth Google callback", own || shared, redirectUri);
+  info("Google credentials", own ? "the project's own" : shared ? "Neon's SHARED development app (Google shows neon.tech; Neon says not for production)" : "unknown");
   const text = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ");
   info("Google page", `${await page.title().catch(() => "")} | ${text.slice(0, 300)}`);
   ok("Google shows its sign-in page (no error)", reached && !/error 400|redirect_uri_mismatch|access blocked|invalid_request|not allowed/i.test(text), "");
@@ -111,7 +116,8 @@ try {
   ok("the app exchanges the verifier through its own domain", gs.some((s) => s.url.startsWith(`${BASE}/neon/auth/`)), gs.map((s) => s.line).join(" | ") || "no get-session with the verifier");
   const after = (await page.locator("body").innerText().catch(() => "")).replace(/\s+/g, " ");
   ok("a failed return ends on the sign-in screen, not a spinner", /Continue with Google|Sign in|Log in/i.test(after), after.slice(0, 120));
-  info("address bar after", show(page.url()));
+  ok("…saying Google sign-in didn't finish", /didn.t finish/i.test(after), "");
+  ok("…with the used verifier gone from the address bar", !page.url().includes("neon_auth_session_verifier"), show(page.url()));
 } catch (e) {
   issues++;
   console.log(`ISSUE ${e?.message ?? e}`);

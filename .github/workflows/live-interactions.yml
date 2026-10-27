@@ -326,7 +326,7 @@ jobs:
         if: always() && inputs.suite == 'auth'
         env:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; node scripts/test/live-oauth-probe.mjs
+        run: export BASE="${{ inputs.base }}"; export BASE="${BASE:-$(head -1 .github/live-interactions.run)}"; node scripts/test/google-oauth-probe.mjs
       - name: Admin control centre (needs an operator to grant the temporary admin)
         if: always() && inputs.suite == 'admin'
         env:

@@ -35,7 +35,7 @@ const errorText = (err: unknown) => authMessage(err instanceof AuthError ? err.c
 
 /**
  * Back from Google without a session: Neon Auth sends the browser to /?auth_error=google&error=<code>
- * (src/data/supabase/neonClient.ts). Read once per page load (it is one), then removed from the
+ * (src/data/supabase/neonClient.ts), or back with a verifier that couldn't be exchanged. Read once per page load (it is one), then removed from the
  * address bar.
  */
 let socialError: string | null | undefined;
@@ -48,8 +48,12 @@ function takeSocialError(): string | null {
 }
 function readSocialError(): string | null {
   const url = new URL(location.href);
-  if (!url.searchParams.has("auth_error")) return null;
+  // Back from Google with a session verifier, yet signed out (this screen only shows then):
+  // exchanging it failed. Say so, and drop it (a reload would only fail again).
+  const verifierFailed = url.searchParams.has("neon_auth_session_verifier");
+  if (!url.searchParams.has("auth_error") && !verifierFailed) return null;
   const code = url.searchParams.get("error") ?? "";
+  url.searchParams.delete("neon_auth_session_verifier");
   url.searchParams.delete("auth_error");
   url.searchParams.delete("error");
   url.searchParams.delete("error_description");
