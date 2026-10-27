@@ -118,6 +118,14 @@ const EXPECT_DESC = "Amigo World is a social app for sharing posts and Moments, 
   const logo = await get("/icons/icon-512.png");
   ok("the logo is a crawlable PNG", logo.status === 200 && logo.type.startsWith("image/png") && allowed("/icons/icon-512.png"));
 }
+// robots.txt is not access control: without a session, private data must not come back.
+for (const t of ["dm_messages", "dm_conversations", "notifications", "profiles", "posts", "app_admins"]) {
+  const res = await fetch(`${BASE}/neon/rest/v1/${t}?select=*&limit=1`, { headers: H });
+  const body = await res.text();
+  let rows = null;
+  try { const j = JSON.parse(body); rows = Array.isArray(j) ? j.length : null; } catch {}
+  ok(`signed out, ${t} returns no rows`, res.status >= 400 || rows === 0, `${res.status}${rows !== null ? ` rows=${rows}` : ""}`);
+}
 const missing = await get("/this-page-does-not-exist-seo-probe");
 info("unknown path", `${missing.status} ${missing.type}`);
 console.log(issues ? `${issues} ISSUE(S)` : "NO ISSUES");
