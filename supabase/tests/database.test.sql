@@ -1066,6 +1066,261 @@ select pg_temp.must_fail('upload only into your own folder', :B,
   $$insert into storage.objects (bucket_id, name) values ('moment-media', '00000000-0000-0000-0000-00000000000a/evil.jpg')$$, '42501');
 select pg_temp.must_fail('purge is not callable by users', :A, $$select public.purge_expired_moments()$$, '42501');
 
+-- ----------------------------------------------------------- predictions
+-- Admins here: :D, :C (owner). :A and :B are invited to the beta; '...0e' is not.
+
+select pg_temp.act_as_admin();
+insert into public.worlds (slug, title, starts_at, ends_at) values
+  ('pl-ars-che', 'Arsenal v Chelsea', now() + interval '1 hour', now() + interval '5 hours'),
+  ('ucl-rma-bay', 'Real Madrid v Bayern', now() + interval '1 day', now() + interval '1 day 5 hours'),
+  ('pl-liv-mun', 'Liverpool v Man Utd', now() + interval '2 days', now() + interval '2 days 5 hours'),
+  ('pl-new-tot', 'Newcastle v Spurs', now() + interval '3 days', now() + interval '3 days 5 hours');
+insert into t select 'pw1', id from public.worlds where slug = 'pl-ars-che';
+insert into t select 'pw2', id from public.worlds where slug = 'ucl-rma-bay';
+insert into t select 'pw3', id from public.worlds where slug = 'pl-liv-mun';
+insert into t select 'pw4', id from public.worlds where slug = 'pl-new-tot';
+create temp table pr_t (k text primary key, v text);
+grant all on pr_t to public;
+
+-- Only admins create questions.
+select pg_temp.must_fail('anon cannot use predictions', null, $$select public.prediction_today()$$, '42501');
+select pg_temp.must_fail('members cannot create questions', :A,
+  format($$select public.admin_create_question(%L, 'premier-league', 'Who wins?', array['Arsenal','Draw','Chelsea'], now() + interval '30 minutes')$$, (select id from t where k = 'pw1')), '42501');
+select pg_temp.must_fail('tables are closed to clients', :A,
+  format($$insert into public.prediction_questions (world_id, competition, drop_date, prompt, options, locks_at) values (%L, 'premier-league', current_date, 'Who wins?', array['a','b'], now() + interval '1 hour')$$, (select id from t where k = 'pw1')), '42501');
+
+insert into t values ('q1', pg_temp.q(:D, format($$select public.admin_create_question(%L, 'premier-league', 'Who wins at the Emirates?',
+  array['Arsenal','Draw','Chelsea'], now() + interval '30 minutes', (now() at time zone 'Africa/Lagos')::date)$$, (select id from t where k = 'pw1')))::uuid);
+insert into t values ('q2', pg_temp.q(:D, format($$select public.admin_create_question(%L, 'champions-league', 'Who goes through?',
+  array['Real Madrid','Bayern'], now() + interval '20 hours', (now() at time zone 'Africa/Lagos')::date, false)$$, (select id from t where k = 'pw2')))::uuid);
+insert into t values ('q3', pg_temp.q(:D, format($$select public.admin_create_question(%L, 'premier-league', 'Who wins at Anfield?',
+  array['Liverpool','Draw','Man Utd'], now() + interval '40 hours', (now() at time zone 'Africa/Lagos')::date, false)$$, (select id from t where k = 'pw3')))::uuid);
+insert into t values ('q4', pg_temp.q(:D, format($$select public.admin_create_question(%L, 'premier-league', 'Who wins at St James''?',
+  array['Newcastle','Draw','Spurs'], now() + interval '64 hours', (now() at time zone 'Africa/Lagos')::date, false)$$, (select id from t where k = 'pw4')))::uuid);
+select pg_temp.check('admins create questions (locks stored as UTC instants)',
+  (select count(*) = 4 from public.prediction_questions)
+  and (select locks_at = now() + interval '30 minutes' and drop_date = (now() at time zone 'Africa/Lagos')::date from public.prediction_questions where id = (select id from t where k = 'q1')));
+
+select pg_temp.must_fail('one question per World', :D,
+  format($$select public.admin_create_question(%L, 'premier-league', 'Another one?', array['a','b'], now() + interval '1 hour', null, false)$$, (select id from t where k = 'pw1')), 'PR005');
+select pg_temp.act_as_admin();
+insert into public.worlds (slug, title, starts_at, ends_at) values ('pl-spare', 'Spare', now() + interval '1 hour', now() + interval '5 hours');
+insert into t select 'pw5', id from public.worlds where slug = 'pl-spare';
+select pg_temp.must_fail('one main Daily Drop per day', :D,
+  format($$select public.admin_create_question(%L, 'premier-league', 'Second main?', array['a','b'], now() + interval '1 hour', (now() at time zone 'Africa/Lagos')::date)$$, (select id from t where k = 'pw5')), 'PR005');
+select pg_temp.must_fail('only Premier League and Champions League for now', :D,
+  format($$select public.admin_create_question(%L, 'npfl', 'Who wins?', array['a','b'], now() + interval '1 hour', null, false)$$, (select id from t where k = 'pw5')), 'PR005');
+select pg_temp.must_fail('two or three options', :D,
+  format($$select public.admin_create_question(%L, 'premier-league', 'Who wins?', array['a'], now() + interval '1 hour', null, false)$$, (select id from t where k = 'pw5')), 'PR005');
+select pg_temp.must_fail('options must differ', :D,
+  format($$select public.admin_create_question(%L, 'premier-league', 'Who wins?', array['Draw','draw '], now() + interval '1 hour', null, false)$$, (select id from t where k = 'pw5')), 'PR005');
+select pg_temp.must_fail('kick-off must be in the future', :D,
+  format($$select public.admin_create_question(%L, 'premier-league', 'Who wins?', array['a','b'], now() - interval '1 minute', null, false)$$, (select id from t where k = 'pw5')), 'PR005');
+select pg_temp.must_fail('kick-off must be before the World ends', :D,
+  format($$select public.admin_create_question(%L, 'premier-league', 'Who wins?', array['a','b'], now() + interval '6 hours', null, false)$$, (select id from t where k = 'pw5')), 'PR005');
+
+-- The allowlist.
+select pg_temp.must_fail('not invited: no Daily Drop', :A, $$select public.prediction_today()$$, 'PR004');
+select pg_temp.must_fail('not invited: no picks', :A, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q1')), 'PR004');
+select pg_temp.must_fail('not invited: no table', :A, $$select * from public.prediction_table()$$, 'PR004');
+select pg_temp.must_fail('nobody invites themselves', :A, $$select public.admin_set_prediction_beta_member('00000000-0000-0000-0000-00000000000a', true)$$, '42501');
+select pg_temp.must_fail('the allowlist table is closed', :A, $$insert into public.prediction_beta_members (user_id) values ('00000000-0000-0000-0000-00000000000a')$$, '42501');
+select pg_temp.q(:D, $$select public.admin_set_prediction_beta_member('00000000-0000-0000-0000-00000000000a', true)$$);
+select pg_temp.q(:D, $$select public.admin_set_prediction_beta_member('00000000-0000-0000-0000-00000000000a', true)$$);
+select pg_temp.q(:D, $$select public.admin_set_prediction_beta_member('00000000-0000-0000-0000-00000000000b', true)$$);
+select pg_temp.check('admins invite people; inviting twice is one row and one audit entry',
+  (select count(*) = 2 from public.prediction_beta_members)
+  and (select count(*) = 2 from public.admin_audit_log where action = 'prediction.beta_add'));
+select pg_temp.check('the allowlist only gates predictions: uninvited people still see Worlds',
+  pg_temp.q('00000000-0000-0000-0000-00000000000e', $$select count(*) from public.worlds where slug = 'pl-ars-che'$$)::int = 1);
+
+-- Unpublished questions are admin-only.
+select pg_temp.check('unpublished: members see nothing', pg_temp.q(:A, $$select public.prediction_today()$$) is null
+  and pg_temp.q(:A, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw1'))) is null);
+select pg_temp.must_fail('unpublished: no picks', :A, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q1')), 'PR004');
+select pg_temp.check('unpublished: admins preview it', (pg_temp.q(:D, $$select public.prediction_today()$$)::jsonb ->> 'published') = 'false');
+select pg_temp.q(:D, format($$select public.admin_update_question(%L, 'Who wins at the Emirates on Saturday?', array['Arsenal','Draw','Chelsea'])$$, (select id from t where k = 'q1')));
+select pg_temp.q(:D, format($$select public.admin_publish_question(%L)$$, k.id)) from t k where k.k in ('q1', 'q2', 'q3', 'q4');
+select pg_temp.must_fail('members cannot publish', :A, format($$select public.admin_publish_question(%L)$$, (select id from t where k = 'q1')), '42501');
+
+-- Picks.
+select pg_temp.q(:A, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q1')));
+select pg_temp.q(:B, format($$select public.submit_pick(%L, 2)$$, (select id from t where k = 'q1')));
+select pg_temp.q(:A, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q1')));
+select pg_temp.check('the same pick twice is one pick, not a change',
+  (select count(*) = 2 from public.predictions where question_id = (select id from t where k = 'q1'))
+  and (select change_count = 0 and option = 0 from public.predictions where question_id = (select id from t where k = 'q1') and user_id = :A));
+select pg_temp.q(:A, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q1')));
+select pg_temp.q(:A, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q1')));
+select pg_temp.check('changing a pick replaces it and is counted',
+  (select count(*) = 1 and min(change_count) = 2 and min(option) = 0 from public.predictions where question_id = (select id from t where k = 'q1') and user_id = :A));
+select pg_temp.must_fail('option out of range', :A, format($$select public.submit_pick(%L, 3)$$, (select id from t where k = 'q1')), 'PR002');
+select pg_temp.must_fail('negative option', :A, format($$select public.submit_pick(%L, -1)$$, (select id from t where k = 'q1')), 'PR002');
+select pg_temp.must_fail('two-way question has no third option', :A, format($$select public.submit_pick(%L, 2)$$, (select id from t where k = 'q2')), 'PR002');
+select pg_temp.must_fail('no direct writes to picks', :A,
+  format($$insert into public.predictions (question_id, user_id, option) values (%L, '00000000-0000-0000-0000-00000000000a', 1)$$, (select id from t where k = 'q2')), '42501');
+select pg_temp.must_fail('no direct reads of picks', :B, $$select count(*) from public.predictions$$, '42501');
+select pg_temp.must_fail('no reads of the questions table', :B, $$select count(*) from public.prediction_questions$$, '42501');
+select pg_temp.act_as_admin();
+update public.predictions set change_count = 10 where question_id = (select id from t where k = 'q1') and user_id = :A;
+select pg_temp.must_fail('at most 10 changes', :A, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q1')), 'PR003');
+select pg_temp.act_as_admin();
+update public.predictions set change_count = 2 where question_id = (select id from t where k = 'q1') and user_id = :A;
+insert into public.account_suspensions (user_id, reason) values (:B, 'test suspension');
+select pg_temp.must_fail('suspended accounts cannot pick', :B, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q2')), 'AS001');
+select pg_temp.act_as_admin();
+delete from public.account_suspensions where user_id = :B;
+select pg_temp.must_fail('a question can''t be edited once people have picked', :D,
+  format($$select public.admin_update_question(%L, 'Changed?', array['a','b','c'])$$, (select id from t where k = 'q1')), 'PR005');
+
+-- Hidden before kick-off.
+insert into pr_t values ('b_view', pg_temp.q(:B, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw1'))));
+insert into pr_t values ('d_view', pg_temp.q(:D, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw1'))));
+select pg_temp.check('before kick-off: your own pick, nobody else''s, no counts (not even for admins)',
+  (select (v::jsonb ->> 'myPick') = '2' and (v::jsonb ->> 'counts') is null and (v::jsonb ->> 'revealed') = 'false' and (v::jsonb ->> 'status') = 'open'
+     from pr_t where k = 'b_view')
+  and (select (v::jsonb ->> 'counts') is null and (v::jsonb ->> 'myPick') is null from pr_t where k = 'd_view'));
+select pg_temp.check('the Daily Drop is today''s main question (Lagos date)',
+  (pg_temp.q(:A, $$select public.prediction_today()$$)::jsonb ->> 'id')::uuid = (select id from t where k = 'q1'));
+
+-- Locked at kick-off by the database clock (the transaction's now() is fixed, so move kick-off instead).
+select pg_temp.act_as_admin();
+update public.prediction_questions set locks_at = now() where id = (select id from t where k = 'q1');
+select pg_temp.must_fail('no new pick at kick-off', :C, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q1')), 'PR001');
+select pg_temp.must_fail('no change at kick-off', :A, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q1')), 'PR001');
+select pg_temp.must_fail('no re-submit of the same pick at kick-off', :A, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q1')), 'PR001');
+do $$ begin
+  update public.predictions set option = 1 where question_id = (select id from t where k = 'q1') and user_id = '00000000-0000-0000-0000-00000000000a';
+  raise exception 'FAIL a pick was changed after kick-off by a direct write';
+exception when sqlstate 'PR001' then raise notice 'ok  the table itself refuses late writes (any role)';
+end $$;
+select pg_temp.check('picks are unchanged after the lock',
+  (select string_agg(option::text, ',' order by user_id) = '0,2' from public.predictions where question_id = (select id from t where k = 'q1')));
+insert into pr_t values ('b_after', pg_temp.q(:B, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw1'))));
+select pg_temp.check('after kick-off: counts per option',
+  (select (v::jsonb -> 'counts') = '[1, 0, 1]'::jsonb and (v::jsonb ->> 'status') = 'locked' from pr_t where k = 'b_after'));
+select pg_temp.must_fail('members cannot settle', :A,
+  format($$select public.admin_settle_question(%L, 0, 'https://www.premierleague.com/match/1')$$, (select id from t where k = 'q1')), '42501');
+select pg_temp.must_fail('members cannot see the admin to-do list', :A, $$select public.admin_unsettled_questions()$$, '42501');
+select pg_temp.check('admins see what needs a result',
+  (select jsonb_array_length(v) = 1 and (v -> 0 ->> 'id')::uuid = (select id from t where k = 'q1')
+     from (select pg_temp.q(:D, 'select public.admin_unsettled_questions()')::jsonb as v) x));
+
+-- Results.
+select pg_temp.must_fail('no result before kick-off', :D,
+  format($$select public.admin_settle_question(%L, 0, 'https://www.uefa.com/match/1')$$, (select id from t where k = 'q2')), 'PR005');
+select pg_temp.must_fail('a result needs an https source', :D,
+  format($$select public.admin_settle_question(%L, 0, 'http://example.com')$$, (select id from t where k = 'q1')), 'PR005');
+select pg_temp.must_fail('the result must be an option', :D,
+  format($$select public.admin_settle_question(%L, 3, 'https://www.premierleague.com/match/1')$$, (select id from t where k = 'q1')), 'PR002');
+select pg_temp.q(:D, format($$select public.admin_settle_question(%L, 0, 'https://www.premierleague.com/match/1', 'Full time 2-1')$$, (select id from t where k = 'q1')));
+select pg_temp.must_fail('settled once only (use a correction)', :D,
+  format($$select public.admin_settle_question(%L, 2, 'https://www.premierleague.com/match/1')$$, (select id from t where k = 'q1')), 'PR005');
+select pg_temp.check('one point per correct pick, computed on the server',
+  pg_temp.q(:A, $$select points || '/' || played || '/' || rank from public.prediction_table('all') where user_id = '00000000-0000-0000-0000-00000000000a'$$) = '1/1/1'
+  and pg_temp.q(:A, $$select points || '/' || played || '/' || rank from public.prediction_table('all') where user_id = '00000000-0000-0000-0000-00000000000b'$$) = '0/1/2');
+select pg_temp.check('your points on the question',
+  (pg_temp.q(:A, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw1')))::jsonb ->> 'myPoints') = '1');
+
+-- Corrections (48 hours).
+select pg_temp.must_fail('a correction needs a reason', :D,
+  format($$select public.admin_correct_question(%L, 2, 'https://www.premierleague.com/match/1', '')$$, (select id from t where k = 'q1')), 'PR005');
+select pg_temp.must_fail('a correction must change the result', :D,
+  format($$select public.admin_correct_question(%L, 0, 'https://www.premierleague.com/match/1', 'typo')$$, (select id from t where k = 'q1')), 'PR005');
+select pg_temp.q(:D, format($$select public.admin_correct_question(%L, 2, 'https://www.bbc.co.uk/sport/football/1', 'Wrong team entered')$$, (select id from t where k = 'q1')));
+select pg_temp.check('a correction re-scores everyone',
+  pg_temp.q(:A, $$select points from public.prediction_table('all') where user_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 0
+  and pg_temp.q(:A, $$select points || '/' || rank from public.prediction_table('all') where user_id = '00000000-0000-0000-0000-00000000000b'$$) = '1/1');
+select pg_temp.check('the correction is recorded with before and after',
+  exists (select 1 from public.admin_audit_log where action = 'prediction.correct' and target_id = (select id from t where k = 'q1')
+            and admin_id = :D and details ->> 'from' = '0' and details ->> 'to' = '2' and details ->> 'previous_source' = 'https://www.premierleague.com/match/1'));
+select pg_temp.act_as_admin();
+update public.prediction_questions set settled_at = now() - interval '49 hours' where id = (select id from t where k = 'q1');
+select pg_temp.must_fail('no correction after 48 hours', :D,
+  format($$select public.admin_correct_question(%L, 0, 'https://www.premierleague.com/match/1', 'Late change')$$, (select id from t where k = 'q1')), 'PR005');
+select pg_temp.must_fail('no void after 48 hours', :D, format($$select public.admin_void_question(%L, 'Late void')$$, (select id from t where k = 'q1')), 'PR005');
+select pg_temp.act_as_admin();
+update public.prediction_questions set settled_at = now() - interval '1 hour' where id = (select id from t where k = 'q1');
+
+-- q2: everyone right (ties). :C is an admin and may play too.
+select pg_temp.q(:A, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q2')));
+select pg_temp.q(:B, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q2')));
+select pg_temp.q(:C, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q2')));
+select pg_temp.act_as_admin();
+update public.prediction_questions set locks_at = now() - interval '2 hours' where id = (select id from t where k = 'q2');
+select pg_temp.q(:D, format($$select public.admin_settle_question(%L, 1, 'https://www.uefa.com/match/1')$$, (select id from t where k = 'q2')));
+
+-- q3: settled, then voided within 48 hours (no points).
+select pg_temp.q(:A, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q3')));
+select pg_temp.q(:B, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q3')));
+select pg_temp.act_as_admin();
+update public.prediction_questions set locks_at = now() - interval '3 hours' where id = (select id from t where k = 'q3');
+select pg_temp.q(:D, format($$select public.admin_settle_question(%L, 0, 'https://www.premierleague.com/match/3')$$, (select id from t where k = 'q3')));
+select pg_temp.check('before the void :A has the point', pg_temp.q(:A, $$select points from public.prediction_table('all') where user_id = '00000000-0000-0000-0000-00000000000a'$$)::int = 2);
+select pg_temp.must_fail('a void needs a reason', :D, format($$select public.admin_void_question(%L, null)$$, (select id from t where k = 'q3')), 'PR005');
+select pg_temp.q(:D, format($$select public.admin_void_question(%L, 'Abandoned at half time, no official result')$$, (select id from t where k = 'q3')));
+insert into pr_t values ('a_void', pg_temp.q(:A, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw3'))));
+select pg_temp.check('a void question scores nothing and shows no result',
+  (select (v::jsonb ->> 'status') = 'void' and (v::jsonb ->> 'correctOption') is null and (v::jsonb ->> 'myPoints') is null and (v::jsonb ->> 'myPick') = '0' from pr_t where k = 'a_void'));
+select pg_temp.must_fail('void is final', :D, format($$select public.admin_correct_question(%L, 1, 'https://x.example/1', 'Changed')$$, (select id from t where k = 'q3')), 'PR005');
+select pg_temp.must_fail('no picks on a void question', :A, format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q3')), 'PR004');
+
+-- q4: postponed, rescheduled; picks kept.
+select pg_temp.q(:A, format($$select public.submit_pick(%L, 2)$$, (select id from t where k = 'q4')));
+select pg_temp.q(:D, format($$select public.admin_postpone_question(%L, 'Storm warning, new date to follow')$$, (select id from t where k = 'q4')));
+select pg_temp.must_fail('no picks while postponed', :B, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q4')), 'PR001');
+select pg_temp.must_fail('no result while postponed', :D,
+  format($$select public.admin_settle_question(%L, 0, 'https://www.premierleague.com/match/4')$$, (select id from t where k = 'q4')), 'PR005');
+select pg_temp.q(:D, format($$select public.admin_reschedule_question(%L, now() + interval '70 hours', 'New date confirmed by the league')$$, (select id from t where k = 'q4')));
+select pg_temp.check('rescheduled before the original kick-off: picks kept and open again',
+  (select option = 2 from public.predictions where question_id = (select id from t where k = 'q4') and user_id = :A)
+  and (pg_temp.q(:A, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw4')))::jsonb ->> 'status') = 'open');
+select pg_temp.q(:B, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q4')));
+-- Kick-off passes, then the match is called off and moved.
+select pg_temp.act_as_admin();
+update public.prediction_questions set locks_at = now() - interval '10 minutes' where id = (select id from t where k = 'q4');
+select pg_temp.q(:D, format($$select public.admin_postpone_question(%L, 'Called off at the ground')$$, (select id from t where k = 'q4')));
+select pg_temp.q(:D, format($$select public.admin_reschedule_question(%L, now() + interval '70 hours', 'Replayed next week')$$, (select id from t where k = 'q4')));
+select pg_temp.must_fail('after the original kick-off, picks stay closed even when rescheduled', :B,
+  format($$select public.submit_pick(%L, 1)$$, (select id from t where k = 'q4')), 'PR001');
+select pg_temp.check('picks kept through postponement',
+  (select count(*) = 2 from public.predictions where question_id = (select id from t where k = 'q4'))
+  and (pg_temp.q(:A, format($$select public.prediction_for_world(%L)$$, (select id from t where k = 'pw4')))::jsonb ->> 'status') = 'locked');
+select pg_temp.must_fail('the result waits for the new kick-off', :D,
+  format($$select public.admin_settle_question(%L, 0, 'https://www.premierleague.com/match/4')$$, (select id from t where k = 'q4')), 'PR005');
+select pg_temp.must_fail('a new kick-off must be in the future', :D,
+  format($$select public.admin_reschedule_question(%L, now() - interval '1 hour', 'Oops')$$, (select id from t where k = 'q4')), 'PR005');
+
+-- The table: all time and this week, ties share a rank.
+select pg_temp.check('all-time table: points, played and shared ranks',
+  pg_temp.q(:B, $$select string_agg(display_name || ':' || points || '/' || played || '#' || rank, ' ' order by rank, display_name) from public.prediction_table('all')$$)
+    = 'Leo Park:2/2#1 Ama M.:1/2#2 Zoë Laurent:1/1#2');
+select pg_temp.act_as_admin();
+update public.prediction_questions set drop_date = drop_date - 14 where id = (select id from t where k = 'q2');
+select pg_temp.check('weekly table only counts this week''s Drops (Lagos)',
+  pg_temp.q(:B, $$select string_agg(display_name || ':' || points || '#' || rank, ' ' order by rank, display_name) from public.prediction_table('week')$$)
+    = 'Leo Park:1#1 Ama M.:0#2');
+select pg_temp.must_fail('the table is for invited people', '00000000-0000-0000-0000-00000000000e', $$select * from public.prediction_table()$$, 'PR004');
+select pg_temp.must_fail('unknown period refused', :A, $$select * from public.prediction_table('month')$$, '22023');
+
+-- The audit trail.
+select pg_temp.check('every admin action on a question is recorded',
+  (select string_agg(action, ',' order by created_at, action) from public.admin_audit_log where target_id = (select id from t where k = 'q1'))
+    = 'prediction.correct,prediction.create,prediction.publish,prediction.settle,prediction.update'
+  and (select count(*) = 4 from public.admin_audit_log where target_id = (select id from t where k = 'q4') and action in ('prediction.postpone', 'prediction.reschedule'))
+  and exists (select 1 from public.admin_audit_log where action = 'prediction.void' and target_id = (select id from t where k = 'q3') and details ->> 'was_settled' = 'true'));
+select pg_temp.q(:D, $$select public.admin_set_prediction_beta_member('00000000-0000-0000-0000-00000000000a', false)$$);
+select pg_temp.must_fail('removed from the beta: no access', :A, $$select public.prediction_today()$$, 'PR004');
+select pg_temp.check('removal is recorded', exists (select 1 from public.admin_audit_log where action = 'prediction.beta_remove' and target_id = :A));
+
+-- Internal helpers stay internal.
+select pg_temp.must_fail('anon cannot pick', null, format($$select public.submit_pick(%L, 0)$$, (select id from t where k = 'q4')), '42501');
+select pg_temp.must_fail('question view helper not callable', :B,
+  format($$select public.prediction_view(q, '00000000-0000-0000-0000-00000000000a') from public.prediction_questions q where id = %L$$, (select id from t where k = 'q1')), '42501');
+select pg_temp.must_fail('membership helper not callable', :B, $$select public.prediction_require_member()$$, '42501');
+select pg_temp.must_fail('admin row helper not callable', :D, format($$select public.prediction_admin_get(%L)$$, (select id from t where k = 'q1')), '42501');
+select pg_temp.must_fail('lock trigger not callable', :B, $$select public.predictions_guard()$$, '42501');
+
 -- ------------------------------------------------------- private surfaces
 
 select pg_temp.must_fail('legacy schema closed to authenticated', :A, 'select count(*) from legacy.user_map', '42501');
