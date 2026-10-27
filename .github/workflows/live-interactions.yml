@@ -13,7 +13,7 @@ on:
         description: "Target URL (default: line 1 of .github/live-interactions.run)"
         required: false
       suite:
-        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; seo: seo-probe (BASE, read-only); email: email-dns | email-send | email-probe (BASE: unsigned/forged refused + readiness, production endpoint expected) | email-otp-keys | email-otp-start | email-otp-verify | email-otp-reset | email-otp-expired | email-otp-prod-{start,verify,reset,expired} (production, owner-approved)"
+        description: "all | likes | moments | follow | creator | messages | media | taps | nav | sync | onboarding | auth | admin (default: all except admin); official address: domain (all of its checks) | domain-auth | transition | domain-media | domain-messages | domain-sync | push; seo: seo-probe (BASE, read-only); google-oauth-probe (BASE, read-only: never completes a sign-in); email: email-dns | email-send | email-probe (BASE: unsigned/forged refused + readiness, production endpoint expected) | email-otp-keys | email-otp-start | email-otp-verify | email-otp-reset | email-otp-expired | email-otp-prod-{start,verify,reset,expired} (production, owner-approved)"
         required: false
       test_to:
         description: "email-send / email-otp-start: the inbox that receives the emails"
@@ -272,6 +272,14 @@ jobs:
           VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           BASE: ${{ inputs.base }}
         run: EXPECT_ENDPOINT=ep-dry-mode-zano9y8g node scripts/test/email-handler-probe.mjs
+      - name: "Google sign-in: the redirect chain, Cancel, and coming back (no sign-in completed)"
+        if: always() && inputs.suite == 'google-oauth-probe'
+        env:
+          BASE: ${{ inputs.base }}
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          ENGINE=chromium node scripts/test/google-oauth-probe.mjs
+          ENGINE=webkit node scripts/test/google-oauth-probe.mjs
       - name: "Search: what Googlebot gets (read-only)"
         if: always() && inputs.suite == 'seo-probe'
         env:
