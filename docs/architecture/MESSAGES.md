@@ -65,6 +65,7 @@ Migrations `20261006200000_messages.sql` and `20261006210000_messaging_security.
 | `e2e_to_device` | Olm-encrypted mail between devices, plus emoji-verification protocol messages (public keys, commitments, MACs). Conversation keys and secrets only travel Olm-encrypted; plaintext `m.room_key` / `m.secret.send` are refused. | the recipient device's owner; deleted once processed |
 | `e2e_backup_versions` | the backup's **public** key, signed by the device that created it | owner only (functions) |
 | `e2e_backup_keys` | conversation keys **encrypted to the backup public key**. A check constraint allows only `ciphertext`, `ephemeral`, `mac`. | owner only (functions); admins have no access |
+| `e2e_backup_keys_replaced` | copies a later backup write replaced (kept, never read by the app). Backups are only written by a verified device and are never deleted by the app: a new backup marks the old one `superseded_at` (see [SECURITY_HARDENING.md](../SECURITY_HARDENING.md)). | nobody (functions only) |
 | `e2e_revoked_devices` | devices removed in Settings → Your devices | nobody directly |
 | `user_blocks` | who blocked whom | only the blocker |
 | `dm_reports` | reason, note, and the messages the reporter selected | admins, through `admin_dm_reports()` only |

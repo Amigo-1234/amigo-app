@@ -18,6 +18,12 @@ const EMOJI = [
 export const canEdit = (m: DirectMessage) =>
   m.fromViewer && !m.undecryptable && !!m.text && m.media.length === 0 && Date.now() - m.createdAt.getTime() < MESSAGE_EDIT_WINDOW_MS;
 
+/**
+ * Whether reactions can be added or changed. The server can't tell a reaction from an
+ * edit, so it refuses any change to your own message after the edit window.
+ */
+export const canAnnotate = (m: DirectMessage) => !m.fromViewer || Date.now() - m.createdAt.getTime() < MESSAGE_EDIT_WINDOW_MS;
+
 export function EmojiGrid({ onPick, label = "Emoji" }: { onPick: (emoji: string) => void; label?: string }) {
   return (
     <div className="emoji-grid" role="group" aria-label={label}>

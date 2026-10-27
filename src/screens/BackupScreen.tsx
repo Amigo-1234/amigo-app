@@ -189,8 +189,13 @@ function SetupBackup({ replacing, onDone, onCancel }: { replacing: boolean; onDo
     setBusy(true);
     try {
       setKey(await api.setUpBackup(viewer.id));
-    } catch {
-      toast("Couldn't set up backup. Try again.", "error");
+    } catch (err) {
+      toast(
+        (err as { code?: string }).code === "device-unverified"
+          ? "Approve this device from another of your devices first, then set up backup."
+          : "Couldn't set up backup. Try again.",
+        "error",
+      );
     } finally {
       setBusy(false);
     }

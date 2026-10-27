@@ -250,10 +250,13 @@ export class E2EDevice {
         break;
       case RequestType.KeysBackup:
         try {
-          response = await this.rpc("e2e_backup_put", { p_version: (req as Sdk.KeysBackupRequest).version, p_rooms: body.rooms ?? {} });
+          response = await this.rpc("e2e_backup_put", { p_device: this.deviceId, p_version: (req as Sdk.KeysBackupRequest).version, p_rooms: body.rooms ?? {} });
         } catch (e) {
-          // The backup was replaced from another device: stop using the old one.
-          if ((e as { code?: string }).code === "DM010") await this.machine.disableBackup();
+          // DM010: the backup was replaced from another device: stop using the old one.
+          // DM012: only verified devices write to the backup; this one isn't (yet), so
+          // stop for now. The backup is turned back on (refreshBackupLocked) on a later start.
+          const code = (e as { code?: string }).code;
+          if (code === "DM010" || code === "DM012") await this.machine.disableBackup();
           else throw e;
           return;
         }
@@ -663,10 +666,11 @@ export class E2EDevice {
    */
   setUpBackup(): Promise<string> {
     return this.serial(async () => {
+      if (!(await this.ownSecurityLocked()).deviceVerified) throw new E2EError("device-unverified");
       const key = this.c.BackupDecryptionKey.createRandomKey();
       const authData: Record<string, unknown> = { public_key: key.megolmV1PublicKey.publicKeyBase64 };
       authData.signatures = JSON.parse((await this.machine.sign(JSON.stringify(authData))).asJSON());
-      const version = await this.rpc<string>("e2e_backup_create", { p_algorithm: BACKUP_ALGORITHM, p_auth_data: authData });
+      const version = await this.rpc<string>("e2e_backup_create", { p_device: this.deviceId, p_algorithm: BACKUP_ALGORITHM, p_auth_data: authData });
       await this.machine.saveBackupDecryptionKey(key, version);
       await this.machine.enableBackupV1(key.megolmV1PublicKey.publicKeyBase64, version);
       await this.backupNewKeys();

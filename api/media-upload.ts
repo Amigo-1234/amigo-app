@@ -2,11 +2,14 @@
  * POST /api/media-upload  { purpose, mime, size, conversationId? } or { variantOf, mime, size }  (Bearer JWT)
  * → { key, url }: a PUT link to the private bucket, valid 10 minutes, only for
  * the key, type and exact size Postgres approved (media_begin_upload).
- * Also deletes a few files queued for removal on each call.
+ * Also deletes a few files queued for removal on each call (needs PUSH_SERVER_SECRET:
+ * media_cleanup_take refuses anyone without the server secret).
  */
 import { json, presign, r2, remove, rpc, tokenFor } from "./_media";
 
 export const config = { runtime: "edge" };
+
+const ENV = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== "POST") return json(405, { error: "method" });
@@ -32,9 +35,10 @@ export default async function handler(req: Request): Promise<Response> {
 
   const key = begun.data;
   // Housekeeping without a scheduler, alongside signing (not after it): remove a few deleted files.
-  const housekeeping = body.variantOf
+  const secret = ENV.PUSH_SERVER_SECRET;
+  const housekeeping = body.variantOf || !secret
     ? Promise.resolve()
-    : rpc<string[]>(token, "media_cleanup_take", { p_limit: 5 }).then((queued) =>
+    : rpc<string[]>(token, "media_cleanup_take", { p_key: secret, p_limit: 5 }).then((queued) =>
         queued.ok ? Promise.all(queued.data.map((k) => remove(store, k).catch(() => undefined))) : undefined,
       );
   const [url] = await Promise.all([presign(store, key, "PUT", 600, { type: body.mime, size: body.size }), housekeeping.catch(() => undefined)]);

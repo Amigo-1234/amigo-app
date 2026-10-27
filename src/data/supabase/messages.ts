@@ -60,6 +60,7 @@ function translate(e: unknown): never {
   const code = (e as { code?: string })?.code;
   if (e instanceof MessageError || e instanceof SecurityError) throw e;
   if (code === "identity-changed" || code === "device-unverified") throw new MessageError(code);
+  if (code === "DM012") throw new MessageError("device-unverified");
   if (code === "device-removed" || code === "DM009") throw new SecurityError("device-removed");
   if (code === "bad-recovery-key" || code === "wrong-recovery-key" || code === "no-backup" || code === "no-other-device") throw new SecurityError(code);
   if (code && ERRORS[code]) throw new MessageError(ERRORS[code], (e as Error).message);
@@ -414,6 +415,7 @@ export function createSupabaseMessages(
   function annotations(rows: StoredMessage[], results: Map<string, DecryptResult>): Annotations {
     const out: Annotations = { reactions: new Map(), edits: new Map() };
     const senderOf = new Map(rows.filter((r) => !r.relates_to).map((r) => [r.id, r.sender_id]));
+    const sentAt = new Map(rows.filter((r) => !r.relates_to).map((r) => [r.id, new Date(r.created_at).getTime()]));
     for (const r of rows) {
       if (!r.relates_to) continue;
       const res = results.get(r.id);
@@ -424,7 +426,12 @@ export function createSupabaseMessages(
         let m = out.reactions.get(target);
         if (!m) out.reactions.set(target, (m = new Map()));
         m.set(r.sender_id, res.payload.body.slice(0, 16));
-      } else if (res.payload.msgtype === "amigo.edit" && senderOf.get(target) === r.sender_id) {
+      } else if (
+        res.payload.msgtype === "amigo.edit" &&
+        senderOf.get(target) === r.sender_id &&
+        // Both times are the server's: an edit made after the window is ignored (the server refuses new ones too).
+        new Date(r.created_at).getTime() - (sentAt.get(target) ?? Infinity) <= MESSAGE_EDIT_WINDOW_MS
+      ) {
         out.edits.set(target, res.payload.body);
       }
     }

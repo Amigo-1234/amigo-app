@@ -19,7 +19,7 @@ import { describeError, limitText } from "../feed/errors";
 import { clockTime, dayLabel, sameDay, STATUS_LABEL } from "./format";
 import { REPORT_REASONS } from "../reports/reasons";
 import { MessageComposer } from "./MessageComposer";
-import { canEdit, EditSheet, MessageActionSheet, ReactionChips, SearchSheet, UnsendSheet, useBubbleGestures } from "./MessageActions";
+import { canAnnotate, canEdit, EditSheet, MessageActionSheet, ReactionChips, SearchSheet, UnsendSheet, useBubbleGestures } from "./MessageActions";
 import { useConversation, type PendingMessage } from "./useMessages";
 import "./Security.css";
 
@@ -277,7 +277,7 @@ export function ConversationPane({ conversationId }: { conversationId: string })
                     showStatus={row.m.id === lastOwn?.id && c.pending.length === 0}
                     onReply={() => setReplyTo(quote(row.m))}
                     onMenu={() => openActions(row.m)}
-                    onReact={actions && !row.m.undecryptable && conversation.canSend ? (emoji) => react(row.m, emoji) : undefined}
+                    onReact={actions && !row.m.undecryptable && conversation.canSend && canAnnotate(row.m) ? (emoji) => react(row.m, emoji) : undefined}
                   />
                 ) : (
                   <PendingBubble p={row.p} onRetry={() => c.retrySend(row.p.localId).then((e) => e && toast(sendErrorText(e, peer.name), "error"))} onDiscard={() => c.discard(row.p.localId)} />
@@ -392,7 +392,7 @@ export function ConversationPane({ conversationId }: { conversationId: string })
         {target && (
           <MessageActionSheet
             m={target}
-            canReact={!!actions && !target.undecryptable && conversation.canSend}
+            canReact={!!actions && !target.undecryptable && conversation.canSend && canAnnotate(target)}
             onReact={(emoji) => {
               react(target, emoji);
               closeSheet();

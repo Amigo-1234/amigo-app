@@ -779,15 +779,39 @@ select pg_temp.check('removing only ever touches your own devices (A "removing" 
   (select count(*) = 1 from public.e2e_devices where user_id = :B and device_id = 'BBBDEV')
   and not exists (select 1 from public.e2e_revoked_devices where user_id = :B));
 
--- Key backup
+-- Key backup: only a verified (cross-signed), not removed device of yours may write it.
+-- AAA3 is a new device of A's, signed only by itself (not approved by A's self-signing key SSA);
+-- AAA2 was removed above.
+select pg_temp.q(:A, $$select public.e2e_upload_keys('AAA3', '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","device_id":"AAA3","keys":{"ed25519:AAA3":"edA3","curve25519:AAA3":"cvA3"},"signatures":{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"ed25519:AAA3":"selfsig3"}}}', null, null)::text$$);
+-- A self-signature (the device's own key) is not approval.
+select pg_temp.must_fail('backup: an unverified device cannot create a backup', :A,
+  $$select public.e2e_backup_create('AAA3', 'm.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB"}')$$, 'DM012');
+select pg_temp.must_fail('backup: an unknown device cannot create a backup', :A,
+  $$select public.e2e_backup_create('NOSUCHDEV', 'm.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB"}')$$, 'DM012');
+select pg_temp.must_fail('backup: a removed device cannot create a backup', :A,
+  $$select public.e2e_backup_create('AAA2', 'm.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB"}')$$, 'DM009');
+select pg_temp.must_fail('backup: signed out cannot create a backup', null,
+  $$select public.e2e_backup_create('AAA3', 'm.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB"}')$$, '42501');
+select pg_temp.check('backup: nothing was created by refused calls', (select count(*) = 0 from public.e2e_backup_versions where user_id = :A));
+select pg_temp.q(:A, $$select public.e2e_upload_signatures('{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"AAA3":{"signatures":{"@00000000-0000-0000-0000-00000000000a:amigo.world":{"ed25519:SSA":"ssig-dev"}}}}}')::text$$);
+select pg_temp.must_fail('backup: someone else cannot use your verified device id', :B,
+  $$select public.e2e_backup_create('AAA3', 'm.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB"}')$$, 'DM012');
 select pg_temp.must_fail('backup must use the megolm backup algorithm', :A,
-  $$select public.e2e_backup_create('plaintext', '{"public_key":"PUB"}')$$, 'DM011');
-insert into dm_t values ('bv', pg_temp.q(:A, $$select public.e2e_backup_create('m.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB","signatures":{}}')$$));
+  $$select public.e2e_backup_create('AAA3', 'plaintext', '{"public_key":"PUB"}')$$, 'DM011');
+insert into dm_t values ('bv', pg_temp.q(:A, $$select public.e2e_backup_create('AAA3', 'm.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB","signatures":{}}')$$));
 select pg_temp.must_fail('backed-up keys must be encrypted (no plaintext session key)', :A,
-  format($$select public.e2e_backup_put(%L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":0,"session_data":{"ciphertext":"c","ephemeral":"e","mac":"m","session_key":"PLAINTEXT"}}}}}')$$, (select v from dm_t where k = 'bv')), 'DM011');
-select pg_temp.q(:A, format($$select public.e2e_backup_put(%L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":5,"forwarded_count":0,"is_verified":true,"session_data":{"ciphertext":"c5","ephemeral":"e","mac":"m"}}}}}')::text$$, (select v from dm_t where k = 'bv')));
-select pg_temp.q(:A, format($$select public.e2e_backup_put(%L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":9,"forwarded_count":0,"is_verified":true,"session_data":{"ciphertext":"c9","ephemeral":"e","mac":"m"}}}}}')::text$$, (select v from dm_t where k = 'bv')));
+  format($$select public.e2e_backup_put('AAA3', %L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":0,"session_data":{"ciphertext":"c","ephemeral":"e","mac":"m","session_key":"PLAINTEXT"}}}}}')$$, (select v from dm_t where k = 'bv')), 'DM011');
+select pg_temp.q(:A, format($$select public.e2e_backup_put('AAA3', %L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":9,"forwarded_count":0,"is_verified":true,"session_data":{"ciphertext":"c9","ephemeral":"e","mac":"m"}}}}}')::text$$, (select v from dm_t where k = 'bv')));
+select pg_temp.q(:A, format($$select public.e2e_backup_put('AAA3', %L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":5,"forwarded_count":0,"is_verified":true,"session_data":{"ciphertext":"c5","ephemeral":"e","mac":"m"}}}}}')::text$$, (select v from dm_t where k = 'bv')));
+select pg_temp.q(:A, format($$select public.e2e_backup_put('AAA3', %L, '{"!r:amigo.world":{"sessions":{"s1":{"first_message_index":7,"forwarded_count":0,"is_verified":true,"session_data":{"ciphertext":"c7","ephemeral":"e","mac":"m"}}}}}')::text$$, (select v from dm_t where k = 'bv')));
 select pg_temp.check('backup keeps the better copy of a key', (select session_data ->> 'ciphertext' = 'c5' from public.e2e_backup_keys where session_id = 's1'));
+select pg_temp.check('the copy it replaced is archived (a worse copy archives nothing)',
+  (select string_agg(session_data ->> 'ciphertext', ',') = 'c9' and bool_and(replaced_by_device = 'AAA3')
+     from public.e2e_backup_keys_replaced where session_id = 's1'));
+select pg_temp.must_fail('backup: an unverified device cannot write keys', :A,
+  format($$select public.e2e_backup_put('BADDEV', %L, '{}')$$, (select v from dm_t where k = 'bv')), 'DM012');
+select pg_temp.must_fail('backup: signed out cannot write keys', null,
+  format($$select public.e2e_backup_put('AAA3', %L, '{}')$$, (select v from dm_t where k = 'bv')), '42501');
 select pg_temp.check('owner restores their encrypted keys',
   pg_temp.q(:A, format($$select public.e2e_backup_get(%L) #>> '{!r:amigo.world,sessions,s1,session_data,ciphertext}'$$, (select v from dm_t where k = 'bv'))) = 'c5');
 select pg_temp.check('nobody else can fetch someone''s backup (not even admins)',
@@ -795,10 +819,58 @@ select pg_temp.check('nobody else can fetch someone''s backup (not even admins)'
   and pg_temp.q(:D, format($$select public.e2e_backup_get(%L)::text$$, (select v from dm_t where k = 'bv'))) = '{}'
   and pg_temp.q(:D, $$select coalesce(public.e2e_backup_current()::text, 'none')$$) = 'none');
 select pg_temp.must_fail('backup tables not directly readable', :D, $$select count(*) from public.e2e_backup_keys$$, '42501');
-select pg_temp.q(:A, $$select public.e2e_backup_create('m.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB2"}')$$);
+select pg_temp.must_fail('replaced-key archive not directly readable', :A, $$select count(*) from public.e2e_backup_keys_replaced$$, '42501');
+select pg_temp.must_fail('backups cannot be deleted by signed-in people', :A, $$select public.e2e_backup_delete()$$, '42501');
+select pg_temp.must_fail('the old backup functions without a device are gone', :A,
+  $$select public.e2e_backup_create('m.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB"}'::jsonb)$$, '42883');
+select pg_temp.check('refused delete left the backup in place', (select count(*) = 1 from public.e2e_backup_keys where session_id = 's1'));
+insert into dm_t values ('bv2', pg_temp.q(:A, $$select public.e2e_backup_create('AAA3', 'm.megolm_backup.v1.curve25519-aes-sha2', '{"public_key":"PUB2"}')$$));
 select pg_temp.must_fail('writing to a replaced backup version is refused', :A,
-  format($$select public.e2e_backup_put(%L, '{}')$$, (select v from dm_t where k = 'bv')), 'DM010');
-select pg_temp.check('a new backup replaces the old one and its keys', (select count(*) = 0 from public.e2e_backup_keys where session_id = 's1'));
+  format($$select public.e2e_backup_put('AAA3', %L, '{}')$$, (select v from dm_t where k = 'bv')), 'DM010');
+select pg_temp.check('a new backup becomes current', pg_temp.q(:A, $$select public.e2e_backup_current() ->> 'version'$$) = (select v from dm_t where k = 'bv2'));
+select pg_temp.check('the old backup and its keys are kept (marked superseded, still restorable by the owner)',
+  (select superseded_at is not null from public.e2e_backup_versions where version = (select v::bigint from dm_t where k = 'bv'))
+  and (select superseded_at is null from public.e2e_backup_versions where version = (select v::bigint from dm_t where k = 'bv2'))
+  and (select count(*) = 1 from public.e2e_backup_keys where session_id = 's1')
+  and pg_temp.q(:A, format($$select public.e2e_backup_get(%L) #>> '{!r:amigo.world,sessions,s1,session_data,ciphertext}'$$, (select v from dm_t where k = 'bv'))) = 'c5');
+-- A new identity (new self-signing key): devices approved under the old one must be approved again.
+select pg_temp.q(:A, $$select public.e2e_upload_signing_keys(null,
+  '{"user_id":"@00000000-0000-0000-0000-00000000000a:amigo.world","usage":["self_signing"],"keys":{"ed25519:SSA2":"SSA2"},"signatures":{}}', null)::text$$);
+select pg_temp.must_fail('backup: a device approved by an old self-signing key is no longer trusted', :A,
+  format($$select public.e2e_backup_put('AAA3', %L, '{}')$$, (select v from dm_t where k = 'bv2')), 'DM012');
+
+-- Edits: changes to your own message are refused after 15 minutes (server time).
+insert into dm_t values ('m1', pg_temp.q(:A, format($$select id::text from public.dm_send_v3('00000000-0000-0000-0000-0000000000e1', %L, 'AAA3', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"orig","session_id":"s"}')$$, (select v from dm_t where k = 'conv'))));
+select pg_temp.q(:A, format($$select id::text from public.dm_send_v3('00000000-0000-0000-0000-0000000000e2', %L, 'AAA3', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"edit","session_id":"s"}', %L)$$,
+  (select v from dm_t where k = 'conv'), (select v from dm_t where k = 'm1')));
+select pg_temp.check('edit within 15 minutes accepted', (select count(*) = 1 from public.dm_messages where id = '00000000-0000-0000-0000-0000000000e2'));
+update public.dm_messages set created_at = now() - interval '16 minutes' where id = (select v::uuid from dm_t where k = 'm1');
+select pg_temp.must_fail('edit after 15 minutes refused by the server', :A,
+  format($$select * from public.dm_send_v3('00000000-0000-0000-0000-0000000000e3', %L, 'AAA3', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"late","session_id":"s"}', %L)$$,
+    (select v from dm_t where k = 'conv'), (select v from dm_t where k = 'm1')), 'DM013');
+select pg_temp.check('a retry of an edit already accepted still answers (idempotent)',
+  pg_temp.q(:A, format($$select id::text from public.dm_send_v3('00000000-0000-0000-0000-0000000000e2', %L, 'AAA3', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"edit","session_id":"s"}', %L)$$,
+    (select v from dm_t where k = 'conv'), (select v from dm_t where k = 'm1'))) = '00000000-0000-0000-0000-0000000000e2');
+select pg_temp.q(:B, format($$select id::text from public.dm_send_v3('00000000-0000-0000-0000-0000000000e4', %L, 'BBBDEV', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"react","session_id":"s"}', %L)$$,
+  (select v from dm_t where k = 'conv'), (select v from dm_t where k = 'm1')));
+select pg_temp.check('the other person can still react to an old message', (select count(*) = 1 from public.dm_messages where id = '00000000-0000-0000-0000-0000000000e4'));
+delete from public.dm_messages where id = (select v::uuid from dm_t where k = 'm1');
+
+-- Media cleanup queue: only the server (with the server secret) may take from it.
+insert into public.push_server (key_hash) values (encode(sha256(convert_to('test-server-secret', 'UTF8')), 'hex'))
+  on conflict (id) do update set key_hash = excluded.key_hash;
+-- (Earlier tests may have queued files already; the server takes up to 20 at a time.)
+select pg_temp.check('cleanup queue: test starts with a small queue', (select count(*) <= 18 from public.media_cleanup_queue where bucket = 'r2'));
+insert into public.media_cleanup_queue (bucket, path, reason) values ('r2', 'u/x/one', 'test'), ('r2', 'u/x/two', 'test');
+select pg_temp.must_fail('cleanup queue: a signed-in person without the secret is refused', :A, $$select count(*) from public.media_cleanup_take(null, 5)$$, '42501');
+select pg_temp.must_fail('cleanup queue: a wrong secret is refused', :A, $$select count(*) from public.media_cleanup_take('guess', 5)$$, '42501');
+select pg_temp.must_fail('cleanup queue: signed out is refused', null, $$select count(*) from public.media_cleanup_take('test-server-secret', 5)$$, '42501');
+select pg_temp.must_fail('cleanup queue: the old secret-less function is gone', :A, $$select count(*) from public.media_cleanup_take(5)$$, '42883');
+select pg_temp.check('cleanup queue: refused calls removed nothing', (select count(*) = 2 from public.media_cleanup_queue where reason = 'test'));
+select pg_temp.check('cleanup queue: the server (with the secret) takes queued files',
+  pg_temp.q(:A, $$select count(*) filter (where p in ('u/x/one', 'u/x/two')) from public.media_cleanup_take('test-server-secret', 20) p$$)::int = 2);
+select pg_temp.check('cleanup queue: taken files leave the queue', (select count(*) = 0 from public.media_cleanup_queue where reason = 'test'));
+delete from public.push_server;
 
 -- Message report review
 select pg_temp.must_fail('only admins review message reports', :A,
