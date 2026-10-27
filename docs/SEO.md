@@ -13,3 +13,12 @@
   `https://amigoworld.com.ng/`; JSON-LD `Organization` (name, url, logo `icons/icon-512.png`) and `WebSite`
   (name, url) only.
 - Check any deployment: workflow suite `seo-probe` with `base` (read-only, as Googlebot).
+
+## Production (2026-10-27)
+
+Commit `5b6f733` deployed as `dpl_FHbbdWDLC2eFySt9Ccczj5GYrQ6x` (rollback: `dpl_E7G4JxJu79WG7SdYuR5bXZXbWZr1`,
+commit `1776e32`). `seo-probe` on https://amigoworld.com.ng: no issues — no noindex header or tag; favicon.ico
+and the 48/96/192 PNGs served as images and crawlable; missing icons 404; description, canonical and JSON-LD as
+above; sitemap and manifest crawlable; 13 private paths still disallowed; signed-out Data API requests for
+messages, conversations, notifications, profiles, posts and admins are refused (400). Email handler probe passed.
+Google's result (icon, snippet) updates on Google's schedule; check in Search Console.
