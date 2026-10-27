@@ -6,6 +6,7 @@ import type { MediaItem } from "../../data";
 import "./MediaViewer.css";
 import { MediaImg, mediaSrc } from "../../lib/mediaLinks";
 import { capturePointer, swallowClicks } from "../../lib/visualViewport";
+import { lockPageScroll } from "../../lib/scrollLock";
 
 type Open = (items: MediaItem[], index?: number) => void;
 const ViewerContext = createContext<Open>(() => {});
@@ -158,24 +159,6 @@ function DownloadButton({ url }: { url: string }) {
       {busy ? <span className="btn__spinner" aria-hidden="true" /> : <Download size={20} />}
     </button>
   );
-}
-
-/**
- * Keeps the page exactly where it is while the viewer is open. `overflow:
- * hidden` alone doesn't stop touch scrolling on iOS, so the body is pinned with
- * position: fixed at the current offset, and put back on close.
- */
-function lockPageScroll(): () => void {
-  const y = window.scrollY;
-  const body = document.body;
-  const prev = { position: body.style.position, top: body.style.top, left: body.style.left, right: body.style.right, width: body.style.width, overflow: body.style.overflow };
-  Object.assign(body.style, { position: "fixed", top: `-${y}px`, left: "0", right: "0", width: "100%", overflow: "hidden" });
-  document.documentElement.classList.add("media-open");
-  return () => {
-    Object.assign(body.style, prev);
-    document.documentElement.classList.remove("media-open");
-    window.scrollTo({ top: y, left: 0, behavior: "instant" as ScrollBehavior });
-  };
 }
 
 type View = { scale: number; x: number; y: number };

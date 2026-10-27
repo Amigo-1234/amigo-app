@@ -1,8 +1,8 @@
 import type { MomentLayout } from "../../data";
 
 /**
- * How a Moment photo sits in its frame. The same rules on every screen, so
- * the part the author framed stays in view on short and tall phones alike:
+ * How a Moment photo sits in its frame. Full size (viewer, composer) always
+ * uses wholePhoto(); the small previews keep the saved framing:
  *
  *   fit "cover"    fills the frame (cropping the overflow)
  *   fit "contain"  the whole photo, over a blurred copy of itself
@@ -19,11 +19,18 @@ export const TEXT_Y_MAX = 0.8;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** A first framing that suits the photo: tall photos fill the screen, wide or square ones show whole. */
-export function initialLayout(width?: number, height?: number): MomentLayout {
-  const tall = !!width && !!height && width / height <= 0.8;
-  return { ...DEFAULT_LAYOUT, fit: tall ? "cover" : "contain", textY: width ? 0.72 : 0.5 };
+/** A new photo Moment's framing: the whole photo, caption towards the bottom. */
+export function initialLayout(width?: number): MomentLayout {
+  return { ...DEFAULT_LAYOUT, fit: "contain", textY: width ? 0.72 : 0.5 };
 }
+
+/**
+ * How a Moment shows full size, whatever framing it was saved with: the whole
+ * photo at its own shape (never stretched or cropped), centred over a blurred
+ * copy of itself; only the caption keeps its place. Earlier Moments saved
+ * "cover" or a zoom, which cropped most of a tall photo on a phone screen.
+ */
+export const wholePhoto = (l: MomentLayout): MomentLayout => ({ ...l, fit: "contain", zoom: 1, x: 0.5, y: 0.5 });
 
 export interface Placement {
   left: number;

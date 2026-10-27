@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import type { MediaItem, MomentBackground, MomentLayout } from "../../data";
 import { MediaImg } from "../../lib/mediaLinks";
-import { DEFAULT_LAYOUT, place } from "./framing";
+import { DEFAULT_LAYOUT, place, wholePhoto } from "./framing";
 
 export type MomentMedia = Pick<MediaItem, "url" | "alt" | "width" | "height" | "preview">;
 export type PhotoState = "loading" | "ready" | "failed";
@@ -23,9 +23,9 @@ function useSize<T extends HTMLElement>(): [Ref<T>, { w: number; h: number }] {
 }
 
 /**
- * What a Moment looks like: a photo framed as its author chose (fill, or the
- * whole photo over a blurred copy of itself), text on a background, or text
- * over a photo, with the caption where the author put it. Used by the viewer,
+ * What a Moment looks like: a photo (full size: always the whole photo, over a
+ * blurred, dimmed copy of itself where it doesn't reach the edges), text on a
+ * background, or text over a photo, with the caption where the author put it. Used by the viewer,
  * the composer's live preview and the small previews, so all three match.
  *
  * While the photo loads, its tiny blurred preview (or the background colour)
@@ -68,12 +68,14 @@ export function MomentVisual({
   // Stored dimensions place the photo before it arrives (no jump); the decoded size wins if they differ.
   const iw = natural?.w ?? media?.width;
   const ih = natural?.h ?? media?.height;
-  const placed = media && iw && ih && frame.w && frame.h ? place(frame.w, frame.h, iw, ih, layout) : null;
-  // Without dimensions (very old Moments): fill, as before.
+  const full = size === "full";
+  const placed = media && iw && ih && frame.w && frame.h ? place(frame.w, frame.h, iw, ih, full ? wholePhoto(layout) : layout) : null;
+  // Without dimensions yet (very old Moments, or before the frame is measured): the browser fits
+  // it — whole at full size, filled in small previews.
   const style: React.CSSProperties = placed
     ? { left: placed.left, top: placed.top, width: placed.width, height: placed.height }
-    : { inset: 0, width: "100%", height: "100%", objectFit: "cover" };
-  const showBackdrop = !!media && (placed?.gaps ?? false);
+    : { inset: 0, width: "100%", height: "100%", objectFit: full ? "contain" : "cover" };
+  const showBackdrop = !!media && (placed ? placed.gaps : full);
   const backdrop = media?.preview;
 
   return (

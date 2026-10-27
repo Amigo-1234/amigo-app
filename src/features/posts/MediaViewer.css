@@ -22,12 +22,6 @@
   background: transparent;
 }
 
-/* While the viewer is open the page behind stays put (see lockPageScroll). */
-html.media-open {
-  overflow: hidden;
-  overscroll-behavior: none;
-}
-
 .media-viewer__stage {
   position: absolute;
   inset: 0;

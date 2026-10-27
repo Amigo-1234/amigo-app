@@ -174,3 +174,12 @@ label,
 [role="switch"] {
   touch-action: manipulation;
 }
+
+/* A full-screen overlay is open (src/lib/scrollLock.ts): the page behind stays put. */
+html.scroll-locked {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.scroll-locked body {
+  overscroll-behavior: none;
+}

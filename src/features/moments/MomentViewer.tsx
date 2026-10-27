@@ -14,6 +14,7 @@ import { VerifiedBadge } from "../../ui/VerifiedBadge";
 import { MomentVisual, type PhotoState } from "./MomentVisual";
 import { mediaSrc, primeMedia } from "../../lib/mediaLinks";
 import { capturePointer, swallowClicks } from "../../lib/visualViewport";
+import { lockPageScroll } from "../../lib/scrollLock";
 import "./Moments.css";
 
 /** How long each Moment shows before moving on. */
@@ -53,6 +54,8 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
   /** A tap seen at pointerup, stepped on its click. */
   const tap = useRef<{ side: "prev" | "next"; at: number } | null>(null);
   const closedBy = useRef<"popstate" | "navigate" | null>(null);
+  /** Releases the page behind (locked while the viewer is open). */
+  const unlock = useRef<(() => void) | null>(null);
 
   const group = pos ? queue[pos.gi] : null;
   const snapshot = group && pos ? group.moments[pos.mi] : null;
@@ -66,20 +69,33 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
 
   const close = useCallback(() => setPos(null), []);
 
-  // Open as a modal; Back (or swipe-back) closes it.
+  // Open as a modal over a locked page; Back (or swipe-back) closes it.
   useEffect(() => {
     const d = ref.current;
+    // History first: the browser records the page's scroll position for the entry it leaves,
+    // and puts it back on Back. Pinned first, that position read 0 and closing jumped to the top.
+    if (!history.state?.momentViewer) history.pushState({ ...(history.state ?? {}), momentViewer: true }, "");
+    unlock.current = lockPageScroll();
     if (d && !d.open) {
       d.showModal();
       d.focus();
     }
-    if (!history.state?.momentViewer) history.pushState({ ...(history.state ?? {}), momentViewer: true }, "");
     const onPop = () => {
       closedBy.current = "popstate";
       setPos(null);
     };
+    // iOS Safari: a pinch would zoom the whole page; the viewer zooms the photo itself.
+    const stop = (e: Event) => e.preventDefault();
+    d?.addEventListener("gesturestart", stop);
+    d?.addEventListener("gesturechange", stop);
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      d?.removeEventListener("gesturestart", stop);
+      d?.removeEventListener("gesturechange", stop);
+      // However it goes away (closed, or unmounted by a route change), the page is released.
+      unlock.current?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -88,6 +104,7 @@ export function MomentViewer({ queue, live, start, onClose }: { queue: MomentGro
     // click of a tap still on its way must not land on the feed that's now underneath.
     swallowClicks();
     ref.current?.close();
+    unlock.current?.();
     if (!closedBy.current && history.state?.momentViewer) history.back();
     onClose();
   }, [pos, onClose]);

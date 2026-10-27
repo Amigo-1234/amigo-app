@@ -194,11 +194,22 @@
 
 /* ---------- Viewer ---------- */
 
+/*
+ * Pinned to the screen and sized to the area actually visible (below Safari's
+ * bars, above the keyboard: --viewport-h from src/lib/scrollLock.ts), so the
+ * top bar and the reply box are never under browser chrome. The page behind
+ * is locked while it's open.
+ */
 .moment-viewer {
+  position: fixed;
+  inset: 0 auto auto 0;
   width: 100vw;
   max-width: none;
-  height: 100dvh;
+  height: 100vh;
+  height: var(--viewport-h, 100dvh);
   max-height: none;
+  overflow: hidden;
+  overscroll-behavior: contain;
   margin: 0;
   padding: 0;
   border: 0;
@@ -525,7 +536,7 @@
   justify-items: center;
 }
 
-/* The Moment as it will appear (9:16), editable in place. */
+/* The Moment as it will appear (9:16); the caption can be dragged. */
 .moment-composer__frame {
   position: relative;
   width: min(100%, calc(58dvh * 9 / 16), 340px);
@@ -533,22 +544,8 @@
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow-sm), 0 0 0 1px var(--border);
-  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
-}
-
-.moment-composer__frame.is-editable {
-  cursor: grab;
-}
-
-.moment-composer__frame.is-editable:active {
-  cursor: grabbing;
-}
-
-.moment-composer__frame:focus-visible {
-  outline: 3px solid var(--coral-500);
-  outline-offset: 2px;
 }
 
 .moment-composer__frame .moment-visual__text.is-draggable {

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect } from "react";
 import { useLocation, useNavigationType } from "react-router";
+import { pageScrollLocked } from "../lib/scrollLock";
 
 /** Scroll position per history entry (this tab only). */
 const positions = new Map<string, number>();
@@ -18,7 +19,9 @@ export function useScrollMemory() {
     let frame = 0;
     const save = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => positions.set(key, window.scrollY));
+      // While an overlay pins the page (src/lib/scrollLock.ts) window.scrollY reads 0; the
+      // real position comes back on release, and that is what Back must return to.
+      frame = requestAnimationFrame(() => !pageScrollLocked() && positions.set(key, window.scrollY));
     };
     window.addEventListener("scroll", save, { passive: true });
     return () => {
