@@ -55,6 +55,16 @@ export default function DevicesScreen() {
 
   const current = devices?.find((d) => d.current);
 
+  // Security key resets in the last while: someone who didn't make one should change their password.
+  const [resets, setResets] = useState<{ deviceId: string | null; at: Date }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    api.securityEvents?.(viewer.id).then((list) => !cancelled && setResets(list.filter((e) => Date.now() - e.at.getTime() < 30 * 86_400_000)), () => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [api, viewer.id]);
+
   return (
     <>
       <ScreenHeader
@@ -71,6 +81,16 @@ export default function DevicesScreen() {
           These devices can read your messages. Remove any you don't recognise — then change your password. New devices must be approved
           from one of your verified devices before they receive your messages.
         </p>
+
+        {resets.length > 0 && (
+          <div className="sec-banner sec-banner--warn" role="status">
+            <ShieldCheck size={18} aria-hidden="true" />
+            <div className="sec-banner__text">
+              <strong>Your security key was reset {timeAgoLong(resets[0].at)}.</strong> If that wasn't you, change your password now and
+              remove any device you don't recognise.
+            </div>
+          </div>
+        )}
 
         {current && setup && !setup.deviceVerified && (
           <div className="sec-banner sec-banner--warn" role="status">

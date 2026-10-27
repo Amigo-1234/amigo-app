@@ -36,7 +36,10 @@
     "test:creator-programme": "node scripts/test/creator-programme.test.mjs",
     "test:e2e-interrupted-setup": "node scripts/test/e2e-interrupted-setup.test.mjs",
     "test:auth-email": "node scripts/test/auth-email.test.mjs",
-    "test:moment-viewer": "node scripts/test/moment-viewer.test.mjs"
+    "test:moment-viewer": "node scripts/test/moment-viewer.test.mjs",
+    "test:e2e-proof": "node scripts/test/e2e-proof.test.mjs",
+    "test:annotations": "node scripts/test/annotations.test.mjs",
+    "test:media-cleanup": "node scripts/test/media-cleanup.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

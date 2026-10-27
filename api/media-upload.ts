@@ -3,7 +3,7 @@
  * → { key, url }: a PUT link to the private bucket, valid 10 minutes, only for
  * the key, type and exact size Postgres approved (media_begin_upload).
  * Also deletes a few files queued for removal on each call (needs PUSH_SERVER_SECRET:
- * media_cleanup_take refuses anyone without the server secret).
+ * media_cleanup_take / media_cleanup_done refuse anyone without the server secret).
  */
 import { json, presign, r2, remove, rpc, tokenFor } from "./_media";
 
@@ -35,13 +35,25 @@ export default async function handler(req: Request): Promise<Response> {
 
   const key = begun.data;
   // Housekeeping without a scheduler, alongside signing (not after it): remove a few deleted files.
+  // Files are leased, deleted, then confirmed: a failed or interrupted delete is retried later.
   const secret = ENV.PUSH_SERVER_SECRET;
-  const housekeeping = body.variantOf || !secret
-    ? Promise.resolve()
-    : rpc<string[]>(token, "media_cleanup_take", { p_key: secret, p_limit: 5 }).then((queued) =>
-        queued.ok ? Promise.all(queued.data.map((k) => remove(store, k).catch(() => undefined))) : undefined,
-      );
+  const housekeeping = body.variantOf || !secret ? Promise.resolve() : cleanUp(token, secret, store);
   const [url] = await Promise.all([presign(store, key, "PUT", 600, { type: body.mime, size: body.size }), housekeeping.catch(() => undefined)]);
 
   return json(200, { key, url });
+}
+
+/** Leases a few queued files, deletes them, and removes from the queue only those confirmed gone. */
+async function cleanUp(token: string, secret: string, store: NonNullable<ReturnType<typeof r2>>) {
+  const queued = await rpc<{ item_id: number; item_path: string; claim: string }[]>(token, "media_cleanup_take", { p_key: secret, p_limit: 5 });
+  if (!queued.ok || !queued.data.length) return;
+  const done = await Promise.all(
+    queued.data.map(async (q) => {
+      const res = await remove(store, q.item_path).catch(() => null);
+      // Gone now, or already gone (a retry after a crash).
+      return res && (res.ok || res.status === 404) ? { id: q.item_id, claim: q.claim } : null;
+    }),
+  );
+  const confirmed = done.filter((d) => d !== null);
+  if (confirmed.length) await rpc(token, "media_cleanup_done", { p_key: secret, p_items: confirmed });
 }

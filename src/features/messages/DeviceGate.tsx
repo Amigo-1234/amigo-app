@@ -12,6 +12,8 @@ const KEY_ERRORS: Record<string, string> = {
   "bad-recovery-key": "That doesn't look like a recovery key. Check for typos — spaces don't matter.",
   "wrong-recovery-key": "That recovery key doesn't match your backup.",
   "no-backup": "Your account has no message backup — leave the recovery key empty to continue.",
+  "reauth-required":
+    "For your security, resetting needs a recent sign-in. Sign out, sign back in, then reset within 10 minutes — your recovery key still works then.",
 };
 
 /**

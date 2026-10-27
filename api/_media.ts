@@ -66,7 +66,8 @@ export async function presignRead(s: R2, key: string, now = Date.now()) {
   return { url: signed.url, remaining };
 }
 
-export const remove = (s: R2, key: string) => s.client.fetch(objectUrl(s, key), { method: "DELETE" });
+/** One attempt (aws4fetch would retry a failure up to 10 times, holding up the upload it runs beside); the cleanup queue retries later. */
+export const remove = async (s: R2, key: string) => fetch(await s.client.sign(objectUrl(s, key), { method: "DELETE" }));
 
 /** Calls a Postgres function through the Data API as the person holding `token`. */
 export async function rpc<T>(token: string, fn: string, args: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; status: number; code?: string; message?: string }> {

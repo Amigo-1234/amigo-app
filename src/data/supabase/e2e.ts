@@ -24,6 +24,7 @@
  * See docs/architecture/MESSAGES.md for the design and its limits.
  */
 import type * as Sdk from "@matrix-org/matrix-sdk-crypto-wasm";
+import { proofMessage, sha256b64, type ProofOp } from "../../lib/e2eProof";
 
 type Crypto = typeof Sdk;
 
@@ -38,6 +39,11 @@ export interface E2EBackend {
     changes: { user_id: string; changed_at: string }[];
     counts: { signed_curve25519: number; unused_fallback: boolean };
   }>;
+  /**
+   * The server routes that verify signatures (api/e2e-backup.ts, api/e2e-identity.ts). Rejects
+   * with { code } like rpc. Without it (tests), backup writes and identity resets aren't available.
+   */
+  secure?<T>(route: "e2e-backup" | "e2e-identity", body: Record<string, unknown>): Promise<T>;
   /** Resolves with the stored key when the backend assigns one. */
   uploadAttachment?(path: string, data: Uint8Array): Promise<string | void>;
   downloadAttachment?(path: string): Promise<Uint8Array>;
@@ -69,8 +75,10 @@ export interface StoredMessage {
   sender_id: string;
   content: unknown;
   created_at: string;
-  /** Reactions and edits: the message they belong to (the only part the server sees). */
+  /** Reactions and edits: the message they belong to (the server sees this link)… */
   relates_to?: string | null;
+  /** …and which of the two it says it is (null: written by an app from before labels). */
+  relates_kind?: "reaction" | "edit" | null;
 }
 
 export interface E2EOptions {
@@ -88,7 +96,15 @@ export interface E2EOptions {
 /** Thrown with code DM009 when this device was removed from the account elsewhere. */
 export class E2EError extends Error {
   constructor(
-    readonly code: "device-removed" | "device-unverified" | "identity-changed" | "bad-recovery-key" | "wrong-recovery-key" | "no-backup" | "no-other-device",
+    readonly code:
+      | "device-removed"
+      | "device-unverified"
+      | "identity-changed"
+      | "bad-recovery-key"
+      | "wrong-recovery-key"
+      | "no-backup"
+      | "no-other-device"
+      | "reauth-required",
     message?: string,
   ) {
     super(message ?? code);
@@ -250,14 +266,15 @@ export class E2EDevice {
         break;
       case RequestType.KeysBackup:
         try {
-          response = await this.rpc("e2e_backup_put", { p_device: this.deviceId, p_version: (req as Sdk.KeysBackupRequest).version, p_rooms: body.rooms ?? {} });
+          response = await this.backupWrite("put", { version: (req as Sdk.KeysBackupRequest).version, rooms: body.rooms ?? {} });
         } catch (e) {
           // DM010: the backup was replaced from another device: stop using the old one.
           // DM012: only verified devices write to the backup; this one isn't (yet), so
           // stop for now. The backup is turned back on (refreshBackupLocked) on a later start.
           const code = (e as { code?: string }).code;
           if (code === "DM010" || code === "DM012") await this.machine.disableBackup();
-          else throw e;
+          // Anything else (offline, keys changed mid-request): not marked as sent, so these
+          // keys are offered again next time. Never let a backup hiccup stop messages syncing.
           return;
         }
         break;
@@ -348,14 +365,26 @@ export class E2EDevice {
   }
 
   private async bootstrap(reset: boolean) {
+    // Before any new keys are made here: the server must accept the reset (fresh sign-in).
+    if (reset) await this.identityRoute({ device: this.deviceId, check: true });
     const b = await this.machine.bootstrapCrossSigning(reset);
     if (b.uploadKeysRequest) await this.send(b.uploadKeysRequest);
     const keys = JSON.parse(b.uploadSigningKeysRequest.body);
-    await this.rpc("e2e_upload_signing_keys", {
-      p_master: keys.master_key ?? null,
-      p_self_signing: keys.self_signing_key ?? null,
-      p_user_signing: keys.user_signing_key ?? null,
-    });
+    if (reset) {
+      // Replacing an identity needs a fresh sign-in, checked by the server (api/e2e-identity.ts).
+      await this.identityRoute({
+        device: this.deviceId,
+        master: keys.master_key ?? null,
+        self_signing: keys.self_signing_key ?? null,
+        user_signing: keys.user_signing_key ?? null,
+      });
+    } else {
+      await this.rpc("e2e_upload_signing_keys", {
+        p_master: keys.master_key ?? null,
+        p_self_signing: keys.self_signing_key ?? null,
+        p_user_signing: keys.user_signing_key ?? null,
+      });
+    }
     await this.send(b.uploadSignaturesRequest);
     await this.sync();
   }
@@ -651,6 +680,32 @@ export class E2EDevice {
     await this.machine.deleteSecretsFromInbox("m.megolm_backup.v1");
   }
 
+  private async identityRoute(body: Record<string, unknown>) {
+    if (!this.backend.secure) throw new E2EError("reauth-required");
+    try {
+      await this.backend.secure("e2e-identity", body);
+    } catch (e) {
+      if ((e as { code?: string }).code === "DM014") throw new E2EError("reauth-required");
+      throw e;
+    }
+  }
+
+  /**
+   * A backup write, signed by this device's own key over a one-time server challenge and
+   * what is written (src/lib/e2eProof.ts); api/e2e-backup.ts checks it and this device's
+   * place in your identity before anything is stored.
+   */
+  private async backupWrite<T>(op: ProofOp, payload: Record<string, unknown>): Promise<T> {
+    if (!this.backend.secure) throw Object.assign(new Error("backup writes need the server"), { code: "DM012" });
+    const nonce = await this.rpc<string>("e2e_proof_challenge", { p_device: this.deviceId });
+    const text = JSON.stringify(payload);
+    const message = proofMessage(op, mxid(this.userId), this.deviceId, nonce, await sha256b64(text));
+    const signatures = JSON.parse((await this.machine.sign(message)).asJSON()) as Record<string, Record<string, string>>;
+    const signature = signatures[mxid(this.userId)]?.[`ed25519:${this.deviceId}`];
+    const res = await this.backend.secure<{ data: T }>("e2e-backup", { op, device: this.deviceId, nonce, payload: text, signature });
+    return res.data;
+  }
+
   private async backupNewKeys() {
     if (!(await this.machine.isBackupEnabled())) return;
     for (let i = 0; i < 20; i++) {
@@ -670,7 +725,7 @@ export class E2EDevice {
       const key = this.c.BackupDecryptionKey.createRandomKey();
       const authData: Record<string, unknown> = { public_key: key.megolmV1PublicKey.publicKeyBase64 };
       authData.signatures = JSON.parse((await this.machine.sign(JSON.stringify(authData))).asJSON());
-      const version = await this.rpc<string>("e2e_backup_create", { p_device: this.deviceId, p_algorithm: BACKUP_ALGORITHM, p_auth_data: authData });
+      const version = await this.backupWrite<string>("create", { algorithm: BACKUP_ALGORITHM, auth_data: authData });
       await this.machine.saveBackupDecryptionKey(key, version);
       await this.machine.enableBackupV1(key.megolmV1PublicKey.publicKeyBase64, version);
       await this.backupNewKeys();
@@ -692,7 +747,14 @@ export class E2EDevice {
       } catch {
         throw new E2EError("bad-recovery-key");
       }
-      if (key.megolmV1PublicKey.publicKeyBase64 !== info.auth_data.public_key) throw new E2EError("wrong-recovery-key");
+      const pub = key.megolmV1PublicKey.publicKeyBase64;
+      if (pub !== info.auth_data.public_key) {
+        // An older backup (replaced since) made with this recovery key: restore from it, read-only.
+        const older = (await this.rpc<{ version: string; auth_data: { public_key: string } }[]>("e2e_backup_versions", {}).catch(() => [])) ?? [];
+        const match = older.find((v) => v.auth_data?.public_key === pub);
+        if (!match) throw new E2EError("wrong-recovery-key");
+        return this.importFromBackup(key, match.version);
+      }
       const imported = await this.importFromBackup(key, info.version);
       await this.machine.saveBackupDecryptionKey(key, info.version);
       await this.machine.enableBackupV1(info.auth_data.public_key, info.version);

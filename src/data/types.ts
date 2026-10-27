@@ -1262,7 +1262,8 @@ export interface KeyBackupStatus {
   thisDeviceHasKey: boolean;
 }
 
-export type SecurityErrorCode = "bad-recovery-key" | "wrong-recovery-key" | "no-backup" | "no-other-device" | "device-removed" | "unknown";
+/** reauth-required: resetting the security key needs a sign-in from the last 10 minutes. */
+export type SecurityErrorCode = "bad-recovery-key" | "wrong-recovery-key" | "no-backup" | "no-other-device" | "device-removed" | "reauth-required" | "unknown";
 
 export class SecurityError extends Error {
   code: SecurityErrorCode;
@@ -1297,6 +1298,8 @@ export interface MessagingSecurityApi {
   restoreBackup(viewerId: string, recoveryKey: string): Promise<{ imported: number; total: number }>;
   /** "I can't use another device": new identity on this device. People who verified you are told it changed. */
   resetIdentity(viewerId: string): Promise<void>;
+  /** Recent security key resets on your account (newest first). Not in the demo. */
+  securityEvents?(viewerId: string): Promise<{ kind: "identity_reset"; deviceId: string | null; at: Date }[]>;
 }
 
 /** A report about a conversation, as admins see it: only what the reporter chose to submit. */

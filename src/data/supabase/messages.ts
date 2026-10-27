@@ -34,6 +34,7 @@ import { toAuthor, VERIFICATION_EMBED } from "./queries";
 import type { MediaStore } from "./mediaStore";
 import type { Json } from "./database.types";
 import { describeDevice } from "../../lib/device";
+import { annotationKind } from "./annotationRule";
 
 type LiveQuery = <T>(name: string, fetcher: () => Promise<T>, sub: Subscription<T>, listen: (ch: RealtimeChannel, refresh: () => void) => RealtimeChannel, pollMs?: number) => () => void;
 
@@ -62,7 +63,8 @@ function translate(e: unknown): never {
   if (code === "identity-changed" || code === "device-unverified") throw new MessageError(code);
   if (code === "DM012") throw new MessageError("device-unverified");
   if (code === "device-removed" || code === "DM009") throw new SecurityError("device-removed");
-  if (code === "bad-recovery-key" || code === "wrong-recovery-key" || code === "no-backup" || code === "no-other-device") throw new SecurityError(code);
+  if (code === "bad-recovery-key" || code === "wrong-recovery-key" || code === "no-backup" || code === "no-other-device" || code === "reauth-required")
+    throw new SecurityError(code);
   if (code && ERRORS[code]) throw new MessageError(ERRORS[code], (e as Error).message);
   throw e;
 }
@@ -105,6 +107,21 @@ export function createSupabaseMessages(
       const { data, error } = await db.rpc("e2e_sync_state" as never, { p_device: deviceId, p_since: since } as never);
       if (error) throw Object.assign(new Error(error.message), { code: error.code });
       return data as never;
+    },
+    async secure<T>(route: "e2e-backup" | "e2e-identity", body: Record<string, unknown>) {
+      // Signature-checking routes (api/e2e-backup.ts, api/e2e-identity.ts); same origin, so the
+      // session cookie goes along too (the identity route checks how fresh the sign-in is).
+      const token = (await db.auth.getSession()).data.session?.access_token;
+      if (!token) throw Object.assign(new Error("sign in first"), { code: "DM001" });
+      const res = await fetch(`/api/${route}`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const out = (await res.json().catch(() => null)) as { code?: string; error?: string; message?: string } | null;
+      if (!res.ok) throw Object.assign(new Error(out?.message ?? out?.error ?? `HTTP ${res.status}`), { code: out?.code ?? out?.error ?? "" });
+      return out as T;
     },
     async fetchToDevice(deviceId) {
       const { data, error } = await db.from("e2e_to_device").select("id, sender_id, event_type, content").eq("recipient_device", deviceId).order("id").limit(500);
@@ -414,24 +431,19 @@ export function createSupabaseMessages(
 
   function annotations(rows: StoredMessage[], results: Map<string, DecryptResult>): Annotations {
     const out: Annotations = { reactions: new Map(), edits: new Map() };
-    const senderOf = new Map(rows.filter((r) => !r.relates_to).map((r) => [r.id, r.sender_id]));
-    const sentAt = new Map(rows.filter((r) => !r.relates_to).map((r) => [r.id, new Date(r.created_at).getTime()]));
+    const targets = new Map(rows.filter((r) => !r.relates_to).map((r) => [r.id, r]));
     for (const r of rows) {
       if (!r.relates_to) continue;
       const res = results.get(r.id);
       // The server only links rows; the encrypted target must agree, so it can't re-point anything.
       if (!res?.ok || res.senderMismatch || res.payload["amigo.target"] !== r.relates_to) continue;
       const target = r.relates_to;
-      if (res.payload.msgtype === "amigo.reaction") {
+      const kind = annotationKind(r, res.payload.msgtype, targets.get(target));
+      if (kind === "reaction") {
         let m = out.reactions.get(target);
         if (!m) out.reactions.set(target, (m = new Map()));
         m.set(r.sender_id, res.payload.body.slice(0, 16));
-      } else if (
-        res.payload.msgtype === "amigo.edit" &&
-        senderOf.get(target) === r.sender_id &&
-        // Both times are the server's: an edit made after the window is ignored (the server refuses new ones too).
-        new Date(r.created_at).getTime() - (sentAt.get(target) ?? Infinity) <= MESSAGE_EDIT_WINDOW_MS
-      ) {
+      } else if (kind === "edit") {
         out.edits.set(target, res.payload.body);
       }
     }
@@ -905,6 +917,15 @@ export function createSupabaseMessages(
       changed();
       return result;
     },
+    async securityEvents() {
+      const { data, error } = await db.rpc("e2e_my_security_events" as never);
+      if (error) return [];
+      return ((data as { kind: "identity_reset"; device_id: string | null; at: string }[] | null) ?? []).map((e) => ({
+        kind: e.kind,
+        deviceId: e.device_id,
+        at: new Date(e.at),
+      }));
+    },
     async resetIdentity(viewerId) {
       await withDevice(viewerId, (d) => d.resetIdentity());
       changed();
@@ -933,11 +954,11 @@ export function createSupabaseMessages(
   }
 
   /** A reaction or edit: encrypted like a message, linked to its message by id. */
-  async function annotate(viewerId: string, conversationId: string, target: string, payload: MessagePayload) {
+  async function annotate(viewerId: string, conversationId: string, target: string, payload: MessagePayload & { msgtype: "amigo.reaction" | "amigo.edit" }) {
     const { d, peerId } = await sender(viewerId, conversationId);
     const content = await d.encrypt(conversationId, peerId, { ...payload, "amigo.target": target }).catch(translate);
     const id = globalThis.crypto.randomUUID();
-    const { error } = await db.rpc("dm_send_v3" as never, { p_id: id, p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json, p_relates_to: target } as never);
+    const { error } = await db.rpc("dm_send_v3" as never, { p_id: id, p_conversation: conversationId, p_device: d.deviceId, p_content: content as Json, p_relates_to: target, p_kind: payload.msgtype === "amigo.edit" ? "edit" : "reaction" } as never);
     if (error) fail(error);
     decrypted.set(id, { ok: true, payload: { ...payload, "amigo.target": target }, senderMismatch: false, unverifiedDevice: false });
     changed();

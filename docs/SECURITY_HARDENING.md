@@ -5,6 +5,10 @@ shared Neon database or deployed until the owner approves it.
 
 ## Stage 1 (migration `20261027090000_safety_hardening_stage1.sql`)
 
+> Superseded in part by Stage 1b (below): backup writes now need a cryptographic proof from the
+> device, identity resets a fresh sign-in, edits a label, and cleanup a lease. The table is kept
+> as the record of what Stage 1 found.
+
 | Finding | Fix | Test (`supabase/tests/database.test.sql`) |
 | --- | --- | --- |
 | Any signed-in person could call `media_cleanup_take` and empty the queue of files waiting for deletion (the files then stay in storage forever). | New signature `media_cleanup_take(p_key, p_limit)` checks the server secret (`push_require_server`, the same as push). The old `media_cleanup_take(integer)` is dropped. `api/media-upload.ts` passes `PUSH_SERVER_SECRET` and skips housekeeping when the secret isn't set. | No secret / wrong secret / signed out refused (42501), old function gone, refused calls remove nothing, server with secret takes the files. |
@@ -41,6 +45,81 @@ must go out together:
 Between the two steps (minutes) old app builds fail to set up a backup or back up new keys
 (production has no backups today) and the upload function skips queued-file deletion (4 files
 queued today); both recover by themselves after step 2.
+
+## Stage 1b (migration `20261028090000_safety_hardening_stage1b.sql`, on top of Stage 1)
+
+The Stage 1 review showed the backup check was only a presence check (any session could name an
+approved device, attach a made-up signature, or replace the identity) and that the edit window
+also blocked reactions to your own old messages. Stage 1b replaces both.
+
+### Backup writes: proof of possession, verified cryptographically
+
+1. The device asks for a one-time challenge (`e2e_proof_challenge`, 5 minutes, one use).
+2. It signs `proofMessage(op, user, device, challenge, sha256(payload))` with its **own device
+   key** (`OlmMachine.sign` signs the exact bytes) — only that device holds the private key.
+3. `/api/e2e-backup` fetches the device's public keys (`e2e_proof_material`, server secret) and
+   checks with WebCrypto Ed25519 (`src/lib/e2eProof.ts`): device keys signed by the self-signing
+   key, the self-signing key signed by the master key, the request signed by the device key.
+4. `e2e_backup_create_verified` / `e2e_backup_put_verified` (server secret only) use up the
+   challenge (no replays) and refuse if the keys changed since step 3 (hash of the stored keys).
+
+Checked against the real library: keys and signatures made by matrix-sdk-crypto-wasm pass, and
+forged signatures, another account's keys, an unapproved device, a device approved under an old
+identity, a changed request or device record all fail (`scripts/test/e2e-proof.test.mjs`). The
+stored keys still verify after Postgres' `jsonb` round trip (canonical JSON is rebuilt).
+
+**Assumption:** the master key on the server is the root of trust (trust on first use), as
+everywhere else in the app. Whoever can replace it controls what counts as "approved" — hence:
+
+### Identity replacement: fresh sign-in, recorded, owner emailed
+
+- `e2e_upload_signing_keys` still accepts first-time setup and the same keys again (an
+  interrupted setup finishing), but refuses a *different* key (DM014).
+- `/api/e2e-identity` replaces it only if the session behind the request (its cookie, asked of
+  Neon Auth) signed in within the last 10 minutes, the new keys hang together (self-signing and
+  user-signing keys signed by the new master), and the session's user is the token's user.
+- Each reset is recorded (`e2e_security_events`; Your devices shows a warning for 30 days) and
+  the account's email address is told (Resend, best effort).
+
+**Limit:** someone who knows the password can sign in fresh and reset. They still can't read
+earlier messages or backups (encrypted to the owner's recovery key), the owner is emailed, the
+owner's devices stop being "verified", and nothing is deleted: superseded backups and replaced
+key copies are kept, and **Restore** now also accepts the recovery key of an older backup
+(`e2e_backup_versions`).
+
+### Edits vs reactions
+
+`dm_send_v3(…, p_kind)` labels an annotation `reaction` or `edit` (stored in
+`dm_messages.relates_kind`; the server learns which, never the content):
+
+| Label | Server |
+| --- | --- |
+| `reaction` | allowed at any age (reacting / un-reacting to anything, your own messages too) |
+| `edit` | only the message's sender, within 15 minutes of it (server time); otherwise DM006 / DM013 |
+| none (apps from before labels) | treated as a possible edit: refused on your own message after 15 minutes |
+
+Receivers (`src/data/supabase/annotationRule.ts`) apply an annotation only if the label matches
+the encrypted type, and an edit only from the sender within 15 minutes — so labelling a late edit
+"reaction" gets it accepted by the server but ignored by every updated app.
+
+**Transition risk:** app builds from before Stage 1 don't check labels or times. Until they
+reload, they would show a late edit that a *modified* client labelled "reaction". Only the
+message's own author can do this, and only to their own message.
+
+### Media cleanup
+
+Queue rows are leased (`media_cleanup_take` sets `claimed_at` / `claim_token`, `attempts`),
+never deleted on take. The upload function deletes each file once (no 10-fold retry holding up
+the upload) and calls `media_cleanup_done` with only the files confirmed gone (2xx, or 404 =
+already gone). Unconfirmed items come back after 10 minutes; concurrent workers skip leased rows
+(`for update skip locked`, plus the lease); after 10 attempts an item stays for a person to look
+at. Only the current lease holder can finish an item.
+
+### Rollout (still not done)
+
+Both migrations go together, with the matching app build, after a dedicated Neon test branch
+run. Production today: 0 backups, 9 identities, 33 devices, 4 annotations (unlabelled; receivers
+treat them as before), 5 queued files (the new columns start empty: first take leases them).
 
 ## Proposed rate limits (design only — not implemented)
 
