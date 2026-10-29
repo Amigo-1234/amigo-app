@@ -1,0 +1,427 @@
+/**
+ * End-to-end API test of the app's Supabase query layer
+ * (src/data/supabase/queries.ts) through a real PostgREST, as real users.
+ *
+ * Needs: a database with the migrations applied (local shim is fine) and a
+ * PostgREST pointing at it. Creates throwaway users and removes them after.
+ *
+ *   PGRST_URL=http://localhost:54330 JWT_SECRET=… DATABASE_URL=… \
+ *     node scripts/test/supabase-api.test.mjs
+ *
+ * Realtime, Storage and Auth (GoTrue) are not covered here — see README.
+ * (Notifications are written by triggers; their Realtime delivery is untested locally.)
+ */
+import { createHmac, randomUUID } from "node:crypto";
+import http from "node:http";
+import pg from "pg";
+import { createClient } from "@supabase/supabase-js";
+import { createServer } from "vite";
+
+const { PGRST_URL, JWT_SECRET, DATABASE_URL } = process.env;
+if (!PGRST_URL || !JWT_SECRET || !DATABASE_URL) throw new Error("Set PGRST_URL, JWT_SECRET and DATABASE_URL");
+
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+const jwt = (claims) => {
+  const head = b64({ alg: "HS256", typ: "JWT" });
+  const body = b64({ exp: Math.floor(Date.now() / 1000) + 3600, ...claims });
+  return `${head}.${body}.${createHmac("sha256", JWT_SECRET).update(`${head}.${body}`).digest("base64url")}`;
+};
+
+// supabase-js talks to <url>/rest/v1 — forward that to PostgREST.
+const proxy = http.createServer(async (req, res) => {
+  const target = PGRST_URL + req.url.replace(/^\/rest\/v1/, "");
+  const chunks = [];
+  for await (const c of req) chunks.push(c);
+  const headers = Object.fromEntries(Object.entries(req.headers).filter(([k]) => !["host", "connection", "content-length"].includes(k)));
+  const r = await fetch(target, { method: req.method, headers, body: chunks.length ? Buffer.concat(chunks) : undefined });
+  res.writeHead(r.status, Object.fromEntries([...r.headers].filter(([k]) => k !== "content-encoding" && k !== "content-length")));
+  res.end(Buffer.from(await r.arrayBuffer()));
+});
+await new Promise((ok) => proxy.listen(0, ok));
+const baseUrl = `http://127.0.0.1:${proxy.address().port}`;
+
+const vite = await createServer({ server: { middlewareMode: true }, appType: "custom", logLevel: "error" });
+const q = await vite.ssrLoadModule("/src/data/supabase/queries.ts");
+
+const db = new pg.Client({ connectionString: DATABASE_URL });
+await db.connect();
+
+const anonKey = jwt({ role: "anon" });
+const asUser = (id) =>
+  createClient(baseUrl, anonKey, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${jwt({ sub: id, role: "authenticated" })}` } } });
+const anon = createClient(baseUrl, anonKey, { auth: { persistSession: false } });
+
+let failures = 0;
+const ok = (label, cond, extra = "") => {
+  console.log(`${cond ? "ok  " : "FAIL"} ${label}${extra ? ` — ${extra}` : ""}`);
+  if (!cond) failures++;
+};
+const rejects = async (label, fn, code) => {
+  try {
+    await fn();
+    ok(label, false, "did not fail");
+  } catch (e) {
+    ok(label, !code || e.code === code || e.pgCode === code, `${e.code}/${e.pgCode}`);
+  }
+};
+
+const tag = randomUUID().slice(0, 8);
+const ids = { ama: randomUUID(), leo: randomUUID(), zoe: randomUUID(), nina: randomUUID(), omar: randomUUID() };
+try {
+  for (const [name, id] of Object.entries(ids)) {
+    await db.query("insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)", [id, `${name}-${tag}@example.com`, { display_name: `${name} ${tag}` }]);
+  }
+  const ama = asUser(ids.ama), leo = asUser(ids.leo), zoe = asUser(ids.zoe);
+
+  // profile
+  const prof = await q.fetchProfile(ama, ids.ama);
+  ok("profile created by trigger and readable", prof?.display_name === `ama ${tag}` && /^ama_/.test(prof.username));
+  const { data: emailProbe, error: emailErr } = await ama.from("profiles").select("email").limit(1);
+  ok("profiles expose no email column", !!emailErr && !emailProbe, emailErr?.code);
+
+  // posting
+  const p1 = await q.createPost(ama, `hello ${tag}`);
+  ok("create_post returns the new row", p1?.body === `hello ${tag}`);
+  await rejects("empty post rejected through the API", () => q.createPost(ama, "  "), "22023");
+  await rejects("anon cannot post", () => q.createPost(anon, "nope"));
+  await rejects("media outside your folder rejected", () =>
+    q.createPost(ama, "x", { media: [{ kind: "image", storage_path: `${ids.leo}/x.jpg`, mime_type: "image/jpeg" }] }), "permission-denied");
+  const p2 = await q.createPost(ama, `with photo ${tag}`, { media: [{ kind: "image", storage_path: `${ids.ama}/p.jpg`, mime_type: "image/jpeg", width: 1200, height: 900 }] });
+
+  // feed
+  const feed = await q.fetchFeed(leo, "latest", 10, ids.leo);
+  const mine = feed.posts.filter((p) => p.text.endsWith(tag));
+  ok("latest feed returns posts with embedded author", mine.length === 2 && mine.every((p) => p.author.name === `ama ${tag}`));
+  const photo = feed.posts.find((p) => p.id === p2.id);
+  ok("media embedded with public URL and size", photo?.media[0]?.url.endsWith(`/storage/v1/object/public/post-media/${ids.ama}/p.jpg`) && photo.media[0].width === 1200);
+  ok("feed is newest first", feed.posts.length < 2 || feed.posts[0].createdAt >= feed.posts[1].createdAt);
+  const anonFeed = await q.fetchFeed(anon, "latest", 10, null);
+  ok("anon can read the public feed", anonFeed.posts.some((p) => p.id === p1.id));
+  const paged = await q.fetchFeed(leo, "latest", 1, ids.leo);
+  ok("hasMore paging", paged.posts.length === 1 && paged.hasMore === true);
+
+  // likes
+  await q.setLike(leo, p1.id, true);
+  await q.setLike(leo, p1.id, true);
+  await q.setLike(zoe, p1.id, true);
+  let post = await q.fetchPost(leo, p1.id, ids.leo);
+  ok("like toggle idempotent, counted, likedByViewer", post.likeCount === 2 && post.likedByViewer === true);
+  await q.setLike(leo, p1.id, false);
+  post = await q.fetchPost(leo, p1.id, ids.leo);
+  ok("unlike", post.likeCount === 1 && post.likedByViewer === false);
+  const { error: forged } = await zoe.from("post_likes").insert({ user_id: ids.leo, post_id: p1.id });
+  ok("cannot like as someone else", forged?.code === "42501", forged?.code);
+
+  // replies
+  await q.createPost(leo, `reply ${tag}`, { parentId: p1.id });
+  const replies = await q.fetchReplies(zoe, p1.id);
+  ok("replies listed with author", replies.length === 1 && replies[0].author.name === `leo ${tag}`);
+  post = await q.fetchPost(zoe, p1.id, ids.zoe);
+  ok("reply_count updated", post.replyCount === 1);
+  const latestAfterReply = await q.fetchFeed(zoe, "latest", 50, ids.zoe);
+  ok("replies are not in the home feed", !latestAfterReply.posts.some((p) => p.text === `reply ${tag}`));
+
+  // follows + following feed + suggestions
+  await q.follow(zoe, ids.zoe, ids.ama);
+  await q.follow(zoe, ids.zoe, ids.ama); // duplicate is fine
+  ok("following ids", (await q.fetchFollowingIds(zoe, ids.zoe)).has(ids.ama));
+  const following = await q.fetchFeed(zoe, "following", 50, ids.zoe);
+  ok("following feed = people you follow", following.posts.length >= 2 && following.posts.every((p) => p.author.id === ids.ama || p.author.id === ids.zoe));
+  const leoFollowing = await q.fetchFeed(leo, "following", 50, ids.leo);
+  ok("following feed empty when following nobody", leoFollowing.posts.every((p) => p.author.id === ids.leo));
+  const sugg = await q.fetchSuggestions(zoe, 50);
+  ok("suggestions skip self and followed", !sugg.some((s) => s.id === ids.zoe || s.id === ids.ama));
+  await rejects("cannot follow on someone else's behalf", () => q.follow(zoe, ids.leo, ids.ama), "permission-denied");
+  await q.unfollow(zoe, ids.zoe, ids.ama);
+  ok("unfollow", !(await q.fetchFollowingIds(zoe, ids.zoe)).has(ids.ama));
+  const { data: anonFollows, error: anonFollowErr } = await anon.from("follows").select("*");
+  ok("anon cannot read the follow graph", !!anonFollowErr && !anonFollows, anonFollowErr?.code);
+
+  // profile edits
+  await q.updateDisplayName(ama, ids.ama, `Ama Renamed ${tag}`);
+  ok("rename own profile", (await q.fetchProfile(leo, ids.ama)).display_name === `Ama Renamed ${tag}`);
+  await q.updateDisplayName(leo, ids.ama, "hijack"); // RLS filters to zero rows
+  ok("cannot rename someone else", (await q.fetchProfile(leo, ids.ama)).display_name === `Ama Renamed ${tag}`);
+  const { error: counterErr } = await ama.from("profiles").update({ follower_count: 1e6 }).eq("id", ids.ama);
+  ok("counters not writable through the API", counterErr?.code === "42501", counterErr?.code);
+
+  // profiles (Phase 3)
+  const amaHandle = (await q.fetchProfile(leo, ids.ama)).username;
+  let profile = await q.fetchProfileByHandle(leo, amaHandle.toUpperCase(), ids.leo);
+  ok("profile by handle is case-insensitive", profile?.id === ids.ama && profile.isViewer === false);
+  ok("profile has counts and join date", profile.postCount === 2 && profile.joinedAt instanceof Date);
+  ok("unknown handle → null", (await q.fetchProfileByHandle(leo, `nobody_${tag}`, ids.leo)) === null);
+  await q.follow(leo, ids.leo, ids.ama);
+  profile = await q.fetchProfileByHandle(leo, amaHandle, ids.leo);
+  ok("viewerFollows + followerCount", profile.viewerFollows === true && profile.followerCount === 1);
+  ok("own profile isViewer", (await q.fetchProfileByHandle(ama, amaHandle, ids.ama)).isViewer === true);
+
+  const amaPosts = await q.fetchProfilePosts(leo, ids.ama, ids.leo, "posts", 10);
+  ok("posts tab: top-level only, newest first", amaPosts.posts.length === 2 && amaPosts.posts.every((x) => !x.replyTo));
+  const leoReplies = await q.fetchProfilePosts(ama, ids.leo, ids.ama, "replies", 10);
+  ok("replies tab: replies with 'replying to' handle", leoReplies.posts.length === 1 && leoReplies.posts[0].replyTo?.handle === amaHandle);
+  const amaMedia = await q.fetchProfilePosts(leo, ids.ama, ids.leo, "media", 10);
+  ok("media tab: only posts with media", amaMedia.posts.length === 1 && amaMedia.posts[0].media.length === 1);
+  const paged2 = await q.fetchProfilePosts(leo, ids.ama, ids.leo, "posts", 1);
+  ok("profile paging", paged2.posts.length === 1 && paged2.hasMore === true);
+
+  const amaFollowers = await q.fetchFollowList(zoe, ids.ama, "followers", ids.zoe);
+  ok("followers list with viewer follow state", amaFollowers.length === 1 && amaFollowers[0].id === ids.leo && amaFollowers[0].viewerFollows === false);
+  const leoFollowingList = await q.fetchFollowList(zoe, ids.leo, "following", ids.zoe);
+  ok("following list", leoFollowingList.length === 1 && leoFollowingList[0].id === ids.ama);
+
+  ok("own handle counts as available", await q.isHandleAvailable(ama, amaHandle, ids.ama));
+  ok("someone else's handle is taken", !(await q.isHandleAvailable(leo, amaHandle, ids.leo)));
+  await rejects("rename to a taken handle", () => q.updateProfileRow(leo, ids.leo, { username: amaHandle }), "handle-taken");
+  await rejects("invalid handle format", () => q.updateProfileRow(leo, ids.leo, { username: "Bad Name" }), "handle-invalid");
+  await rejects("over-long bio is not reported as a username problem", () => q.updateProfileRow(leo, ids.leo, { bio: "x".repeat(161) }), "unknown");
+  await q.updateProfileRow(leo, ids.leo, { username: `leo_${tag}`, bio: "Hiking." });
+  ok("rename + bio saved", (await q.fetchProfileByHandle(ama, `leo_${tag}`, ids.ama))?.bio === "Hiking.");
+  await q.updateProfileRow(zoe, ids.leo, { bio: "hijacked" }); // RLS filters to zero rows
+  ok("cannot edit someone else's profile", (await q.fetchProfileByHandle(ama, `leo_${tag}`, ids.ama))?.bio === "Hiking.");
+
+  // discovery (Phase 4)
+  const zoeHandle = (await q.fetchProfile(leo, ids.zoe)).username;
+  let people = await q.searchPeople(leo, zoeHandle.slice(0, 5).toUpperCase(), ids.leo, 10);
+  ok("people search by username prefix, case-insensitive", people.some((x) => x.id === ids.zoe));
+  people = await q.searchPeople(leo, `zoe ${tag}`, ids.leo, 10);
+  ok("people search by display name", people.length === 1 && people[0].id === ids.zoe && typeof people[0].bio === "string");
+  people = await q.searchPeople(leo, `@${zoeHandle}`, ids.leo, 10);
+  ok("leading @ ignored", people[0]?.id === ids.zoe);
+  people = await q.searchPeople(leo, `Ama Renamed ${tag}`, ids.leo, 10);
+  ok("search reflects profile edits and follow state", people[0]?.id === ids.ama && people[0].viewerFollows === true);
+  ok("'%' is literal, not match-all", (await q.searchPeople(leo, "%", ids.leo, 10)).length === 0);
+  ok("'_' is literal", (await q.searchPeople(leo, "_x_x_", ids.leo, 10)).length === 0);
+  ok("commas/parentheses don't break the filter", (await q.searchPeople(leo, "a,b(c)", ids.leo, 10)).length === 0);
+
+  const hits = await q.searchPosts(zoe, tag, ids.zoe, { order: "latest", limit: 20 });
+  ok("post text search incl. replies", hits.posts.length === 3 && hits.posts.some((x) => x.replyTo));
+  ok("latest order", hits.posts[0].createdAt >= hits.posts[1].createdAt);
+  const topHits = await q.searchPosts(zoe, tag, ids.zoe, { order: "top", limit: 20 });
+  ok("top order = most liked first", topHits.posts[0].likeCount >= topHits.posts[1].likeCount);
+  const mediaHits = await q.searchPosts(zoe, tag, ids.zoe, { order: "latest", mediaOnly: true, limit: 20 });
+  ok("media-only search", mediaHits.posts.length === 1 && mediaHits.posts[0].media.length === 1);
+  ok("search paging", (await q.searchPosts(zoe, tag, ids.zoe, { order: "latest", limit: 1 })).hasMore === true);
+  ok("no matches → empty", (await q.searchPosts(zoe, `nothing_${tag}`, ids.zoe, { order: "latest", limit: 5 })).posts.length === 0);
+  ok("blank query → empty without a request", (await q.searchPosts(zoe, "   ", ids.zoe, { order: "latest", limit: 5 })).posts.length === 0);
+
+  const ex = await q.fetchExplore(zoe, ids.zoe);
+  ok("explore: suggestions exclude self", ex.suggestedPeople.every((x) => x.id !== ids.zoe));
+  ok("explore: popular this week (7-day window)", ex.popular.windowDays === 7 && ex.popular.posts.length > 0);
+  ok("explore: conversations only have replies", ex.conversations.length > 0 && ex.conversations.every((x) => x.replyCount > 0));
+  ok("explore: media only has media", ex.media.every((x) => x.media.length > 0));
+  const { error: anonSugg } = await anon.rpc("suggested_profiles", { p_limit: 3 });
+  ok("suggestions are for signed-in people only", anonSugg?.code === "42501", anonSugg?.code);
+
+  // multi-image posts (Phase 5)
+  const m = (n, w, h) => ({ kind: "image", storage_path: `${ids.ama}/multi-${tag}-${n}.jpg`, mime_type: "image/jpeg", width: w, height: h, byte_size: 1000 + n });
+  const multiPost = await q.createPost(ama, `three photos ${tag}`, { media: [m(1, 1080, 1350), m(2, 1600, 900), m(3, 1000, 1000)] });
+  ok("create_post returns the new id", typeof multiPost.id === "string");
+  const readBack = await q.fetchPost(leo, multiPost.id, ids.leo);
+  ok("media come back in composer order with dimensions",
+    JSON.stringify(readBack.media.map((x) => `${x.width}x${x.height}`)) === JSON.stringify(["1080x1350", "1600x900", "1000x1000"]) &&
+    readBack.media.every((x, i) => x.url.endsWith(`multi-${tag}-${i + 1}.jpg`)));
+  const inFeed = (await q.fetchFeed(leo, "latest", 50, ids.leo)).posts.find((x) => x.id === multiPost.id);
+  ok("multi-image post in the feed with all media", inFeed?.media.length === 3);
+  const inMedia = (await q.fetchProfilePosts(leo, ids.ama, ids.leo, "media", 20)).posts.find((x) => x.id === multiPost.id);
+  ok("multi-image post on Profile Media with all media", inMedia?.media.length === 3);
+  await rejects("5 images rejected (schema allows 4)", () => q.createPost(ama, "too many", { media: [1, 2, 3, 4, 5].map((n) => m(10 + n, 10, 10)) }), "unknown");
+  await rejects("image-only post needs no text", async () => { await q.createPost(ama, "", { media: [m(20, 800, 800)] }); throw Object.assign(new Error("ok"), { code: "accepted" }); }, "accepted");
+
+  // notifications (Phase 6) — two fresh people so their inboxes start empty
+  const nina = asUser(ids.nina), omar = asUser(ids.omar);
+  const ninaHandle = (await q.fetchProfile(nina, ids.nina)).username;
+  const inbox = async (who, limit = 50) => (await q.fetchNotifications(who, limit)).items;
+  ok("new inbox is empty", (await inbox(nina)).length === 0 && (await q.fetchUnreadCount(nina)) === 0);
+
+  await q.follow(omar, ids.omar, ids.nina);
+  let n = await inbox(nina);
+  ok("follow → notification with actor", n.length === 1 && n[0].kind === "follow" && n[0].actor.id === ids.omar && n[0].post === null && !n[0].read);
+  ok("unread count", (await q.fetchUnreadCount(nina)) === 1);
+  ok("the actor gets nothing", (await inbox(omar)).length === 0);
+
+  const np = await q.createPost(nina, `nina's photo ${tag}`, { media: [{ kind: "image", storage_path: `${ids.nina}/n.jpg`, mime_type: "image/jpeg", width: 800, height: 600 }] });
+  await q.setLike(omar, np.id, true);
+  await q.setLike(omar, np.id, false);
+  ok("unliked → like notification hidden", !(await inbox(nina)).some((x) => x.kind === "like"));
+  await q.setLike(omar, np.id, true);
+  n = (await inbox(nina)).filter((x) => x.kind === "like");
+  ok("like → unlike → like = one like notification", n.length === 1);
+  ok("like carries a preview of your post with media", n[0].post?.id === np.id && n[0].post.text === `nina's photo ${tag}` && n[0].post.media.length === 1 && /n\.jpg$/.test(n[0].post.media[0].url));
+  await q.setLike(nina, np.id, true);
+  ok("liking your own post: no self-notification", (await inbox(nina)).filter((x) => x.kind === "like").length === 1);
+
+  const or1 = await q.createPost(omar, "nice one", { parentId: np.id });
+  n = await inbox(nina);
+  ok("reply → 'replied to your post'", n[0].kind === "reply" && n[0].post?.id === or1.id && n[0].post.text === "nice one" && n[0].inReplyToReply === false);
+  const nr = await q.createPost(nina, "thanks!", { parentId: or1.id });
+  ok("reply to your reply notifies its author", (await inbox(omar)).some((x) => x.kind === "reply" && x.post?.id === nr.id));
+  const or2 = await q.createPost(omar, `you're welcome @${ninaHandle}`, { parentId: nr.id });
+  n = await inbox(nina);
+  ok("→ 'replied to your reply' (mention folded in)", n[0].kind === "reply" && n[0].post?.id === or2.id && n[0].inReplyToReply === true && !n.some((x) => x.kind === "mention"));
+  const om = await q.createPost(omar, `Shout out to @${ninaHandle.toUpperCase()} (not nina@${ninaHandle}.com)`);
+  n = await inbox(nina);
+  ok("mention → notification", n[0].kind === "mention" && n[0].post?.id === om.id && n.filter((x) => x.kind === "mention").length === 1);
+  const fetched = await q.fetchPost(nina, or2.id, ids.nina);
+  ok("opened reply knows what it replies to", fetched?.replyTo?.postId === nr.id);
+
+  // pagination + order
+  const page = await q.fetchNotifications(nina, 2);
+  ok("pagination: limit + hasMore, newest first", page.items.length === 2 && page.hasMore && page.items[0].createdAt >= page.items[1].createdAt);
+
+  // privacy
+  const { data: peek } = await omar.from("notifications").select("id").eq("recipient_id", ids.nina);
+  ok("someone else's notifications are invisible", Array.isArray(peek) && peek.length === 0);
+  const { error: anonErr } = await anon.from("notifications").select("id").limit(1);
+  ok("anon cannot read notifications", anonErr?.code === "42501", anonErr?.code);
+  const { error: forgeErr } = await omar.from("notifications").insert({ recipient_id: ids.nina, actor_id: ids.leo, kind: "follow" });
+  ok("notifications cannot be forged", forgeErr?.code === "42501", forgeErr?.code);
+  const { error: delErr } = await nina.from("notifications").delete().eq("recipient_id", ids.nina);
+  ok("notifications cannot be deleted by clients", delErr?.code === "42501", delErr?.code);
+
+  // read state
+  const before = await q.fetchUnreadCount(nina);
+  const firstId = (await inbox(nina))[0].id;
+  await q.markNotificationsRead(omar, [firstId]);
+  ok("marking someone else's notification read does nothing", (await q.fetchUnreadCount(nina)) === before);
+  await q.markNotificationsRead(nina, [firstId]);
+  ok("mark one read", (await q.fetchUnreadCount(nina)) === before - 1 && (await inbox(nina))[0].read === true);
+  await q.markNotificationsRead(nina);
+  ok("mark all read", (await q.fetchUnreadCount(nina)) === 0 && (await inbox(nina)).every((x) => x.read));
+
+  await omar.rpc("delete_post", { p_post_id: or2.id });
+  ok("deleted post's notification disappears", !(await inbox(nina)).some((x) => x.post?.id === or2.id));
+  await q.unfollow(omar, ids.omar, ids.nina);
+  ok("undone follow disappears", !(await inbox(nina)).some((x) => x.kind === "follow"));
+
+  // worlds (admin-created via SQL, as in production)
+  const wslug = `api-${tag}`;
+  await db.query(
+    `insert into public.worlds (slug, title, tagline, starts_at, ends_at, competition, entries_close_at, entry_limit, points_reaction, points_reply, prize)
+     values ($1, 'API Night', 'testing', now() - interval '10 minutes', now() + interval '1 hour', true, now() + interval '30 minutes', 1, 1, 2, 'Bragging rights'),
+            ($2, 'Later', '', now() + interval '1 day', now() + interval '1 day 1 hour', false, null, 1, 1, 2, null)`,
+    [wslug, `later-${tag}`],
+  );
+  let ws = await q.fetchWorlds(nina, ids.nina);
+  let w = ws.find((x) => x.slug === wslug);
+  ok("worlds listed with competition settings", w?.competition?.scoring.reply === 2 && w.competition.prize === "Bragging rights" && w.participantCount === 0 && !w.viewerJoined);
+  const { error: wInsErr } = await nina.from("worlds").insert({ slug: `mine-${tag}`, title: "x", starts_at: new Date().toISOString(), ends_at: new Date(Date.now() + 1e6).toISOString() });
+  ok("clients cannot create Worlds", wInsErr?.code === "42501", wInsErr?.code);
+  await q.joinWorld(nina, w.id, ids.nina);
+  await q.joinWorld(omar, w.id, ids.omar);
+  await q.joinWorld(nina, w.id, ids.nina); // idempotent
+  w = await q.fetchWorld(nina, wslug, ids.nina);
+  ok("join: count, joined state, faces", w.participantCount === 2 && w.viewerJoined && w.participantsPreview.some((p) => p.id === ids.omar));
+  await rejects("must join before posting", () => q.createWorldPost(leo, w.id, false, "hi"), "not-joined");
+  const later = ws.find((x) => x.slug === `later-${tag}`);
+  await q.joinWorld(nina, later.id, ids.nina);
+  await rejects("cannot post before a World starts", () => q.createWorldPost(nina, later.id, false, "early"), "not-live");
+  await rejects("no entries before a World starts", () => q.createWorldPost(nina, later.id, true, "x"), "not-live");
+  const entry = await q.createWorldPost(nina, w.id, true, `my entry ${tag}`);
+  await rejects("entry limit", () => q.createWorldPost(nina, w.id, true, "another"), "entry-limit");
+  await q.setLike(omar, entry.id, true);
+  await q.setLike(nina, entry.id, true);
+  await q.createPost(omar, "ha", { parentId: entry.id });
+  const lb = await q.fetchLeaderboard(leo, w.id, ids.leo);
+  ok("leaderboard: 1 like + 1 reply from others = 3 pts", lb.length === 1 && lb[0].person.id === ids.nina && lb[0].points === 3 && lb[0].rank === 1 && lb[0].entries === 1);
+  const entries = await q.fetchWorldPosts(omar, w.id, ids.omar, { entriesOnly: true, limit: 10 });
+  ok("entries list with World chip", entries.posts.length === 1 && entries.posts[0].world?.slug === wslug && entries.posts[0].world.entry === true);
+  const allPosts = await q.fetchWorldPosts(omar, w.id, ids.omar, { entriesOnly: false, limit: 10 });
+  ok("World posts exclude replies", allPosts.posts.length === 1);
+  const { data: anonBoard, error: anonBoardErr } = await anon.rpc("world_leaderboard", { p_world_id: w.id });
+  ok("leaderboard readable signed out", !anonBoardErr && anonBoard.length === 1);
+  await q.sendChat(nina, w.id, "hello room");
+  await rejects("non-members cannot chat", () => q.sendChat(leo, w.id, "hi"), "not-joined");
+  const chat = await q.fetchChat(omar, w.id, 50);
+  ok("chat readable with authors", chat.length === 1 && chat[0].author.id === ids.nina && chat[0].text === "hello room");
+  const here = await q.fetchParticipants(nina, w.id, ids.nina, 10);
+  ok("participants exclude you", here.length === 1 && here[0].id === ids.omar);
+  await q.leaveWorld(omar, w.id, ids.omar);
+  ok("leave updates the count", (await q.fetchWorld(nina, wslug, ids.nina)).participantCount === 1);
+
+  // support hub + admin
+  ok("support: starter credits", (await q.fetchWallet(nina)).credits === 5);
+  const req = await q.createSupportRequest(nina, { title: `Hear my demo ${tag}`, description: "Is the chorus catchy enough?", url: "https://soundcloud.com/nina/demo", category: "music", ask: "listen", target: 3 });
+  ok("support: create spends credits, waits for review", req.status === "pending" && (await q.fetchWallet(nina)).credits === 0);
+  await rejects("support: second request needs credits", () => q.createSupportRequest(nina, { title: "Another", description: "One more request here.", url: "https://example.com", category: "app", ask: "try", target: 3 }), "insufficient-credits");
+  await rejects("support: bad link rejected", () => q.createSupportRequest(omar, { title: "Bad link", description: "javascript links fail.", url: "javascript:alert(1)", category: "app", ask: "try", target: 3 }), "invalid");
+  ok("support: pending hidden from others", (await q.fetchSupportRequest(omar, req.id, ids.omar)) === null && (await q.fetchSupportRequest(nina, req.id, ids.nina))?.status === "pending");
+  ok("support: normal users aren't admins", (await q.fetchIsAdmin(omar)) === false);
+  await rejects("support: non-admin cannot moderate", () => q.adminModerate(omar, req.id, "approve"), "not-admin");
+  await rejects("support: non-admin cannot read reports", () => q.adminReports(omar, "open"), "not-admin");
+  await rejects("support: non-admin cannot adjust credits", () => q.adminAdjustCredits(omar, ids.omar, 100, "free"), "not-admin");
+  await db.query("insert into public.app_admins (user_id, note) values ($1, 'api test')", [ids.leo]);
+  ok("support: admin recognised", (await q.fetchIsAdmin(leo)) === true);
+  ok("support: admin sees pending queue", (await q.adminListRequests(leo, ids.leo, "pending")).some((r) => r.id === req.id));
+  await q.adminModerate(leo, req.id, "approve");
+  await q.adminModerate(leo, req.id, "feature");
+  const forYou = await q.fetchSupportRequests(omar, ids.omar, { section: "for_you", category: null, query: "", limit: 20 });
+  ok("support: approved + featured shows in For you", forYou.requests.some((r) => r.id === req.id && r.featured && r.viewerState === "none"));
+  ok("support: category + search", (await q.fetchSupportRequests(omar, ids.omar, { section: "new", category: "music", query: tag, limit: 20 })).requests.length === 1
+    && (await q.fetchSupportRequests(omar, ids.omar, { section: "new", category: "app", query: tag, limit: 20 })).requests.length === 0);
+  await rejects("support: can't support your own", () => q.openSupport(nina, req.id), "own-request");
+  await rejects("support: must open first", () => q.confirmSupport(omar, req.id), "not-opened");
+  await q.openSupport(omar, req.id);
+  ok("support: opened state", (await q.fetchSupportRequest(omar, req.id, ids.omar)).viewerState === "opened");
+  await rejects("support: instant confirm refused", () => q.confirmSupport(omar, req.id), "too-fast");
+  await db.query("update public.support_visits set opened_at = now() - interval '1 minute' where user_id = $1", [ids.omar]);
+  const earned = await q.confirmSupport(omar, req.id);
+  const after = await q.fetchSupportRequest(omar, req.id, ids.omar);
+  ok("support: confirm earns credits/reputation", earned.credits === 1 && earned.reputation === 2 && after.viewerState === "supported" && after.supporterCount === 1);
+  await rejects("support: once only", () => q.confirmSupport(omar, req.id), "already-supported");
+  ok("support: written feedback bonus", (await q.leaveFeedback(omar, req.id, "useful", "Great hook, shorter intro please.")).credits === 1);
+  ok("support: feedback private to the creator", (await q.fetchFeedback(nina, req.id)).length === 1 && (await q.fetchFeedback(omar, req.id)).length === 0);
+  ok("support: supported request leaves For you", !(await q.fetchSupportRequests(omar, ids.omar, { section: "for_you", category: null, query: "", limit: 50 })).requests.some((r) => r.id === req.id));
+  ok("support: wallet + profile stats", (await q.fetchWallet(omar)).credits === 7 && (await q.fetchSupportProfileStats(anon, ids.omar)).helpedCount === 1);
+  await q.reportSupport(omar, req.id, "test report");
+  await rejects("support: report once", () => q.reportSupport(omar, req.id, "again"), "already-reported");
+  const reps = await q.adminReports(leo, "open");
+  ok("support: admin sees report", reps.some((x) => x.request.id === req.id && x.reporter.id === ids.omar));
+  await q.adminResolveReport(leo, reps.find((x) => x.request.id === req.id).id, "dismissed");
+  ok("support: quick confirm not flagged after a minute", !(await q.adminSuspicious(leo)).some((x) => x.person.id === ids.omar));
+  ok("support: supporters inspector", (await q.adminSupporters(leo, req.id))[0]?.seconds >= 60);
+  const found = await q.adminFindUser(leo, ids.leo, (await q.fetchProfile(nina, ids.nina)).username);
+  await q.adminAdjustCredits(leo, ids.nina, 3, "api test top-up");
+  ok("support: admin credit adjustment", found?.wallet.credits === 0 && (await q.fetchWallet(nina)).credits === 3);
+  ok("support: audit log", (await q.adminAudit(leo, 20)).filter((a) => a.admin.id === ids.leo).length === 4);
+
+  // verification (admin-only)
+  await rejects("verify: non-admin denied", () => q.adminVerify(omar, ids.omar, "creator", "me"), "not-admin");
+  const { error: selfVerifyErr } = await omar.from("profile_verifications").insert({ user_id: ids.omar, verification_type: "creator" });
+  ok("verify: cannot verify yourself directly", selfVerifyErr?.code === "42501", selfVerifyErr?.code);
+  await q.adminVerify(leo, ids.nina, "creator", "checked her channel");
+  const ninaHandle2 = (await q.fetchProfile(nina, ids.nina)).username;
+  ok("verify: profile shows the badge", (await q.fetchProfileByHandle(omar, ninaHandle2, ids.omar))?.verified === true);
+  ok("verify: post authors carry the badge", (await q.fetchFeed(omar, "latest", 50, ids.omar)).posts.find((x) => x.author.id === ids.nina)?.author.verified === true);
+  ok("verify: search results carry the badge", (await q.searchPeople(omar, ninaHandle2, ids.omar, 5)).find((x) => x.id === ids.nina)?.verified === true);
+  const { error: noteErr } = await omar.from("profile_verifications").select("note");
+  ok("verify: admin note is private", noteErr?.code === "42501", noteErr?.code);
+  ok("verify: admin lookup has type + note", (await q.adminFindUserProfile(leo, ids.leo, ninaHandle2))?.verification?.note === "checked her channel");
+  await q.adminUnverify(leo, ids.nina, "test over");
+  ok("verify: removed", (await q.fetchProfileByHandle(omar, ninaHandle2, ids.omar))?.verified === false && (await q.adminVerifiedUsers(leo, ids.leo)).every((u) => u.person.id !== ids.nina));
+
+  // private surfaces
+  const { error: legacyErr } = await ama.rpc("legacy_find_unmigrated_user", { p_email: "x@example.com" });
+  ok("legacy lookup blocked for users", legacyErr?.code === "42501", legacyErr?.code);
+  const { error: genErr } = await ama.rpc("generate_username", { seed: "x" });
+  ok("internal helpers blocked", genErr?.code === "42501", genErr?.code);
+
+  // (Last: these add posts, which would change the counts checked above.)
+  // A retry with the same client reference returns the saved post instead of posting twice.
+  const ref = randomUUID();
+  const once = await q.createPost(ama, `retry-safe ${tag}`, { clientRef: ref });
+  const again = await q.createPost(ama, `retry-safe ${tag}`, { clientRef: ref });
+  const { data: dupes } = await ama.from("posts").select("id").eq("body", `retry-safe ${tag}`);
+  ok("retrying a post never creates a duplicate", once?.id && again?.id === once.id && dupes?.length === 1, `${dupes?.length}`);
+  const other = await q.createPost(ama, `retry-safe ${tag}`, { clientRef: randomUUID() });
+  ok("a different post with the same text is still created", other?.id && other.id !== once.id);
+} finally {
+  await db.query("delete from public.worlds where slug like $1", [`%-${tag}`]);
+  await db.query("delete from auth.users where id = any($1)", [Object.values(ids)]);
+  await db.end();
+  await vite.close();
+  proxy.close();
+}
+
+console.log(failures ? `\n${failures} API TEST(S) FAILED` : "\nALL API TESTS PASSED");
+process.exit(failures ? 1 : 0);

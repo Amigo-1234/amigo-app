@@ -1,0 +1,60 @@
+/* Home's notification opt-in: the welcome card's frame, one row. */
+.push-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 16px);
+  background: var(--surface);
+}
+
+.push-prompt__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.push-prompt__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.push-prompt__title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 650;
+}
+
+.push-prompt__text {
+  margin: 4px 0 0;
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}
+
+.push-prompt__error {
+  margin: var(--space-2) 0 0;
+  color: var(--danger);
+  font-size: var(--text-sm);
+}
+
+.push-prompt__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.push-prompt__link {
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}

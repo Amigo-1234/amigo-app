@@ -1,0 +1,1704 @@
+/**
+ * Normalized client models. Screens only ever see these — never raw
+ * Firestore documents — so the storage schema can evolve (Firebase Storage
+ * media, reposts, moments…) without touching UI code.
+ */
+
+export interface Viewer {
+  id: string;
+  name: string;
+  handle: string;
+  email: string | null;
+  avatarUrl: string | null;
+  /** Backends that verify email ownership after sign-up (Neon) report it here. */
+  emailVerified?: boolean;
+}
+
+export interface Author {
+  id: string;
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+  /** Set only by Amigo admins (see AdminUsersApi). Shown as a badge beside the name. */
+  verified?: boolean;
+  /** A business (posts by a business): id, handle (/b/:handle), name and logo are the business's own. */
+  business?: boolean;
+}
+
+/**
+ * One attachment on a post. Posts carry an ordered array of these.
+ * "video" is modelled now so adding video uploads later doesn't change the post
+ * shape (see docs/architecture/MEDIA.md); the composer only creates images today.
+ */
+export type MediaItem = {
+  type: "image" | "video";
+  url: string;
+  width?: number;
+  height?: number;
+  alt?: string;
+  /** A tiny blurred version shown while the image loads (data: URL, a few hundred bytes). */
+  preview?: string;
+  /** Video only (future): poster image and duration. */
+  posterUrl?: string;
+  durationMs?: number;
+};
+
+export interface Post {
+  id: string;
+  author: Author;
+  text: string;
+  media: MediaItem[];
+  /** null while the server timestamp is pending (just-created post). */
+  createdAt: Date | null;
+  likeCount: number;
+  likedByViewer: boolean;
+  replyCount: number;
+  /** Set when this post is a reply (shown on profile "Replies" tabs). */
+  replyTo?: { postId: string; handle: string } | null;
+  /** Set when the post was made inside a World (shown as a chip linking to it). */
+  world?: { slug: string; title: string; entry: boolean } | null;
+  /** The author changed the text after posting. */
+  edited?: boolean;
+  /** Saved to your bookmarks (backends with post tools only). */
+  bookmarkedByViewer?: boolean;
+}
+
+export type ContentReportTarget = "post" | "profile" | "world" | "business";
+
+/** Bookmarks, editing, deleting and reporting posts — where the backend supports them. */
+export interface PostToolsApi {
+  setBookmarked(viewerId: string, postId: string, saved: boolean): Promise<void>;
+  /** Your bookmarks, newest saved first. */
+  bookmarks(viewerId: string, limit: number): Promise<Post[]>;
+  /** Your own post's text. */
+  edit(viewerId: string, postId: string, text: string): Promise<void>;
+  /** Your own post, for everyone. */
+  remove(viewerId: string, postId: string): Promise<void>;
+  /** Reports go to the Amigo team; reporting twice while open counts once. */
+  report(viewerId: string, target: ContentReportTarget, targetId: string, input: { reason: MessageReportReason; note: string }): Promise<void>;
+}
+
+/** Your account's standing (suspended accounts can read, report and delete, but not post or message). */
+export interface AccountStatus {
+  suspended: boolean;
+  reason: string | null;
+  until: Date | null;
+  /** Warnings from the Amigo team you haven't acknowledged yet. */
+  warnings: { id: string; message: string; issuedAt: Date }[];
+}
+
+export interface BlockedAccount {
+  id: string;
+  handle: string;
+  name: string;
+  avatarUrl: string | null;
+  blockedAt: Date;
+}
+
+/** Blocking people (stops messages both ways, removes follows, prevents following). */
+export interface BlockingApi {
+  list(): Promise<BlockedAccount[]>;
+  block(userId: string): Promise<void>;
+  unblock(userId: string): Promise<void>;
+}
+
+export interface PlatformStats {
+  users: number;
+  usersVerifiedEmail: number;
+  newUsers24h: number;
+  newUsers7d: number;
+  /** People who posted, liked, followed or messaged in the last 24 hours (a lower bound). */
+  active24h: number;
+  posts24h: number;
+  replies24h: number;
+  /** Count only — message content is end-to-end encrypted. */
+  messages24h: number;
+  worldJoins7d: number;
+  supportSubmissions7d: number;
+  openReports: number;
+  suspended: number;
+}
+
+/**
+ * Admin → Overview (migration 20261020090000_admin_insights.sql). All counted on
+ * the server. "Active" = did something that leaves a record (posted, replied,
+ * liked, followed, messaged, posted/viewed/reacted to a Moment, joined a World,
+ * opened a Support request) — a lower bound, since reading leaves none.
+ */
+export interface PlatformInsights {
+  generatedAt: Date;
+  users: number;
+  usersVerifiedEmail: number;
+  newUsersToday: number;
+  newUsers7d: number;
+  dau: number;
+  wau: number;
+  mau: number;
+  posts: number;
+  replies: number;
+  posts7d: number;
+  momentsLive: number;
+  moments7d: number;
+  worlds: number;
+  worldsLive: number;
+  worldsUpcoming: number;
+  supportRequests: number;
+  supportOpen: number;
+  reportsOpen: number;
+  moderationActions7d: number;
+  suspended: number;
+  admins: number;
+  /** Last 14 days (UTC), oldest first. */
+  daily: { day: string; signups: number; posts: number; active: number }[];
+  recentUsers: { id: string; handle: string; name: string; avatarUrl: string | null; joinedAt: Date }[];
+}
+
+export interface AdminUserRow {
+  id: string;
+  handle: string;
+  name: string;
+  avatarUrl: string | null;
+  joinedAt: Date;
+  posts: number;
+  followers: number;
+  emailVerified: boolean;
+  isAdmin: boolean;
+  suspended: boolean;
+  suspendedUntil: Date | null;
+}
+
+export interface AdminUserDetail extends AdminUserRow {
+  bio: string;
+  replies: number;
+  following: number;
+  likesGiven: number;
+  moments30d: number;
+  lastActive: Date | null;
+  suspension: { reason: string; since: Date; until: Date | null } | null;
+  warnings: { message: string; at: Date; acknowledged: boolean }[];
+  reportsAgainst: { posts: number; profile: number; messages: number; moments: number; open: number };
+  reportsMade: number;
+}
+
+export interface AdminHistoryEntry {
+  id: string;
+  admin: string | null;
+  action: string;
+  targetType: string;
+  summary: string;
+  at: Date;
+}
+
+export type AdminNoteTarget = "user" | "post" | "moment" | "post_report" | "dm_report" | "moment_report" | "support_request" | "world";
+
+export interface Reply {
+  id: string;
+  postId: string;
+  author: Author;
+  text: string;
+  createdAt: Date | null;
+  /** The reply as a full post (likes, options), where the backend provides it. */
+  post?: Post;
+}
+
+export interface PersonSummary {
+  id: string;
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+  verified?: boolean;
+  viewerFollows: boolean;
+  /** They follow the viewer (drives "Follow Back"). Absent where the backend doesn't say. */
+  followsViewer?: boolean;
+  /** Present where a short bio helps (search results, suggestions). */
+  bio?: string;
+}
+
+/** A processed image ready to publish (already resized, re-encoded, metadata stripped). */
+export interface NewMediaInput {
+  kind: "image";
+  blob: Blob;
+  width: number;
+  height: number;
+  alt?: string;
+}
+
+export interface NewPostInput {
+  text: string;
+  /** Ordered; the first item is the cover. */
+  media: NewMediaInput[];
+  /** Post inside a World (only on backends with the worlds capability). entry: a competition entry. */
+  world?: { id: string; entry: boolean };
+  /** Same on every retry of this post, so a retry after a lost answer never posts twice. */
+  clientRef?: string;
+}
+
+/** Product-wide limits for new posts. */
+export const POST_MAX_LENGTH = 500;
+
+export type Unsubscribe = () => void;
+
+export type FeedScope = "latest" | "following";
+
+/** Backend-neutral auth failures, so screens never depend on SDK error strings. */
+export type AuthErrorCode =
+  | "invalid-credentials"
+  | "email-in-use"
+  | "weak-password"
+  | "invalid-email"
+  | "email-not-confirmed"
+  | "rate-limited"
+  | "invalid-code"
+  | "network"
+  | "unknown";
+
+export class AuthError extends Error {
+  code: AuthErrorCode;
+  constructor(code: AuthErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+// ----------------------------------------------------------------- profiles
+
+export interface Profile {
+  id: string;
+  name: string;
+  handle: string;
+  bio: string;
+  avatarUrl: string | null;
+  verified?: boolean;
+  followerCount: number;
+  followingCount: number;
+  postCount: number;
+  joinedAt: Date | null;
+  viewerFollows: boolean;
+  /** They follow the viewer (drives "Follow Back"). */
+  followsViewer?: boolean;
+  isViewer: boolean;
+}
+
+export type ProfileTab = "posts" | "replies" | "media";
+export type FollowListKind = "followers" | "following";
+
+export interface ProfileUpdate {
+  name?: string;
+  handle?: string;
+  bio?: string;
+  /** A new picture, or null to remove the current one. Omit to leave it unchanged. */
+  avatar?: { dataUrl: string; width: number; height: number } | null;
+}
+
+export const HANDLE_PATTERN = /^[a-z0-9_]{3,24}$/;
+
+/** Interests someone can pick while joining (the database accepts exactly these). */
+export const INTERESTS = ["technology", "football", "music", "gaming", "entertainment", "fashion", "photography", "business", "education", "science", "art", "lifestyle"] as const;
+export type Interest = (typeof INTERESTS)[number];
+export type SocialProvider = "google";
+export const BIO_MAX_LENGTH = 160;
+export const NAME_MAX_LENGTH = 50;
+
+export type ProfileErrorCode = "handle-taken" | "handle-invalid" | "unknown";
+
+export class ProfileError extends Error {
+  code: ProfileErrorCode;
+  constructor(code: ProfileErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/**
+ * Profiles are an optional capability: backends that have real usernames and
+ * profile rows (Supabase, demo) provide it; the legacy Firebase source does not,
+ * and the UI degrades to plain names without profile links.
+ */
+export interface ProfilesApi {
+  /** Case-insensitive. null when no such person exists. */
+  getProfile(handle: string, viewerId: string): Promise<Profile | null>;
+  subscribeProfilePosts(
+    profileId: string,
+    viewerId: string,
+    tab: ProfileTab,
+    limit: number,
+    sub: Subscription<{ posts: Post[]; hasMore: boolean }>,
+  ): Unsubscribe;
+  listFollows(profileId: string, kind: FollowListKind, viewerId: string): Promise<PersonSummary[]>;
+  isHandleAvailable(handle: string, viewerId: string): Promise<boolean>;
+  /** Updates the signed-in person's profile; onViewerChanged fires with the new values. */
+  updateProfile(viewerId: string, update: ProfileUpdate): Promise<void>;
+}
+
+// ---------------------------------------------------------------- discovery
+
+export type SearchTab = "top" | "people" | "posts" | "media";
+
+export interface PostPage {
+  posts: Post[];
+  hasMore: boolean;
+}
+
+/** Everything on the Explore landing page. Every section is derived from real data. */
+export interface ExploreFeed {
+  suggestedPeople: PersonSummary[];
+  /**
+   * Most-liked recent posts. windowDays says how far back "recent" reaches:
+   * 7 → "Popular this week"; null → no recent activity, so all-time most liked.
+   */
+  popular: { posts: Post[]; windowDays: number | null };
+  /** Newest posts that have replies. */
+  conversations: Post[];
+  /** Newest posts with images or video. */
+  media: Post[];
+}
+
+export type PostSearchOrder = "top" | "latest";
+
+/**
+ * Search and discovery. Optional capability: demo and Supabase provide it,
+ * the legacy Firebase source does not (Explore stays a placeholder there).
+ * Matching is case-insensitive substring matching on usernames, display names
+ * and post text; backends may rank and index however they like.
+ */
+export interface DiscoveryApi {
+  explore(viewerId: string): Promise<ExploreFeed>;
+  searchPeople(query: string, viewerId: string, limit: number): Promise<PersonSummary[]>;
+  searchPosts(
+    query: string,
+    viewerId: string,
+    opts: { order: PostSearchOrder; mediaOnly?: boolean; limit: number },
+  ): Promise<PostPage>;
+}
+
+// ------------------------------------------------------------ notifications
+
+/**
+ * What happened. Only kinds the product actually has: reposts, messages,
+ * Moments and system notices get their own kinds when those features exist.
+ */
+export type NotificationKind = "follow" | "like" | "reply" | "mention" | "support";
+
+/** The post a notification is about, trimmed to what a preview needs. */
+export interface NotificationPost {
+  id: string;
+  text: string;
+  media: MediaItem[];
+}
+
+/**
+ * One event. Backends store and return individual events; grouping
+ * ("Mira and 4 others liked your post") is a presentation concern
+ * (src/features/notifications/group.ts), so no event is ever lost.
+ */
+export interface AppNotification {
+  id: string;
+  kind: NotificationKind;
+  actor: Author;
+  createdAt: Date;
+  read: boolean;
+  /** like: your post. reply: the new reply. mention: the post that mentions you. follow: null. */
+  post: NotificationPost | null;
+  /** reply only: the reply answers one of your replies rather than a top-level post. */
+  inReplyToReply?: boolean;
+  /** like only: the liked post is one of your replies. */
+  onReply?: boolean;
+  /** support only: your Support Hub request they supported. */
+  request?: { id: string; title: string } | null;
+}
+
+export interface NotificationPage {
+  items: AppNotification[];
+  hasMore: boolean;
+}
+
+/**
+ * Notifications. Optional capability: demo and Supabase provide it, the legacy
+ * Firebase source does not (the Notifications tab stays a placeholder there).
+ * Notifications are created by the backend from real actions, never by the
+ * client, and a backend only returns ones that are still true (an undone
+ * like or follow, or a deleted post, drops out).
+ */
+export interface NotificationsApi {
+  /** Newest first. Pushes updates when notifications arrive or change. */
+  subscribeNotifications(viewerId: string, limit: number, sub: Subscription<NotificationPage>): Unsubscribe;
+  /** Live unread count for badges. */
+  subscribeUnreadCount(viewerId: string, sub: Subscription<number>): Unsubscribe;
+  markRead(viewerId: string, ids: string[]): Promise<void>;
+  markAllRead(viewerId: string): Promise<void>;
+}
+
+// ------------------------------------------------------------------- worlds
+
+/**
+ * Worlds: scheduled live social events, created by Amigo admins only
+ * (WorldsAdminApi). Status is derived from the server-set times (and
+ * cancellation) on the client, corrected to the server's clock, so a World
+ * flips to live or finished on time without a reload or an admin present.
+ */
+export type WorldStatus = "upcoming" | "live" | "finished" | "cancelled";
+
+/** Points per thing an entry earns while the World is running. */
+export interface WorldScoring {
+  /** Per like on your entry (your own like doesn't count). */
+  reaction: number;
+  /** Per reply to your entry from someone else. */
+  reply: number;
+  /** Bonus when Amigo picks your entry. 0 = no Amigo picks in this World. */
+  hostPick: number;
+}
+
+export interface WorldCompetition {
+  scoring: WorldScoring;
+  /** Entries can be submitted until this time; likes/replies keep counting until the World ends. */
+  entriesCloseAt: Date;
+  /** How many entries one person may submit. */
+  entryLimit: number;
+  /** Display-only prize description. No payments or payouts exist. */
+  prize: string | null;
+}
+
+export interface World {
+  id: string;
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  coverUrl: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  participantCount: number;
+  viewerJoined: boolean;
+  /** A few participants to show as faces (people the viewer follows first). */
+  participantsPreview: Author[];
+  /** null = a social World without points. */
+  competition: WorldCompetition | null;
+  /** Set when an admin cancelled it: no joining, posting or chat. */
+  cancelledAt?: Date | null;
+  cancelReason?: string | null;
+}
+
+/** "A World you joined is live" / "…was cancelled" (Notifications). */
+export interface WorldNotice {
+  id: string;
+  kind: "live" | "cancelled";
+  world: { slug: string; title: string };
+  createdAt: Date;
+  read: boolean;
+}
+
+/** What an admin sets when creating or editing a World. Times are absolute. */
+export interface WorldInput {
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  coverUrl: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  /** null: a social World without points. */
+  competition: { entriesCloseAt: Date; entryLimit: number; scoring: WorldScoring; prize: string | null } | null;
+}
+
+/** Admins only (the database checks every call and logs it). */
+export interface WorldsAdminApi {
+  create(input: WorldInput): Promise<{ id: string }>;
+  /** Only what changed. Once a World has started, its start, link and competition rules are fixed. */
+  update(worldId: string, patch: Partial<WorldInput>): Promise<void>;
+  cancel(worldId: string, reason: string): Promise<void>;
+  /** The Amigo pick bonus on a competition entry. */
+  setHostPick(worldId: string, postId: string, picked: boolean): Promise<void>;
+  /** Entries Amigo picked in this World. */
+  picks(worldId: string): Promise<string[]>;
+  removeChatMessage(messageId: string): Promise<void>;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  person: Author;
+  points: number;
+  entries: number;
+  viewerFollows: boolean;
+  followsViewer?: boolean;
+}
+
+export interface WorldChatMessage {
+  id: string;
+  author: Author;
+  text: string;
+  createdAt: Date;
+}
+
+export const WORLD_CHAT_MAX_LENGTH = 300;
+
+export type WorldErrorCode = "not-joined" | "not-live" | "entries-closed" | "entry-limit" | "not-competition" | "cancelled" | "unknown";
+
+export class WorldError extends Error {
+  code: WorldErrorCode;
+  constructor(code: WorldErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/**
+ * Worlds. Optional capability: demo and Supabase provide it, the legacy
+ * Firebase source does not (the Worlds nav item is hidden there).
+ * Posting into a World goes through DataSource.createPost with input.world.
+ */
+export interface WorldsApi {
+  listWorlds(viewerId: string): Promise<World[]>;
+  /** By slug. Live: participant count and join state update. null = no such World. */
+  subscribeWorld(slug: string, viewerId: string, sub: Subscription<World | null>): Unsubscribe;
+  join(worldId: string, viewerId: string): Promise<void>;
+  leave(worldId: string, viewerId: string): Promise<void>;
+  /** Posts made in the World, newest first. entriesOnly: competition entries only. */
+  subscribeWorldPosts(worldId: string, viewerId: string, opts: { entriesOnly: boolean; limit: number }, sub: Subscription<PostPage>): Unsubscribe;
+  /** Ranked by points (ties: earliest first entry wins). Frozen once the World ends. */
+  subscribeLeaderboard(worldId: string, viewerId: string, sub: Subscription<LeaderboardEntry[]>): Unsubscribe;
+  /** Oldest first, the latest `limit` messages. */
+  subscribeChat(worldId: string, limit: number, sub: Subscription<WorldChatMessage[]>): Unsubscribe;
+  sendChat(worldId: string, viewer: Viewer, text: string): Promise<void>;
+  /** People who joined (excluding the viewer), people the viewer doesn't follow yet first. */
+  listParticipants(worldId: string, viewerId: string, limit: number): Promise<PersonSummary[]>;
+  /** The server's clock (ms since epoch), so countdowns don't depend on the phone's clock. */
+  serverTime?(): Promise<number>;
+  /** Your World notices, newest first; and marking them read. */
+  notices?(viewerId: string): Promise<WorldNotice[]>;
+  markNoticesRead?(): Promise<void>;
+  /** Asks the server to post "it's live" notices for Worlds that have started (and push them). Idempotent. */
+  tick?(): Promise<void>;
+  admin?: WorldsAdminApi;
+}
+
+// ------------------------------------------------------------- support hub
+
+/**
+ * Support Hub: people ask for genuine help with something outside Amigo (a
+ * song, video, app, business…). Supporting means visiting it and confirming
+ * you did; nothing external (follows, streams, likes) is ever required or
+ * verified. Optional capability: demo and Supabase only.
+ */
+export type SupportCategory = "music" | "video" | "app" | "business" | "design" | "social" | "other";
+export type SupportAsk = "listen" | "watch" | "try" | "visit" | "read";
+/** pending: waiting for review (when moderation is on). removed/rejected are only visible to the creator and admins. */
+export type SupportStatus = "pending" | "active" | "completed" | "closed" | "rejected" | "removed";
+export type SupportReaction = "loved" | "useful" | "nice" | "keep_going";
+export type SupportSection = "for_you" | "needs" | "new" | "completed" | "mine";
+
+export interface SupportRequest {
+  id: string;
+  creator: Author;
+  title: string;
+  description: string;
+  url: string;
+  category: SupportCategory;
+  ask: SupportAsk;
+  target: number;
+  supporterCount: number;
+  createdAt: Date;
+  status: SupportStatus;
+  featured: boolean;
+  isViewer: boolean;
+  /** "supported" once the viewer confirmed; "opened" after tapping Support but before confirming. */
+  viewerState: "none" | "opened" | "supported";
+  /** Whether the viewer already left feedback (feedback can be left once). */
+  viewerFeedback: boolean;
+}
+
+export interface SupportFeedback {
+  id: string;
+  author: Author;
+  reaction: SupportReaction | null;
+  text: string;
+  createdAt: Date;
+}
+
+/** Credits are spendable; reputation is permanent and can't be spent. */
+export interface SupportWallet {
+  credits: number;
+  reputation: number;
+  helpedCount: number;
+  activeRequests: number;
+}
+
+/** Public, restrained profile numbers. */
+export interface SupportProfileStats {
+  helpedCount: number;
+  reputation: number;
+  activeRequests: number;
+}
+
+/** Scoring and rules. Configurable per backend (demo constants / a settings row in Supabase). */
+export interface SupportConfig {
+  requestCost: number;
+  starterCredits: number;
+  supportCredits: number;
+  supportReputation: number;
+  feedbackCredits: number;
+  feedbackReputation: number;
+  defaultTarget: number;
+  minTarget: number;
+  maxTarget: number;
+  /** New requests wait for admin approval. */
+  moderation: boolean;
+  /** Minimum seconds between tapping Support and confirming. */
+  minVisitSeconds: number;
+}
+
+export interface NewSupportRequest {
+  title: string;
+  description: string;
+  url: string;
+  category: SupportCategory;
+  ask: SupportAsk;
+  target: number;
+}
+
+export const SUPPORT_LIMITS = { titleMin: 4, titleMax: 80, descriptionMin: 10, descriptionMax: 280, feedbackMax: 280, urlMax: 500 } as const;
+
+export type SupportErrorCode =
+  | "insufficient-credits"
+  | "own-request"
+  | "already-supported"
+  | "not-opened"
+  | "too-fast"
+  | "not-active"
+  | "invalid"
+  | "already-reported"
+  | "not-admin"
+  | "unknown";
+
+export class SupportError extends Error {
+  code: SupportErrorCode;
+  constructor(code: SupportErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+export interface SupportApi {
+  config(): Promise<SupportConfig>;
+  wallet(viewerId: string): Promise<SupportWallet>;
+  /** Ranked or filtered requests. Live: updates when supports/requests change. */
+  subscribeRequests(
+    viewerId: string,
+    opts: { section: SupportSection; category: SupportCategory | null; query: string; limit: number },
+    sub: Subscription<{ requests: SupportRequest[]; hasMore: boolean }>,
+  ): Unsubscribe;
+  subscribeRequest(id: string, viewerId: string, sub: Subscription<SupportRequest | null>): Unsubscribe;
+  /** Spends requestCost credits. */
+  createRequest(viewerId: string, input: NewSupportRequest): Promise<{ id: string; status: SupportStatus }>;
+  /** Records that the viewer opened the link (tap Support). */
+  openSupport(requestId: string, viewerId: string): Promise<void>;
+  /** Confirms the viewer supported it; earns credits + reputation. Once per request. */
+  confirmSupport(requestId: string, viewerId: string): Promise<{ credits: number; reputation: number }>;
+  leaveFeedback(requestId: string, viewerId: string, feedback: { reaction: SupportReaction | null; text: string }): Promise<{ credits: number; reputation: number }>;
+  /** Only the request's creator (and admins) can read its feedback. */
+  listFeedback(requestId: string, viewerId: string): Promise<SupportFeedback[]>;
+  report(requestId: string, viewerId: string, reason: string): Promise<void>;
+  profileStats(profileId: string): Promise<SupportProfileStats>;
+}
+
+// -------------------------------------------------------------------- admin
+
+/**
+ * Admin. The UI hides /admin from non-admins, but every admin operation is
+ * authorised by the backend (Supabase: is_admin() inside SECURITY DEFINER RPCs).
+ * Every action is written to an audit log.
+ */
+export type SupportAdminAction = "approve" | "reject" | "remove" | "close" | "reopen" | "feature" | "unfeature";
+
+export interface SupportReport {
+  id: string;
+  request: { id: string; title: string; status: SupportStatus };
+  reporter: Author;
+  reason: string;
+  createdAt: Date;
+  status: "open" | "dismissed" | "actioned";
+}
+
+export interface SuspiciousSupport {
+  kind: "quick-confirm" | "burst" | "mutual";
+  person: Author;
+  /** Plain-language explanation built from real timestamps/counts. */
+  detail: string;
+  requestId: string | null;
+  at: Date;
+}
+
+export interface AdminAuditEntry {
+  id: string;
+  admin: Author;
+  action: string;
+  summary: string;
+  createdAt: Date;
+}
+
+export interface SupportAdminApi {
+  listRequests(adminId: string, status: SupportStatus | "all"): Promise<SupportRequest[]>;
+  moderate(adminId: string, requestId: string, action: SupportAdminAction, note?: string): Promise<void>;
+  listReports(adminId: string, status: "open" | "all"): Promise<SupportReport[]>;
+  resolveReport(adminId: string, reportId: string, outcome: "dismissed" | "actioned"): Promise<void>;
+  suspicious(adminId: string): Promise<SuspiciousSupport[]>;
+  /** Supporters of one request with how long they took to confirm. */
+  supporters(adminId: string, requestId: string): Promise<{ person: Author; openedAt: Date; confirmedAt: Date | null; seconds: number | null }[]>;
+  findUser(adminId: string, handle: string): Promise<(PersonSummary & { wallet: SupportWallet }) | null>;
+  adjustCredits(adminId: string, userId: string, delta: number, note: string): Promise<void>;
+  audit(adminId: string, limit: number): Promise<AdminAuditEntry[]>;
+}
+
+/** Why someone is verified. Public: whether they're verified. Admin-only: the type and note. */
+export type VerificationType = "notable" | "creator" | "business" | "organization" | "amigo_team";
+
+export interface Verification {
+  type: VerificationType;
+  /** Private admin note (e.g. how it was checked). Never shown publicly. */
+  note: string;
+  verifiedAt: Date;
+  verifiedBy: Author | null;
+}
+
+/**
+ * Admin → Users. Verification is set only here; there is no member-facing
+ * API to request or change it (the backend refuses anyone who isn't an admin).
+ */
+export interface AdminUsersApi {
+  find(adminId: string, handle: string): Promise<{ person: PersonSummary; verification: Verification | null } | null>;
+  verify(adminId: string, userId: string, type: VerificationType, note: string): Promise<void>;
+  unverify(adminId: string, userId: string, note: string): Promise<void>;
+  listVerified(adminId: string): Promise<{ person: PersonSummary; verification: Verification }[]>;
+}
+
+// ------------------------------------------------------------------- legal
+
+export type LegalSlug = "terms" | "privacy" | "guidelines" | "copyright" | "monetization" | "deletion" | "cookies";
+
+export interface LegalVersion {
+  slug: LegalSlug;
+  version: string;
+  title: string;
+  effectiveAt: Date;
+  publishedAt: Date | null;
+  requiresAcceptance: boolean;
+  materialChange: boolean;
+  summary: string;
+}
+
+/** A current version this account hasn't accepted. required: must accept to continue; otherwise a notice. */
+export interface PendingLegal {
+  slug: LegalSlug;
+  version: string;
+  title: string;
+  summary: string;
+  required: boolean;
+}
+
+export interface LegalApi {
+  current(): Promise<LegalVersion[]>;
+  pending(): Promise<PendingLegal[]>;
+  accept(docs: { slug: LegalSlug; version: string }[]): Promise<void>;
+}
+
+export interface LegalAdminApi {
+  list(): Promise<LegalVersion[]>;
+  publish(input: { slug: LegalSlug; version: string; title: string; effectiveAt: Date; requiresAcceptance: boolean; materialChange: boolean; summary: string }): Promise<void>;
+}
+
+// ------------------------------------------------------------ monetization
+
+export type MonetizationStatus = "not_eligible" | "eligible" | "suspended" | "revoked";
+
+export interface CreatorEngagement {
+  verifiedFollowers: number;
+  followers: number;
+  posts30d: number;
+  supportReceived: number;
+  supportRequestsCompleted: number;
+  accountAgeDays: number;
+}
+
+/** What a creator sees. Nothing financial: there are no earnings, balances or payouts. */
+export interface CreatorOverview {
+  programmeOpen: boolean;
+  applicationsOpen: boolean;
+  /** Admin-configured criteria; empty until officially configured. */
+  criteria: Record<string, unknown>;
+  publicNote: string;
+  status: MonetizationStatus;
+  statusReason: string;
+  standing: "good" | "under_review" | "restricted";
+  application: { status: "pending" | "approved" | "rejected" | "withdrawn"; submittedAt: Date; reviewedAt: Date | null; reviewNote: string } | null;
+  engagement: CreatorEngagement;
+}
+
+export interface MonetizationApi {
+  overview(): Promise<CreatorOverview>;
+  apply(): Promise<void>;
+}
+
+// ------------------------------------------------------- Creator Programme
+
+/**
+ * Creator Programme (migration 20261021090000). Early access: approval admits a
+ * creator to the programme; there are no earnings, balances or payouts.
+ */
+export const CREATOR_CATEGORIES = [
+  { id: "music", label: "Music" },
+  { id: "video", label: "Video" },
+  { id: "art", label: "Art & design" },
+  { id: "photography", label: "Photography" },
+  { id: "writing", label: "Writing" },
+  { id: "education", label: "Education" },
+  { id: "gaming", label: "Gaming" },
+  { id: "comedy", label: "Comedy" },
+  { id: "tech", label: "Tech" },
+  { id: "lifestyle", label: "Lifestyle" },
+  { id: "other", label: "Other" },
+] as const;
+export type CreatorCategory = (typeof CREATOR_CATEGORIES)[number]["id"];
+
+export type CreatorApplicationStatus = "pending" | "info_requested" | "approved" | "rejected" | "withdrawn";
+/** not_eligible = not (or no longer) in the programme; eligible = approved. */
+export type CreatorStatus = "not_eligible" | "eligible" | "suspended" | "revoked";
+
+export interface CreatorApplicationInput {
+  category: CreatorCategory;
+  description: string;
+  reason: string;
+  links: string[];
+  extra: string;
+}
+
+export interface CreatorStats {
+  posts: number;
+  likesReceived: number;
+  repliesReceived: number;
+  followers: number;
+  verifiedFollowers: number;
+  recentPosts: { id: string; body: string; likes: number; replies: number; createdAt: Date }[];
+  /** Last 8 weeks (Monday starts), oldest first. */
+  weekly: { week: string; posts: number; likes: number; replies: number }[];
+}
+
+export interface CreatorProgramme {
+  applicationsOpen: boolean;
+  publicNote: string;
+  creatorStatus: CreatorStatus;
+  creatorReason: string;
+  accountSuspended: boolean;
+  applicationsThisMonth: number;
+  application:
+    | (CreatorApplicationInput & {
+        id: string;
+        status: CreatorApplicationStatus;
+        submittedAt: Date;
+        updatedAt: Date;
+        reviewedAt: Date | null;
+        infoRequest: string;
+        reviewNote: string;
+      })
+    | null;
+  /** Only for approved creators. */
+  stats: CreatorStats | null;
+}
+
+export type CreatorFeedbackCategory = "programme" | "features" | "bug" | "support" | "other";
+export interface CreatorFeedback {
+  id: string;
+  category: CreatorFeedbackCategory;
+  rating: number | null;
+  body: string;
+  status: "open" | "reviewed" | "resolved";
+  adminResponse: string;
+  respondedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface CreatorProgrammeApi {
+  get(): Promise<CreatorProgramme>;
+  apply(input: CreatorApplicationInput): Promise<void>;
+  /** Answer a request for more information (or edit while pending). */
+  update(applicationId: string, input: CreatorApplicationInput): Promise<void>;
+  withdraw(applicationId: string): Promise<void>;
+  feedback(): Promise<CreatorFeedback[]>;
+  sendFeedback(input: { category: CreatorFeedbackCategory; rating: number | null; body: string }): Promise<void>;
+}
+
+export interface AdminCreatorApplication extends CreatorApplicationInput {
+  id: string;
+  person: Author;
+  status: CreatorApplicationStatus;
+  infoRequest: string;
+  creatorStatus: CreatorStatus;
+  current: CreatorEngagement & { openFraudFlags: number };
+  submittedAt: Date;
+  updatedAt: Date;
+  reviewedAt: Date | null;
+  reviewedBy: string | null;
+  reviewNote: string;
+}
+
+export interface AdminCreatorFeedback extends CreatorFeedback {
+  person: Author;
+  respondedBy: string | null;
+}
+
+export interface CreatorProgrammeAdminApi {
+  applications(status: CreatorApplicationStatus | "all", query: string): Promise<AdminCreatorApplication[]>;
+  decide(applicationId: string, decision: "approved" | "rejected" | "info_requested", note: string): Promise<void>;
+  stats(userId: string): Promise<CreatorStats>;
+  feedback(status: CreatorFeedback["status"] | "all"): Promise<AdminCreatorFeedback[]>;
+  updateFeedback(feedbackId: string, status: CreatorFeedback["status"], response: string): Promise<void>;
+}
+
+export interface MonetizationSettings {
+  programmeOpen: boolean;
+  applicationsOpen: boolean;
+  criteria: Record<string, unknown>;
+  publicNote: string;
+  updatedAt: Date;
+}
+
+export interface CreatorApplication {
+  id: string;
+  person: Author;
+  status: "pending" | "approved" | "rejected" | "withdrawn";
+  snapshot: CreatorEngagement;
+  current: CreatorEngagement & { openFraudFlags: number };
+  submittedAt: Date;
+  reviewedAt: Date | null;
+  reviewNote: string;
+}
+
+export interface FraudFlag {
+  id: string;
+  userId: string;
+  handle: string;
+  kind: "support_farming" | "fake_followers" | "engagement_manipulation" | "duplicate_accounts" | "other";
+  detail: string;
+  createdAt: Date;
+  resolvedAt: Date | null;
+}
+
+export interface MonetizationAdminApi {
+  settings(): Promise<MonetizationSettings>;
+  saveSettings(input: { programmeOpen: boolean; applicationsOpen: boolean; criteria: Record<string, unknown>; publicNote: string }): Promise<void>;
+  applications(status: "pending" | "all"): Promise<CreatorApplication[]>;
+  review(applicationId: string, decision: "approved" | "rejected", note: string): Promise<void>;
+  setStatus(userId: string, status: MonetizationStatus, reason: string): Promise<void>;
+  flags(openOnly: boolean): Promise<FraudFlag[]>;
+  flag(userId: string, kind: FraudFlag["kind"], detail: string): Promise<void>;
+  resolveFlag(flagId: string): Promise<void>;
+}
+
+export interface AdminApi {
+  isAdmin(viewerId: string): Promise<boolean>;
+  /** Legal documents: publish new versions (text ships with the app). */
+  legal?: LegalAdminApi;
+  /** Creator monetization — architecture only; nothing financial is enabled. */
+  monetization?: MonetizationAdminApi;
+  /** Creator Programme applications and creator feedback (newer databases). */
+  creatorProgramme?: CreatorProgrammeAdminApi;
+  support: SupportAdminApi;
+  /** Message reports (only the evidence reporters submitted — admins can't read conversations). */
+  messageReports?: MessageReportsAdminApi;
+  /** Reported Moments: review and remove. */
+  moments?: MomentsAdminApi;
+  /** Reported posts, profiles and Worlds; post takedown; account suspension. */
+  moderation?: ModerationAdminApi;
+  users: AdminUsersApi;
+}
+
+export interface ContentReport {
+  id: string;
+  reporterHandle: string;
+  targetType: ContentReportTarget;
+  targetId: string;
+  /** "Post", "Reply", "Profile" or "World". */
+  targetLabel: string;
+  targetText: string;
+  targetAuthor: { id: string; handle: string } | null;
+  targetRemoved: boolean;
+  /** Open reports about the same thing. */
+  reportCount: number;
+  reason: MessageReportReason;
+  note: string;
+  status: "open" | "reviewed";
+  createdAt: Date;
+}
+
+export interface Suspension {
+  userId: string;
+  handle: string;
+  name: string;
+  reason: string;
+  suspendedAt: Date;
+  until: Date | null;
+  suspendedBy: string | null;
+}
+
+export interface ModerationAdminApi {
+  listReports(status: "open" | "all"): Promise<ContentReport[]>;
+  setReportStatus(reportId: string, status: "open" | "reviewed"): Promise<void>;
+  removePost(postId: string, note: string): Promise<void>;
+  listSuspensions(): Promise<Suspension[]>;
+  /** until null: until restored. Admins can't be suspended. */
+  suspend(userId: string, reason: string, until: Date | null): Promise<void>;
+  unsuspend(userId: string, note: string): Promise<void>;
+  /** A warning the person sees until they acknowledge it. */
+  warn(userId: string, message: string): Promise<void>;
+  stats(): Promise<PlatformStats>;
+  /** Overview metrics, a 14-day trend and newest accounts (newer databases only). */
+  insights?(): Promise<PlatformInsights>;
+  /** People by handle or name; empty query lists the newest. */
+  searchUsers?(query: string): Promise<AdminUserRow[]>;
+  userDetail?(userId: string): Promise<AdminUserDetail>;
+  /** A moderation note, kept in the audit log. */
+  addNote?(targetType: AdminNoteTarget, targetId: string, note: string): Promise<void>;
+  /** Admin actions and notes about one person, report or item. */
+  history?(targetId: string): Promise<AdminHistoryEntry[]>;
+  /** App errors people's devices reported, grouped (no personal data). */
+  clientErrors(hours: number): Promise<{ total: number; top: { message: string; route: string; version: string; count: number; lastAt: Date }[] }>;
+}
+
+// ----------------------------------------------------------------- messages
+
+/**
+ * Where a message of yours has got to. "sending"/"failed" exist only on this
+ * device; the rest come from the other person's read/delivered markers.
+ */
+export type MessageStatus = "sending" | "failed" | "sent" | "delivered" | "read";
+
+/** The message a reply answers, trimmed to what the quote needs. */
+export interface MessageQuote {
+  id: string;
+  fromViewer: boolean;
+  text: string;
+  hasImage: boolean;
+}
+
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  fromViewer: boolean;
+  text: string;
+  media: MediaItem[];
+  replyTo: MessageQuote | null;
+  createdAt: Date;
+  /** Your messages: sent → delivered → read. Theirs: always "read" or "delivered". */
+  status: MessageStatus;
+  /**
+   * End-to-end encrypted backends only: this device has no key for the message
+   * (sent before this device existed, or keys not received yet). text is empty.
+   */
+  undecryptable?: boolean;
+  /** E2E backends: sent from one of their devices they haven't verified. */
+  unverifiedDevice?: boolean;
+  /** One reaction per person; grouped by emoji. */
+  reactions?: MessageReaction[];
+  /** The sender changed the text after sending. */
+  edited?: boolean;
+}
+
+export interface MessageReaction {
+  emoji: string;
+  count: number;
+  /** Includes your reaction. */
+  mine: boolean;
+}
+
+/** One-to-one only (no groups yet). */
+export interface Conversation {
+  id: string;
+  peer: Author;
+  /** null for a conversation that has no messages yet. */
+  lastMessage: { text: string; hasImage: boolean; fromViewer: boolean; createdAt: Date; status: MessageStatus; undecryptable?: boolean } | null;
+  unreadCount: number;
+  /** You blocked them: nothing can be sent either way until you unblock. */
+  blockedByViewer: boolean;
+  /** false when either side has blocked the other. Who blocked whom is only shown to the blocker. */
+  canSend: boolean;
+}
+
+export interface ConversationView {
+  conversation: Conversation;
+  messages: DirectMessage[];
+}
+
+export interface NewMessageInput {
+  /** Client-chosen id: sending again with the same id never stores a second copy. */
+  clientId?: string;
+  text: string;
+  image?: NewMediaInput | null;
+  replyToId?: string | null;
+}
+
+export type MessageReportReason = "spam" | "harassment" | "inappropriate" | "other";
+
+/** peer-unavailable: end-to-end encrypted backends only — they have no device that can receive messages yet. */
+/**
+ * identity-changed: their security key changed since you verified them — OK it (or verify again) to keep sending.
+ * device-unverified: this device must be approved from another of your devices (or your identity reset) first.
+ */
+export type MessageErrorCode = "blocked" | "empty" | "too-long" | "not-found" | "peer-unavailable" | "identity-changed" | "device-unverified" | "rate-limited" | "suspended" | "unknown";
+
+export class MessageError extends Error {
+  code: MessageErrorCode;
+  constructor(code: MessageErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/** Longest message, in characters. Same limit on every backend. */
+export const MESSAGE_MAX_LENGTH = 2000;
+
+/**
+ * Direct messages. Optional capability.
+ *
+ * `encryption` says what the backend really does with message bodies:
+ *  - "e2e": encrypted on this device before upload; the server stores only
+ *    ciphertext (Supabase, see docs/architecture/MESSAGES.md).
+ *  - "none": not end-to-end encrypted (the demo keeps messages in this browser).
+ * The UI only ever says "end-to-end encrypted" when this is "e2e".
+ */
+export interface MessagesApi {
+  encryption: "none" | "e2e";
+  /** False where encrypted photo storage isn't available yet (Neon, for now): text only. */
+  photos?: boolean;
+  subscribeConversations(viewerId: string, sub: Subscription<Conversation[]>): Unsubscribe;
+  /** Conversations with unread messages (what the Messages badge shows). */
+  subscribeUnreadCount(viewerId: string, sub: Subscription<number>): Unsubscribe;
+  /** The conversation with this person, created if needed. Resolves with its id. */
+  openConversation(viewerId: string, peerId: string): Promise<string>;
+  /** null: no such conversation, or you're not in it. */
+  subscribeConversation(conversationId: string, viewerId: string, sub: Subscription<ConversationView | null>): Unsubscribe;
+  /** Resolves once stored, with the stored message's id (when the backend reports it). */
+  send(viewerId: string, conversationId: string, input: NewMessageInput): Promise<{ id: string } | void>;
+  /** Marks everything in the conversation as read by you (the other person sees "Read"). */
+  markRead(viewerId: string, conversationId: string): Promise<void>;
+  /** Ephemeral: never stored. */
+  setTyping(viewerId: string, conversationId: string, typing: boolean): void;
+  subscribeTyping(conversationId: string, viewerId: string, cb: (peerTyping: boolean) => void): Unsubscribe;
+  block(viewerId: string, peerId: string): Promise<void>;
+  unblock(viewerId: string, peerId: string): Promise<void>;
+  /**
+   * Report a conversation. On an encrypted backend the server can't read
+   * messages, so the reporter's device includes the text of the messages
+   * they chose to share (messageIds) in the report.
+   */
+  report(viewerId: string, conversationId: string, input: { reason: MessageReportReason; note: string; messageIds: string[] }): Promise<void>;
+  /** Devices, verification and key backup. Present on end-to-end encrypted backends (and simulated in the demo). */
+  security?: MessagingSecurityApi;
+  /** Reactions, edits, unsend and older history, where the backend supports them. */
+  actions?: MessageActionsApi;
+}
+
+/** Edits are allowed for this long after sending (your own text messages only). */
+export const MESSAGE_EDIT_WINDOW_MS = 15 * 60_000;
+
+export interface MessageActionsApi {
+  /** Your reaction to a message; null removes it. Encrypted like a message. */
+  react(viewerId: string, conversationId: string, messageId: string, emoji: string | null): Promise<void>;
+  /** Replace the text of one of your messages (within MESSAGE_EDIT_WINDOW_MS). Encrypted like a message. */
+  edit(viewerId: string, conversationId: string, messageId: string, text: string): Promise<void>;
+  /**
+   * Remove one of your messages for everyone: the server deletes its ciphertext,
+   * reactions and edits. The other person may already have read it.
+   */
+  unsend(viewerId: string, conversationId: string, messageId: string): Promise<void>;
+  /** Fetches older messages into the open conversation. Resolves false when there are none left. */
+  loadOlder(viewerId: string, conversationId: string): Promise<boolean>;
+}
+
+// -------------------------------------------------------- messaging security
+
+/** How someone's identity looks from your device. */
+export type PeerTrust =
+  /** You verified them (emoji matched) and nothing changed since. */
+  | "verified"
+  /** Normal default: messages are encrypted; you just haven't compared emoji. */
+  | "unverified"
+  /** You had verified them and their security key changed. Sending pauses until you OK it or verify again. */
+  | "changed-verified"
+  /** Their security key changed since you first talked (you hadn't verified them). */
+  | "changed";
+
+export interface MessagingDevice {
+  id: string;
+  /** e.g. "Chrome on Windows". */
+  name: string;
+  current: boolean;
+  /** Approved by your account (cross-signed): it receives your conversation keys. */
+  verified: boolean;
+  createdAt: Date;
+  lastActiveAt: Date | null;
+}
+
+/** Whether this device can read and send messages yet. */
+export interface MessagingSetup {
+  deviceVerified: boolean;
+  /** Another verified device exists that could approve this one. */
+  canVerifyWithOtherDevice: boolean;
+}
+
+export interface VerificationFlow {
+  id: string;
+  /** null when verifying your own devices. */
+  peer: Author | null;
+  self: boolean;
+  weStarted: boolean;
+  state: "incoming" | "waiting" | "starting" | "compare" | "confirmed" | "done" | "cancelled";
+  emoji?: { symbol: string; name: string }[];
+  /** "mismatch" | "cancelled" | "timeout" */
+  cancelReason?: "mismatch" | "cancelled" | "timeout";
+}
+
+export interface KeyBackupStatus {
+  /** A backup exists for your account. */
+  exists: boolean;
+  keyCount: number;
+  /** This device holds the backup key (it backs up and can restore). */
+  thisDeviceHasKey: boolean;
+}
+
+/** reauth-required: resetting the security key needs a sign-in from the last 10 minutes. */
+export type SecurityErrorCode = "bad-recovery-key" | "wrong-recovery-key" | "no-backup" | "no-other-device" | "device-removed" | "reauth-required" | "unknown";
+
+export class SecurityError extends Error {
+  code: SecurityErrorCode;
+  constructor(code: SecurityErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+export interface MessagingSecurityApi {
+  /** true in the demo: everything here is a simulation (no real keys). */
+  simulated: boolean;
+  setup(viewerId: string): Promise<MessagingSetup>;
+  subscribeDevices(viewerId: string, sub: Subscription<MessagingDevice[]>): Unsubscribe;
+  removeDevice(viewerId: string, deviceId: string): Promise<void>;
+  peerTrust(viewerId: string, peerId: string): Promise<PeerTrust>;
+  /** OK a changed security key without verifying again. */
+  acceptIdentityChange(viewerId: string, peerId: string): Promise<void>;
+  /** Emoji verification with someone, or "self" to approve this device from another of yours. Resolves with the flow id. */
+  startVerification(viewerId: string, peerId: string | "self"): Promise<string>;
+  /** Active and incoming verifications (refreshes often while one is in progress). */
+  subscribeVerifications(viewerId: string, sub: Subscription<VerificationFlow[]>): Unsubscribe;
+  acceptVerification(viewerId: string, flowId: string): Promise<void>;
+  /** The emoji match. */
+  confirmVerification(viewerId: string, flowId: string): Promise<void>;
+  /** The emoji don't match. */
+  rejectVerification(viewerId: string, flowId: string): Promise<void>;
+  cancelVerification(viewerId: string, flowId: string): Promise<void>;
+  backupStatus(viewerId: string): Promise<KeyBackupStatus>;
+  /** Creates (or replaces) the backup. Resolves with the recovery key, shown once and never stored by Amigo. */
+  setUpBackup(viewerId: string): Promise<string>;
+  restoreBackup(viewerId: string, recoveryKey: string): Promise<{ imported: number; total: number }>;
+  /** "I can't use another device": new identity on this device. People who verified you are told it changed. */
+  resetIdentity(viewerId: string): Promise<void>;
+  /** Recent security key resets on your account (newest first). Not in the demo. */
+  securityEvents?(viewerId: string): Promise<{ kind: "identity_reset"; deviceId: string | null; at: Date }[]>;
+}
+
+/** A report about a conversation, as admins see it: only what the reporter chose to submit. */
+export interface MessageReport {
+  id: string;
+  reporter: { id: string; handle: string };
+  reported: { id: string; handle: string };
+  reason: MessageReportReason;
+  note: string;
+  /** Messages the reporter selected and submitted (decrypted on their device). Not verifiable by Amigo. */
+  evidence: { id: string; fromReported: boolean; text: string; createdAt: Date | null }[];
+  status: "open" | "reviewed";
+  createdAt: Date;
+  reviewedBy: string | null;
+  reviewedAt: Date | null;
+}
+
+export interface MessageReportsAdminApi {
+  list(adminId: string): Promise<MessageReport[]>;
+  setStatus(adminId: string, reportId: string, status: "open" | "reviewed"): Promise<void>;
+}
+
+// ------------------------------------------------------------------ moments
+
+/** Who can see a Moment. Close friends may come later. */
+export type MomentAudience = "everyone" | "followers";
+
+/** Background styles for text Moments (also behind text over a photo while it loads). */
+export const MOMENT_BACKGROUNDS = ["coral", "sunset", "ocean", "forest", "night", "plain"] as const;
+export type MomentBackground = (typeof MOMENT_BACKGROUNDS)[number];
+
+/** The quick reactions offered on a Moment. */
+export const MOMENT_REACTIONS = ["❤️", "😂", "😮", "😢", "🔥", "👏"] as const;
+
+export const MOMENT_TEXT_MAX_LENGTH = 200;
+export const MOMENT_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * How the author framed a photo Moment and placed its caption
+ * (src/features/moments/framing.ts). textY also places text on a background.
+ */
+export interface MomentLayout {
+  fit: "cover" | "contain";
+  /** 1–4, on top of the fit. */
+  zoom: number;
+  /** The point of the photo kept at the centre (0–1 of its width/height). */
+  x: number;
+  y: number;
+  /** The caption's vertical centre, 0–1 of the screen height. */
+  textY: number;
+}
+
+/** A temporary post: a photo, text on a background, or text over a photo. Gone after 24 hours. */
+export interface Moment {
+  id: string;
+  author: Author;
+  text: string;
+  background: MomentBackground;
+  /** The photo, if any. */
+  media: MediaItem | null;
+  audience: MomentAudience;
+  createdAt: Date;
+  expiresAt: Date;
+  /** You've seen it. */
+  seen: boolean;
+  /** Your reaction (emoji), if any. */
+  viewerReaction: string | null;
+  /** Your own Moments only: how many people have seen it. */
+  viewCount?: number;
+  /** Absent on older Moments: the defaults apply. */
+  layout?: MomentLayout;
+}
+
+/** One person's active Moments, oldest first (the viewer plays them in order). */
+export interface MomentGroup {
+  author: Author;
+  moments: Moment[];
+  /** At least one you haven't seen. */
+  hasUnseen: boolean;
+  isViewer: boolean;
+}
+
+/** Your own Moment's viewers (with their reaction). Only the author can list them. */
+export interface MomentViewer {
+  person: Author;
+  viewedAt: Date;
+  reaction: string | null;
+}
+
+export interface NewMomentInput {
+  text: string;
+  background: MomentBackground;
+  image?: NewMediaInput | null;
+  audience: MomentAudience;
+  layout?: MomentLayout;
+}
+
+export type MomentErrorCode = "empty" | "too-long" | "not-found" | "not-allowed" | "unknown";
+
+export class MomentError extends Error {
+  code: MomentErrorCode;
+  constructor(code: MomentErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+/**
+ * Moments. Optional capability (demo and Supabase). Replies are sent through
+ * Messages (MessagesApi), so they're private to the two people — on the
+ * Supabase backend end-to-end encrypted like any message.
+ */
+export interface MomentsApi {
+  /** False where photo storage isn't available yet (Neon, for now): text Moments only. */
+  photos?: boolean;
+  /** Everyone whose Moments you can see right now: you first, then unseen, newest first. */
+  subscribeFeed(viewerId: string, sub: Subscription<MomentGroup[]>): Unsubscribe;
+  /** One person's active Moments you can see (empty when none). */
+  forAuthor(authorId: string, viewerId: string): Promise<Moment[]>;
+  create(viewer: Viewer, input: NewMomentInput): Promise<{ id: string }>;
+  /** Your own, before it expires. */
+  delete(viewerId: string, momentId: string): Promise<void>;
+  markSeen(viewerId: string, momentId: string): Promise<void>;
+  /** null removes your reaction. */
+  react(viewerId: string, momentId: string, emoji: string | null): Promise<void>;
+  viewers(viewerId: string, momentId: string): Promise<MomentViewer[]>;
+  report(viewerId: string, momentId: string, input: { reason: MessageReportReason; note: string }): Promise<void>;
+}
+
+// ------------------------------------------------------------------ push
+
+/** A browser/device that receives notifications for this account. */
+export interface PushDevice {
+  id: string;
+  label: string;
+  createdAt: Date;
+  lastSeenAt: Date;
+  lastSuccessAt: Date | null;
+}
+
+export interface NotificationPrefs {
+  messages: boolean;
+  worlds: boolean;
+  social: boolean;
+}
+
+export interface PushApi {
+  /** The server's public key for subscribing; null when push isn't set up on this deployment. */
+  publicKey(): Promise<string | null>;
+  subscribe(device: { endpoint: string; p256dh: string; auth: string; label: string }): Promise<void>;
+  /** Still registered? (Moves it to the signed-in account; never re-adds a removed device.) */
+  touch(endpoint: string): Promise<boolean>;
+  /** A "notifications work" push to your own devices. "wait": sent one moments ago. */
+  sendTest(): Promise<"sent" | "wait" | "failed">;
+  unsubscribe(endpoint: string): Promise<void>;
+  devices(viewerId: string): Promise<PushDevice[]>;
+  removeDevice(id: string): Promise<void>;
+  prefs(viewerId: string): Promise<NotificationPrefs>;
+  setPrefs(prefs: Partial<NotificationPrefs>): Promise<void>;
+}
+
+/** A reported Moment, as admins see it. Admins see the Moment, never Moment replies (those are Messages). */
+export interface MomentReport {
+  id: string;
+  reporter: { id: string; handle: string };
+  reason: MessageReportReason;
+  note: string;
+  status: "open" | "reviewed";
+  createdAt: Date;
+  /** null once it expired or was deleted. */
+  moment: { id: string; author: Author; text: string; media: MediaItem | null; background: MomentBackground; createdAt: Date; removed: boolean } | null;
+}
+
+export interface MomentsAdminApi {
+  listReports(adminId: string): Promise<MomentReport[]>;
+  /** Takes the Moment down for everyone (audit-logged). */
+  remove(adminId: string, momentId: string, note: string): Promise<void>;
+  setReportStatus(adminId: string, reportId: string, status: "open" | "reviewed"): Promise<void>;
+}
+
+export interface Subscription<T> {
+  /** `cached`: what this view showed last time (this tab's memory), shown at once; a fresh value follows. */
+  onData: (value: T, info?: { cached: true }) => void;
+  onError: (error: Error) => void;
+}
+
+/** Everything the UI needs from a backend. Implemented by Supabase, demo and (legacy) Firebase sources. */
+export interface DataSource {
+  kind: "firebase" | "supabase" | "neon" | "demo";
+
+  /**
+   * How many media items one new post may carry on this backend.
+   * Supabase: 4 (post_media.position 0–3, enforced by create_post). Legacy Firebase: 1.
+   */
+  maxMediaPerPost: number;
+  /** False where the backend can't store photos yet (Neon, for now): no avatar uploads. */
+  photoUploads?: boolean;
+  /** Email ownership check by emailed code, for backends that sign people in before verifying (Neon). */
+  emailVerification?: { sendCode(): Promise<void>; verify(code: string): Promise<void> };
+  /** What the person says they're into (kept for personalisation; nothing is filtered by it). */
+  interests?: { get(): Promise<Interest[]>; set(interests: Interest[]): Promise<Interest[]> };
+  /** "Continue with …" sign-in through the auth provider (OAuth/OpenID Connect). Returns after leaving for the provider. */
+  socialSignIn?: { providers: SocialProvider[]; start(provider: SocialProvider): Promise<void> };
+  /** Bookmarks, edit, delete and report posts. */
+  postTools?: PostToolsApi;
+  /** Whether your account is suspended, plus unacknowledged warnings. */
+  accountStatus?(): Promise<AccountStatus>;
+  acknowledgeWarning?(warningId: string): Promise<void>;
+  /** Records an uncaught app error (redacted, not linked to the person). */
+  reportError?(kind: "error" | "unhandledrejection" | "render", message: string, route: string): Promise<void>;
+  /** Privacy-safe performance samples (see src/lib/perf.ts). */
+  reportPerf?(samples: { m: string; v: number; r: string; n: string }[]): Promise<void>;
+  blocking?: BlockingApi;
+  /** Permanently deletes the signed-in account after re-checking the password (Neon/Supabase). */
+  deleteAccount?(password: string): Promise<void>;
+  /** Versioned legal documents and acceptance records. */
+  legal?: LegalApi;
+  /** Notifications on a locked phone (Web Push). */
+  push?: PushApi;
+  /** Business profiles (Neon only; see BusinessApi). */
+  business?: BusinessApi;
+  /** Creator monetization overview (coming soon; nothing financial). */
+  monetization?: MonetizationApi;
+  /** Creator Programme: applications, status, dashboard, feedback. */
+  creatorProgramme?: CreatorProgrammeApi;
+  /** The original bytes of a stored photo ("/api/media/<key>"), permission-checked. */
+  mediaBytes?(src: string): Promise<Blob>;
+  /** Password reset by emailed code instead of a link (Neon). Without it, sendPasswordReset emails a link. */
+  passwordResetByCode?: { send(email: string): Promise<void>; reset(email: string, code: string, password: string): Promise<void> };
+
+  /** Optional capability — see ProfilesApi. */
+  profiles?: ProfilesApi;
+  /** Optional capability — see DiscoveryApi. */
+  discovery?: DiscoveryApi;
+  /** Optional capability — see NotificationsApi. */
+  notifications?: NotificationsApi;
+  /** Demo only: wipe the browser-saved demo state (the caller reloads). */
+  resetDemo?: () => Promise<void>;
+  /** Optional capability — see WorldsApi. */
+  worlds?: WorldsApi;
+  /** Optional capability — see SupportApi. */
+  support?: SupportApi;
+  /** Optional capability — see AdminApi. */
+  admin?: AdminApi;
+  /** Optional capability — see MessagesApi. */
+  messages?: MessagesApi;
+  /** Optional capability — see MomentsApi. */
+  moments?: MomentsApi;
+
+  // auth
+  onViewerChanged(cb: (viewer: Viewer | null) => void): Unsubscribe;
+  signIn(email: string, password: string): Promise<void>;
+  /** needsEmailConfirmation: the account exists but the person must click the emailed link first. */
+  /** acceptLegal: the Terms/Privacy versions accepted on the sign-up form, recorded once the account exists. */
+  signUp(email: string, password: string, name: string, opts?: { acceptLegal?: { slug: LegalSlug; version: string }[] }): Promise<{ needsEmailConfirmation: boolean }>;
+  sendPasswordReset(email: string): Promise<void>;
+  /** Fires when someone arrives through a password-reset link and must choose a new password. */
+  onPasswordRecovery?(cb: () => void): Unsubscribe;
+  updatePassword(newPassword: string): Promise<void>;
+  signOut(): Promise<void>;
+  updateDisplayName(name: string): Promise<void>;
+
+  // posts
+  /** scope is a hint: backends that can filter server-side do; the feed hook filters again regardless. */
+  subscribeLatestPosts(viewerId: string | null, limit: number, sub: Subscription<{ posts: Post[]; hasMore: boolean }>, scope?: FeedScope): Unsubscribe;
+  subscribePost(postId: string, viewerId: string | null, sub: Subscription<Post | null>): Unsubscribe;
+  /** Resolves with the new post's id once it is stored. */
+  createPost(viewer: Viewer, input: NewPostInput): Promise<{ id: string }>;
+  setLiked(postId: string, viewerId: string, liked: boolean): Promise<void>;
+
+  // replies
+  subscribeReplies(postId: string, sub: Subscription<Reply[]>): Unsubscribe;
+  addReply(postId: string, viewer: Viewer, text: string): Promise<void>;
+
+  // social graph
+  getFollowingIds(viewerId: string): Promise<Set<string>>;
+  getPeopleSuggestions(viewerId: string, max: number): Promise<PersonSummary[]>;
+  follow(viewerId: string, targetId: string): Promise<void>;
+  unfollow(viewerId: string, targetId: string): Promise<void>;
+}
+
+// ------------------------------------------------------------------ businesses
+
+/** The fixed business categories (ids are stored; labels are shown). */
+export const BUSINESS_CATEGORIES = [
+  { id: "food_drink", label: "Food & drink" },
+  { id: "retail", label: "Retail & shopping" },
+  { id: "beauty_wellness", label: "Beauty & wellness" },
+  { id: "health", label: "Health" },
+  { id: "services", label: "Services" },
+  { id: "education", label: "Education" },
+  { id: "technology", label: "Technology" },
+  { id: "creative_media", label: "Creative & media" },
+  { id: "events_entertainment", label: "Events & entertainment" },
+  { id: "travel_hospitality", label: "Travel & hospitality" },
+  { id: "nonprofit_community", label: "Nonprofit & community" },
+  { id: "other", label: "Other" },
+] as const;
+export type BusinessCategory = (typeof BUSINESS_CATEGORIES)[number]["id"];
+
+/** A business as anyone sees it. Who owns it is never part of this. */
+export interface Business {
+  id: string;
+  handle: string;
+  name: string;
+  category: BusinessCategory;
+  description: string;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  website: string | null;
+  email: string | null;
+  phone: string | null;
+  followerCount: number;
+  postCount: number;
+  createdAt: Date;
+  following: boolean;
+  /** The viewer owns it. */
+  mine: boolean;
+}
+
+/** Your own business, with what only the owner sees. */
+export interface MyBusiness extends Business {
+  status: "active" | "suspended";
+  canChangeHandleAt: Date;
+}
+
+export type BusinessSummary = Pick<Business, "id" | "handle" | "name" | "category" | "description" | "logoUrl" | "followerCount" | "following">;
+
+export interface BusinessInput {
+  name: string;
+  category: BusinessCategory;
+  description: string;
+  website: string;
+  email: string;
+  phone: string;
+  /** Required to create; to rename, at most once every 30 days. */
+  handle?: string;
+}
+
+export type BusinessErrorCode =
+  | "off" // not available yet
+  | "not-eligible" // email not verified, or account suspended
+  | "handle" // taken, reserved or badly formed
+  | "name" // not allowed
+  | "handle-too-soon"
+  | "already-have-one"
+  | "suspended"
+  | "invalid" // a field doesn't pass its checks
+  | "slow-down"
+  | "unknown";
+
+export class BusinessError extends Error {
+  code: BusinessErrorCode;
+  constructor(code: BusinessErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+export interface AdminBusiness {
+  id: string;
+  handle: string;
+  name: string;
+  category: BusinessCategory;
+  status: "active" | "suspended";
+  suspendedNote: string | null;
+  followerCount: number;
+  postCount: number;
+  ownerHandle: string;
+  createdAt: Date;
+}
+
+/**
+ * Business profiles: one per person (verified email, not suspended), shown at /b/:handle.
+ * Business posts are top-level and public; likes and replies stay personal. Who owns a
+ * business is never part of any answer (except to admins).
+ */
+export interface BusinessApi {
+  /** Whether businesses are switched on, and yours if you have one. */
+  mine(): Promise<{ enabled: boolean; business: MyBusiness | null }>;
+  create(input: BusinessInput & { handle: string }): Promise<string>;
+  update(input: BusinessInput): Promise<void>;
+  remove(): Promise<void>;
+  /** Uploads and sets the logo or cover; null removes it. */
+  setImage(kind: "logo" | "cover", image: Blob | null): Promise<void>;
+  byHandle(handle: string): Promise<Business | null>;
+  posts(businessId: string, limit: number): Promise<Post[]>;
+  search(query: string, category: BusinessCategory | null): Promise<BusinessSummary[]>;
+  /** Answers the new follower count. */
+  follow(businessId: string, follow: boolean): Promise<number>;
+  followedIds(): Promise<Set<string>>;
+  createPost(text: string, images: NewMediaInput[]): Promise<string>;
+  /** Deletes a post of your own business (business posts can't be edited). */
+  deletePost(postId: string): Promise<void>;
+  admin: {
+    list(status: "all" | "active" | "suspended"): Promise<AdminBusiness[]>;
+    setStatus(businessId: string, suspend: boolean, note: string): Promise<void>;
+    setEnabled(enabled: boolean): Promise<void>;
+  };
+}

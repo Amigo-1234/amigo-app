@@ -1,0 +1,11 @@
+*.local
+.env
+.env*.local
+.env.local
+dist
+migration-data
+node_modules
+secrets
+neon/build/
+*.tsbuildinfo
+email-previews/

@@ -1,0 +1,129 @@
+import { useState } from "react";
+import { NavLink, useParams } from "react-router";
+import { FileText, Flag, HandHeart, History, LayoutDashboard, MessageSquareText, Orbit, ShieldAlert, Sparkles, Store, UsersRound } from "lucide-react";
+import { dataSource } from "../data";
+import { AdminLegal, AdminMonetization } from "../features/admin/AdminPlatform";
+import { AdminClientErrors, AdminContentReports, AdminStats, AdminSuspensions } from "../features/admin/AdminModeration";
+import { useIsAdmin } from "../features/admin/useAdmin";
+import { AdminAuditLog, AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
+import { AdminCreatorApplications, AdminCreatorFeedback } from "../features/admin/AdminCreators";
+import { SupportAdmin } from "../features/admin/SupportAdmin";
+import { AdminUsers } from "../features/admin/AdminUsers";
+import { AdminAccounts } from "../features/admin/AdminAccounts";
+import { AdminInsights } from "../features/admin/AdminInsights";
+import { AdminMessageReports } from "../features/admin/AdminMessageReports";
+import { AdminMomentReports } from "../features/admin/AdminMomentReports";
+import { AdminBusinesses } from "../features/admin/AdminBusinesses";
+import { ScreenHeader } from "../shell/ScreenHeader";
+import { Skeleton } from "../ui/Skeleton";
+import { StateMessage } from "../ui/StateMessage";
+import "../features/support/Support.css";
+import "../features/admin/Admin.css";
+
+/** Future modules (campaigns, paid placement, creator plans…) get an entry here. */
+const SECTIONS = [
+  { id: "", label: "Overview", icon: LayoutDashboard },
+  { id: "support", label: "Support Hub", icon: HandHeart },
+  { id: "worlds", label: "Worlds", icon: Orbit },
+  { id: "users", label: "Users", icon: UsersRound },
+  { id: "reports", label: "Reports", icon: Flag },
+  ...(dataSource.business ? [{ id: "businesses", label: "Businesses", icon: Store }] : []),
+  ...(dataSource.admin?.monetization ? [{ id: "creators", label: "Creator Programme", icon: Sparkles }] : []),
+  ...(dataSource.admin?.creatorProgramme ? [{ id: "creator-feedback", label: "Creator Feedback", icon: MessageSquareText }] : []),
+  ...(dataSource.admin?.legal ? [{ id: "legal", label: "Legal", icon: FileText }] : []),
+  { id: "audit", label: "Audit log", icon: History },
+];
+
+export default function AdminScreen() {
+  const admin = useIsAdmin();
+  const { section = "" } = useParams();
+  const [suspendKey, setSuspendKey] = useState(0);
+
+  if (admin === null) {
+    return (
+      <>
+        <ScreenHeader title="Admin" />
+        <div className="admin-body" aria-busy="true">
+          <Skeleton width="60%" height={18} />
+        </div>
+      </>
+    );
+  }
+  // Non-admins get the same answer as any unknown page — nothing to probe.
+  if (!admin) {
+    return (
+      <>
+        <ScreenHeader title="Not found" />
+        <StateMessage icon={<ShieldAlert size={24} />} title="This page doesn't exist" body="Check the link, or head back home." />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <ScreenHeader title="Admin">
+        <nav className="tabs admin-tabs" aria-label="Admin sections">
+          {SECTIONS.map(({ id, label, icon: Icon }) => (
+            <NavLink key={id} to={id ? `/admin/${id}` : "/admin"} end className="tab tab--link admin-tab">
+              <Icon size={16} aria-hidden="true" />
+              <span>{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+      </ScreenHeader>
+      <div className="admin-body">
+        {section === "" && (
+          <>
+            {dataSource.admin?.moderation && (dataSource.admin.moderation.insights ? <AdminInsights fallback={<AdminStats />} /> : <AdminStats />)}
+            <AdminOverview />
+            {dataSource.admin?.moderation && <AdminClientErrors />}
+          </>
+        )}
+        {!SECTIONS.some((x) => x.id === section) && (
+          <AdminPlaceholder title="Nothing here" body="This admin section doesn't exist." link={{ to: "/admin", label: "Back to the overview" }} />
+        )}
+        {section === "support" && <SupportAdmin />}
+        {section === "worlds" && <AdminWorlds />}
+        {section === "users" && (
+          <>
+            {dataSource.admin?.moderation?.searchUsers && <AdminAccounts />}
+            <AdminUsers />
+          </>
+        )}
+        {section === "creators" && dataSource.admin?.monetization && (
+          <>
+            {dataSource.admin.creatorProgramme && <AdminCreatorApplications />}
+            <AdminMonetization />
+          </>
+        )}
+        {section === "creator-feedback" && dataSource.admin?.creatorProgramme && <AdminCreatorFeedback />}
+        {section === "businesses" && <AdminBusinesses />}
+        {section === "audit" && <AdminAuditLog />}
+        {section === "legal" && dataSource.admin?.legal && <AdminLegal />}
+        {section === "reports" && (
+          <>
+            <AdminMomentReports />
+            <AdminMessageReports />
+            {dataSource.admin?.moderation ? (
+              <>
+                <AdminContentReports onSuspended={() => setSuspendKey((k) => k + 1)} />
+                <AdminSuspensions refreshKey={suspendKey} />
+                <AdminPlaceholder
+                  title="Support Hub reports"
+                  body="Reports on Support Hub requests are reviewed in Support Hub → Reports."
+                  link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
+                />
+              </>
+            ) : (
+              <AdminPlaceholder
+                title="Other reports"
+                body="Reporting posts and people isn't built yet. Reports on Support Hub requests are reviewed in Support Hub → Reports."
+                link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
+              />
+            )}
+          </>
+        )}
+      </div>
+    </>
+  );
+}

@@ -1,0 +1,185 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: 1.45;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, p {
+  margin: 0;
+}
+
+img, video {
+  display: block;
+  max-width: 100%;
+}
+
+button, input, textarea, select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: 0;
+  padding: 0;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 100;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: var(--bg);
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (min-width: 768px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
+.splash {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+
+.splash .amigo-mark {
+  animation: splash-breathe 1.4s ease-in-out infinite;
+}
+
+@keyframes splash-breathe {
+  50% { transform: scale(0.92); opacity: 0.7; }
+}
+
+.crash {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  min-height: 100dvh;
+  padding: var(--space-4);
+  text-align: center;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.crash h1 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.crash p {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.crash__home {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+}
+
+/* "Created by AMIGODEV" with the original mark (src/lib/creator.ts). */
+.creator-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: bottom;
+}
+
+.creator-link img {
+  border-radius: 3px;
+}
+
+/* Quick double taps on controls shouldn't zoom the page (iOS); pinch-to-zoom
+   stays available everywhere for accessibility. */
+button,
+a,
+input,
+select,
+textarea,
+label,
+[role="button"],
+[role="tab"],
+[role="switch"] {
+  touch-action: manipulation;
+}
+
+/* A full-screen overlay is open (src/lib/scrollLock.ts): the page behind stays put. */
+html.scroll-locked {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+html.scroll-locked body {
+  overscroll-behavior: none;
+}
