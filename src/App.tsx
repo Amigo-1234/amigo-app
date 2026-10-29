@@ -27,6 +27,7 @@ const FollowListScreen = lazy(() => import("./screens/FollowListScreen"));
 const SettingsScreen = lazy(() => import("./screens/SettingsScreen"));
 const ExploreScreen = lazy(() => import("./screens/ExploreScreen"));
 const NotificationsScreen = lazy(() => import("./screens/NotificationsScreen"));
+const NotificationSettingsScreen = lazy(() => import("./screens/NotificationSettingsScreen"));
 const WorldsScreen = lazy(() => import("./screens/WorldsScreen"));
 const WorldScreen = lazy(() => import("./screens/WorldScreen"));
 const SupportScreen = lazy(() => import("./screens/SupportScreen"));
@@ -129,6 +130,7 @@ const router = createBrowserRouter([
       { path: "settings", element: <SettingsScreen /> },
       ...(dataSource.creatorProgramme ? [{ path: "settings/monetization", element: <CreatorProgrammeScreen /> }] : []),
       ...(dataSource.interests ? [{ path: "settings/interests", element: <InterestsScreen /> }] : []),
+      ...(notificationsEnabled ? [{ path: "settings/notifications", element: <NotificationSettingsScreen /> }] : []),
       ...(dataSource.postTools ? [{ path: "bookmarks", element: <BookmarksScreen /> }] : []),
       ...(dataSource.blocking ? [{ path: "settings/blocked", element: <BlockedScreen /> }] : []),
       ...(dataSource.messages?.security

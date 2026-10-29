@@ -19,7 +19,9 @@ import type {
   MediaItem,
   NewMediaInput,
   NotificationKind,
+  NotificationPrefs,
   PersonSummary,
+  PushDevice,
   Post,
   Profile,
   ProfileTab,
@@ -293,6 +295,12 @@ interface NoteRecord {
 
 const notes: NoteRecord[] = [];
 let noteSeq = 0;
+
+const demoPushPrefs: NotificationPrefs = { messages: true, social: true, worlds: true };
+const demoPushDevices: PushDevice[] = [
+  { id: "pd1", label: "iPhone · Safari", createdAt: days(12), lastSeenAt: minutes(40), lastSuccessAt: days(1) },
+  { id: "pd2", label: "Windows · Chrome", createdAt: days(30), lastSeenAt: days(3), lastSuccessAt: days(3) },
+];
 
 function notify(recipientId: string | undefined, actorId: string, kind: NotificationKind, postId: string | null, at = new Date()) {
   if (!recipientId || recipientId === actorId) return;
@@ -720,6 +728,28 @@ export const demoSource: DataSource = {
         notes.forEach((n) => { if (n.recipientId === viewerId && !n.readAt) n.readAt = new Date(); });
         emit();
       }, 300),
+  },
+
+  // Push settings for UI work only: no public key, so this device reads "not available" and
+  // nothing ever subscribes with a push service. Choices and the device list live in memory.
+  push: {
+    publicKey: async () => null,
+    subscribe: () => later(() => undefined),
+    touch: async () => true,
+    sendTest: () => later(() => "sent" as const),
+    unsubscribe: () => later(() => undefined),
+    devices: () => later(() => demoPushDevices.map((d) => ({ ...d }))),
+    removeDevice: (id) =>
+      later(() => {
+        const i = demoPushDevices.findIndex((d) => d.id === id);
+        if (i >= 0) demoPushDevices.splice(i, 1);
+      }, 200),
+    prefs: () => later(() => ({ ...demoPushPrefs })),
+    setPrefs: (p) =>
+      later(() => {
+        failIfError();
+        Object.assign(demoPushPrefs, Object.fromEntries(Object.entries(p).filter(([, v]) => typeof v === "boolean")));
+      }, 200),
   },
 
   profiles: {
