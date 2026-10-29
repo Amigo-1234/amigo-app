@@ -14,9 +14,11 @@
  */
 export const config = { runtime: "edge" };
 
+const ENV = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+// Overrides exist for local development against a test branch only (`npm run dev:verify`, vite.config.ts).
 const UPSTREAM: Record<string, string> = {
-  auth: "https://ep-dry-mode-zano9y8g.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth",
-  rest: "https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest",
+  auth: ENV.NEON_AUTH_URL_OVERRIDE ?? "https://ep-dry-mode-zano9y8g.neonauth.c-2.eu-west-2.aws.neon.tech/neondb/auth",
+  rest: ENV.NEON_REST_URL_OVERRIDE?.replace(/\/v1\/?$/, "") ?? "https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest",
 };
 
 // Hop-by-hop, proxy-added and platform headers are not forwarded upstream.
