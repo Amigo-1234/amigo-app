@@ -46,6 +46,9 @@ const InterestsScreen = lazy(() => import("./screens/InterestsScreen"));
 const CreatorProgrammeScreen = lazy(() => import("./screens/CreatorProgrammeScreen"));
 const BookmarksScreen = lazy(() => import("./screens/BookmarksScreen"));
 const BlockedScreen = lazy(() => import("./screens/BlockedScreen"));
+const BusinessScreen = lazy(() => import("./screens/BusinessScreen"));
+const BusinessProfileScreen = lazy(() => import("./screens/BusinessProfileScreen"));
+const BusinessManageScreen = lazy(() => import("./screens/BusinessManageScreen"));
 
 function Splash() {
   return <LoadingScreen />;
@@ -133,6 +136,15 @@ const router = createBrowserRouter([
       ...(notificationsEnabled ? [{ path: "settings/notifications", element: <NotificationSettingsScreen /> }] : []),
       ...(dataSource.postTools ? [{ path: "bookmarks", element: <BookmarksScreen /> }] : []),
       ...(dataSource.blocking ? [{ path: "settings/blocked", element: <BlockedScreen /> }] : []),
+      // Business pages live at /b/:handle, apart from people's /u/:handle. The screens show
+      // "not available" until an admin switches businesses on.
+      ...(dataSource.business
+        ? [
+            { path: "business", element: <BusinessScreen /> },
+            { path: "b/:handle", element: <BusinessProfileScreen /> },
+            { path: "settings/business", element: <BusinessManageScreen /> },
+          ]
+        : []),
       ...(dataSource.messages?.security
         ? [
             { path: "settings/devices", element: <DevicesScreen /> },

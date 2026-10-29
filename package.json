@@ -41,7 +41,10 @@
     "test:annotations": "node scripts/test/annotations.test.mjs",
     "test:media-cleanup": "node scripts/test/media-cleanup.test.mjs",
     "test:google-signin": "node scripts/test/google-signin-return.test.mjs",
-    "test:notification-settings": "node scripts/test/notification-settings.test.mjs"
+    "test:notification-settings": "node scripts/test/notification-settings.test.mjs",
+    "test:media-cron": "node scripts/test/media-cron.test.mjs",
+    "test:push-prompt": "node scripts/test/push-prompt.test.mjs",
+    "test:business": "node scripts/test/business.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

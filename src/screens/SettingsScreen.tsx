@@ -22,6 +22,7 @@ import {
   Moon,
   RotateCcw,
   ShieldCheck,
+  Store,
   Sun,
   Trash2,
   UserRound,
@@ -30,6 +31,7 @@ import {
 import { CREATOR } from "../lib/creator";
 
 import { useIsAdmin } from "../features/admin/useAdmin";
+import { useMyBusiness } from "../features/business/useMyBusiness";
 import { CodeField, PasswordField, authMessage } from "../features/auth";
 import { profilesEnabled } from "../features/profile/links";
 import { AuthError, dataSource } from "../data";
@@ -171,6 +173,14 @@ function InfoRow(row: Parameters<typeof Row>[0]) {
 
 // ----------------------------------------------------------------- Account
 
+/** Shown once business pages are on, or to someone who already has one. */
+function BusinessRow() {
+  const { state } = useMyBusiness();
+  if (state?.business) return <LinkRow to="/settings/business" icon={<Store size={20} />} title="Your business" detail={`${state.business.name} · /b/${state.business.handle}`} />;
+  if (!state?.enabled) return null;
+  return <LinkRow to="/settings/business" icon={<Store size={20} />} title="Create a business page" detail="One page per person, at /b/handle. Your own account isn't shown on it" />;
+}
+
 function AccountSection({ isAdmin }: { isAdmin: boolean }) {
   const viewer = useViewer();
   const [verifying, setVerifying] = useState(false);
@@ -205,6 +215,7 @@ function AccountSection({ isAdmin }: { isAdmin: boolean }) {
       )}
       {dataSource.interests && <LinkRow to="/settings/interests" icon={<Shapes size={20} />} title="Interests" detail="Personalize your Amigo experience" />}
       {dataSource.postTools && <LinkRow to="/bookmarks" icon={<Bookmark size={20} />} title="Bookmarks" detail="Posts you saved. Only you can see them" />}
+      <BusinessRow />
       {dataSource.creatorProgramme && (
         <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator Monetization" detail="Creator Programme (early access) — apply, status and your dashboard" />
       )}

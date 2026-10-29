@@ -5,7 +5,7 @@
  * Also deletes a few files queued for removal on each call (needs PUSH_SERVER_SECRET:
  * media_cleanup_take / media_cleanup_done refuse anyone without the server secret).
  */
-import { json, presign, r2, remove, rpc, tokenFor } from "./_media";
+import { deleteLeased, json, presign, r2, rpc, tokenFor, type Leased } from "./_media";
 
 export const config = { runtime: "edge" };
 
@@ -17,13 +17,18 @@ export default async function handler(req: Request): Promise<Response> {
   if (!store) return json(503, { error: "storage-not-configured" });
   const token = await tokenFor(req);
   if (!token || !req.headers.get("authorization")) return json(401, { error: "sign-in" });
-  const body = (await req.json().catch(() => null)) as { purpose?: string; mime?: string; size?: number; conversationId?: string | null; variantOf?: string } | null;
+  const body = (await req.json().catch(() => null)) as {
+    purpose?: string; mime?: string; size?: number; conversationId?: string | null; businessId?: string | null; variantOf?: string;
+  } | null;
   if (!body?.mime || typeof body.size !== "number" || !(body.purpose || body.variantOf)) return json(400, { error: "bad-request" });
 
   // variantOf: the smaller copy of a photo this person just uploaded (media_begin_variant).
   const [fn, args] = body.variantOf
     ? (["media_begin_variant", { p_original: body.variantOf, p_mime: body.mime, p_size: body.size }] as const)
-    : (["media_begin_upload", { p_purpose: body.purpose, p_mime: body.mime, p_size: body.size, p_conversation: body.conversationId ?? null }] as const);
+    : ([
+        "media_begin_upload",
+        { p_purpose: body.purpose, p_mime: body.mime, p_size: body.size, p_conversation: body.conversationId ?? null, ...(body.businessId ? { p_business: body.businessId } : {}) },
+      ] as const);
   let begun = await rpc<string>(token, fn, args);
   // A token issued moments ago can be accepted by the Data API before Postgres
   // resolves its user (seen live right after sign-up): ask once more.
@@ -45,15 +50,8 @@ export default async function handler(req: Request): Promise<Response> {
 
 /** Leases a few queued files, deletes them, and removes from the queue only those confirmed gone. */
 async function cleanUp(token: string, secret: string, store: NonNullable<ReturnType<typeof r2>>) {
-  const queued = await rpc<{ item_id: number; item_path: string; claim: string }[]>(token, "media_cleanup_take", { p_key: secret, p_limit: 5 });
+  const queued = await rpc<Leased[]>(token, "media_cleanup_take", { p_key: secret, p_limit: 5 });
   if (!queued.ok || !queued.data.length) return;
-  const done = await Promise.all(
-    queued.data.map(async (q) => {
-      const res = await remove(store, q.item_path).catch(() => null);
-      // Gone now, or already gone (a retry after a crash).
-      return res && (res.ok || res.status === 404) ? { id: q.item_id, claim: q.claim } : null;
-    }),
-  );
-  const confirmed = done.filter((d) => d !== null);
+  const confirmed = await deleteLeased(store, queued.data);
   if (confirmed.length) await rpc(token, "media_cleanup_done", { p_key: secret, p_items: confirmed });
 }

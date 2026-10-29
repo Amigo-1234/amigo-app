@@ -3,9 +3,11 @@
  * Never bundled into production builds unless VITE_DATA_SOURCE=demo.
  *
  * Preview states with a query param: ?demo=loading | empty | error | slow | signedout | postfail
+ * (?demo=business turns business profiles on.)
  */
 import { mentionedHandles } from "../lib/mentions";
 import { clearDemoState, loadDemoState, saveDemoState } from "./demoPersist";
+import { createDemoBusiness } from "./demoBusiness";
 import { createDemoMessages } from "./demoMessages";
 import { createDemoMoments } from "./demoMoments";
 import { createDemoSecurity } from "./demoSecurity";
@@ -732,8 +734,10 @@ export const demoSource: DataSource = {
 
   // Push settings for UI work only: no public key, so this device reads "not available" and
   // nothing ever subscribes with a push service. Choices and the device list live in memory.
+  // ?demo=push answers a placeholder key so the opt-in prompt shows (for browser tests that
+  // stand in for the browser's push service; a real browser would refuse the key).
   push: {
-    publicKey: async () => null,
+    publicKey: async () => (scenario === "push" ? `B${"A".repeat(86)}` : null),
     subscribe: () => later(() => undefined),
     touch: async () => true,
     sendTest: () => later(() => "sent" as const),
@@ -751,6 +755,8 @@ export const demoSource: DataSource = {
         Object.assign(demoPushPrefs, Object.fromEntries(Object.entries(p).filter(([, v]) => typeof v === "boolean")));
       }, 200),
   },
+
+  business: createDemoBusiness({ enabled: scenario === "business", viewer: () => viewerFromPerson(people.get("me")!), later }),
 
   profiles: {
     getProfile: (handle, viewerId) =>

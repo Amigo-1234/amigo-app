@@ -985,7 +985,10 @@ export function createSupabaseMessages(
 
     async unsend(viewerId, conversationId, messageId) {
       ownMessage(viewerId, conversationId, messageId);
-      const { error } = await db.rpc("dm_unsend" as never, { p_id: messageId } as never);
+      // The server can't see which file an encrypted message holds; name its photo so it's deleted too.
+      const opened = decrypted.get(messageId);
+      const photo = opened?.ok ? opened.payload["amigo.image"]?.path : undefined;
+      const { error } = await db.rpc("dm_unsend" as never, (photo ? { p_id: messageId, p_media: [photo] } : { p_id: messageId }) as never);
       if (error) fail(error);
       const t = threads.get(conversationId);
       if (t) t.rows = t.rows.filter((r) => r.id !== messageId && r.relates_to !== messageId);

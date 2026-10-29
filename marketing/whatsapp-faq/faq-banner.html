@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Amigo World FAQ</title>
+<style>
+  /* The app's own fonts and brand tokens (src/styles/tokens.css, src/ui/Brand.css). */
+  @font-face {
+    font-family: "Bricolage Grotesque Variable";
+    src: url("../../node_modules/@fontsource-variable/bricolage-grotesque/files/bricolage-grotesque-latin-wght-normal.woff2") format("woff2-variations");
+    font-weight: 200 800;
+  }
+  @font-face {
+    font-family: "Geist Variable";
+    src: url("../../node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2") format("woff2-variations");
+    font-weight: 100 900;
+  }
+  :root {
+    --coral-300: #ff9b83;
+    --coral-400: #ff7a5c;
+    --coral-500: #ff5a3c;
+    --on-accent: #1d0a05;
+    --bg: #0c0c0e;
+    --surface: #131316;
+    --line: rgba(255, 255, 255, 0.09);
+    --text: #f3f1ee;
+    --text-2: #b4b0aa;
+    --text-3: #807c76;
+    --display: "Bricolage Grotesque Variable", "Geist Variable", system-ui, sans-serif;
+    --body: "Geist Variable", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1920px; background: var(--bg); }
+  body {
+    position: relative;
+    overflow: hidden;
+    color: var(--text);
+    font-family: var(--body);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* One quiet light source in brand coral, top right; nothing else decorative. */
+  .glow {
+    position: absolute;
+    top: -420px; right: -360px;
+    width: 1100px; height: 1100px;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(255, 90, 60, 0.22), rgba(255, 90, 60, 0) 70%);
+  }
+  .page {
+    position: relative;
+    height: 100%;
+    padding: 88px 84px 132px; /* bottom kept clear of WhatsApp's reply bar */
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  .brand { display: flex; align-items: center; gap: 18px; }
+  .brand svg { width: 64px; height: 64px; }
+  .brand__name {
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 50px;
+    letter-spacing: -0.045em;
+    font-variation-settings: "wdth" 90;
+    line-height: 1;
+    padding-bottom: 4px;
+  }
+  .brand__world { color: var(--text-3); font-weight: 600; margin-left: 2px; }
+
+  .title {
+    margin-top: 54px;
+    font-family: var(--display);
+    font-weight: 800;
+    font-size: 118px;
+    line-height: 0.9;
+    letter-spacing: -0.04em;
+    font-variation-settings: "wdth" 88;
+    text-transform: uppercase;
+  }
+  .title span { display: block; }
+  .title .faq { color: var(--coral-500); }
+  .tagline {
+    margin-top: 28px;
+    font-size: 37px;
+    line-height: 1.3;
+    font-weight: 500;
+    color: var(--text-2);
+    letter-spacing: -0.01em;
+  }
+  .tagline strong { color: var(--text); font-weight: 600; }
+
+  /* FAQ list: numbered rows on hairlines, no cards */
+  .faq-list { margin-top: 44px; margin-bottom: 40px; list-style: none; border-top: 2px solid var(--line); }
+  .faq-item {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    column-gap: 8px;
+    padding: 25px 0 27px;
+    border-bottom: 2px solid var(--line);
+  }
+  .faq-num {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 34px;
+    line-height: 1.25;
+    color: var(--coral-500);
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .faq-q {
+    text-wrap: balance;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 40px;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    font-variation-settings: "wdth" 92;
+  }
+  .faq-a {
+    margin-top: 9px;
+    font-size: 30px;
+    line-height: 1.4;
+    color: var(--text-2);
+    letter-spacing: -0.005em;
+  }
+
+  /* Message + footer */
+  .message {
+    text-wrap: balance;
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 38px;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  .message::before {
+    content: "";
+    flex: none;
+    width: 8px;
+    align-self: stretch;
+    border-radius: 4px;
+    background: var(--coral-500);
+  }
+  .footer {
+    margin-top: 34px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 26px;
+    color: var(--text-3);
+    letter-spacing: 0.01em;
+  }
+  .soon {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--coral-300);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 24px;
+  }
+  .soon::before {
+    content: "";
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--coral-500);
+    box-shadow: 0 0 0 6px rgba(255, 90, 60, 0.18);
+  }
+</style>
+</head>
+<body>
+  <div class="glow" aria-hidden="true"></div>
+  <main class="page">
+    <header class="brand">
+      <!-- The Amigo mark, as in src/ui/Brand.tsx -->
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <path d="M9 0h14a9 9 0 0 1 9 9v14a9 9 0 0 1-9 9H3a3 3 0 0 1-3-3V9a9 9 0 0 1 9-9z" fill="#ff5a3c" />
+        <circle cx="14.6" cy="17.2" r="5.6" fill="none" stroke="#1d0a05" stroke-width="3.2" />
+        <rect x="19.6" y="10" width="3.3" height="13" rx="1.65" fill="#1d0a05" />
+      </svg>
+      <span class="brand__name">amigo<span class="brand__world"> world</span></span>
+    </header>
+
+    <h1 class="title"><span>Amigo World</span><span class="faq">FAQ</span></h1>
+    <p class="tagline">More than connection. <strong>A community that supports.</strong></p>
+
+    <ol class="faq-list">
+      <li class="faq-item">
+        <span class="faq-num">01</span>
+        <div>
+          <h2 class="faq-q">Why Amigo World instead of other social media?</h2>
+          <p class="faq-a">Because social media should be about more than connecting. It's about supporting each other, sharing experiences and building real community.</p>
+        </div>
+      </li>
+      <li class="faq-item">
+        <span class="faq-num">02</span>
+        <div>
+          <h2 class="faq-q">What can I do on Amigo World?</h2>
+          <p class="faq-a">Share posts and Moments, chat privately, discover people and take part in Worlds.</p>
+        </div>
+      </li>
+      <li class="faq-item">
+        <span class="faq-num">03</span>
+        <div>
+          <h2 class="faq-q">What makes Amigo World different?</h2>
+          <p class="faq-a">We're building around meaningful interactions, shared experiences and communities — not endless scrolling.</p>
+        </div>
+      </li>
+      <li class="faq-item">
+        <span class="faq-num">04</span>
+        <div>
+          <h2 class="faq-q">How can I connect with people?</h2>
+          <p class="faq-a">Share what matters to you, join conversations, discover people with common interests and take part in Worlds.</p>
+        </div>
+      </li>
+      <li class="faq-item">
+        <span class="faq-num">05</span>
+        <div>
+          <h2 class="faq-q">What's the idea behind Amigo World?</h2>
+          <p class="faq-a">A social space where people can share, belong, grow together and support one another.</p>
+        </div>
+      </li>
+    </ol>
+
+    <p class="message">A platform to support each other, not just connect.</p>
+    <footer class="footer">
+      <span class="soon">Coming soon</span>
+      <span>amigoworld.com.ng</span>
+    </footer>
+  </main>
+</body>
+</html>

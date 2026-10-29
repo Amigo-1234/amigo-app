@@ -34,6 +34,8 @@ export type PostRow = {
   liked?: boolean;
   world?: { slug: string; title: string } | null;
   author: ProfileRow | null;
+  /** Set on business posts (author is then null): the business, never its owner. */
+  business?: { id: string; handle: string; name: string; logo_url: string | null } | null;
   media: MediaRow[];
   parent?: { id: string; author: { username: string } | null } | null;
 };
@@ -58,6 +60,14 @@ export function enablePostTools() {
   inlineLikes = true;
   MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 }
+
+/** Backends with migration 20261028130000: business posts carry their business (and no author). */
+export function enableBusinessPosts() {
+  POST_SELECT += ", business:businesses!posts_business_id_fkey(id, handle, name, logo_url)";
+  MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
+}
+
+const toBusinessAuthor = (b: NonNullable<PostRow["business"]>) => ({ id: b.id, name: b.name, handle: b.handle, avatarUrl: b.logo_url, business: true });
 
 // ------------------------------------------------------------------ mapping
 
@@ -90,7 +100,7 @@ export function toPost(db: Db, row: PostRow, liked: Set<string>): Post {
   return {
     replyTo: row.parent?.author ? { postId: row.parent.id, handle: row.parent.author.username } : null,
     id: row.id,
-    author: toAuthor(row.author),
+    author: row.business ? toBusinessAuthor(row.business) : toAuthor(row.author),
     text: row.body,
     media: toMedia(db, row.media ?? []),
     createdAt: new Date(row.created_at),

@@ -418,6 +418,18 @@
   color: var(--text-3);
 }
 
+/* "Business" on posts signed by a business page. */
+.post__business {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
 .action--save.is-active {
   color: var(--text);
 }

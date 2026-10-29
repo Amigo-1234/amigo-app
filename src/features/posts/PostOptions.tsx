@@ -8,6 +8,7 @@ import { Button, IconButton } from "../../ui/Button";
 import { Sheet } from "../../ui/Sheet";
 import { REPORT_REASONS } from "../reports/reasons";
 import { publicUrl } from "../../lib/publicUrl";
+import { businessApi, businessPostsChanged, useMyBusiness } from "../business/useMyBusiness";
 
 /** Optimistic bookmark toggle (backends with post tools only). */
 export function useBookmark(post: Post) {
@@ -43,7 +44,12 @@ export function PostOptions({ post, focus }: { post: Post; focus: boolean }) {
   const tools = dataSource.postTools;
   const bookmark = useBookmark(post);
   const [sheet, setSheet] = useState<Sheet_>(null);
-  const mine = post.author.id === viewer.id;
+  // Business posts: only the business's owner may delete them (never edit); nobody blocks a business.
+  const business = !!post.author.business;
+  const ownBusiness = useMyBusiness().state?.business?.id;
+  const ownsBusinessPost = business && !!businessApi && ownBusiness === post.author.id;
+  const mine = !business && post.author.id === viewer.id;
+  const canDelete = (tools && mine) || ownsBusinessPost;
   const close = () => setSheet(null);
 
   const copyLink = async () => {
@@ -83,17 +89,17 @@ export function PostOptions({ post, focus }: { post: Post; focus: boolean }) {
               <Pencil size={20} aria-hidden="true" /> Edit
             </button>
           )}
-          {tools && mine && (
+          {canDelete && (
             <button className="sheet-menu__item sheet-menu__item--danger" onClick={() => setSheet("delete")}>
               <Trash2 size={20} aria-hidden="true" /> Delete
             </button>
           )}
-          {tools && !mine && (
+          {tools && !mine && !ownsBusinessPost && (
             <button className="sheet-menu__item sheet-menu__item--danger" onClick={() => setSheet("report")}>
               <Flag size={20} aria-hidden="true" /> Report {post.replyTo ? "reply" : "post"}
             </button>
           )}
-          {dataSource.blocking && !mine && (
+          {dataSource.blocking && !mine && !business && (
             <button className="sheet-menu__item sheet-menu__item--danger" onClick={() => setSheet("block")}>
               <Ban size={20} aria-hidden="true" /> Block @{post.author.handle}
             </button>
@@ -127,7 +133,10 @@ export function PostOptions({ post, focus }: { post: Post; focus: boolean }) {
           onCancel={close}
           onConfirm={async () => {
             try {
-              await tools!.remove(viewer.id, post.id);
+              if (ownsBusinessPost) {
+                await businessApi!.deletePost(post.id);
+                businessPostsChanged();
+              } else await tools!.remove(viewer.id, post.id);
               toast("Post deleted");
               close();
               if (focus) navigate("/", { replace: true });

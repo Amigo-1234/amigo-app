@@ -8,7 +8,8 @@ import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { FeedFooter } from "../features/feed/FeedFooter";
 import { MomentsRow } from "../features/moments/MomentsRow";
-import { WelcomeCard } from "../features/onboarding/WelcomeCard";
+import { isWelcomeDismissed, WelcomeCard } from "../features/onboarding/WelcomeCard";
+import { PushPrompt } from "../features/notifications/PushPrompt";
 import { messagesInBottomBar } from "../shell/nav";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useComposer } from "../state/composer";
@@ -41,6 +42,7 @@ export default function HomeScreen() {
   // Optimistic posts, until the real post shows up in the feed.
   const feedIds = new Set(feed.posts.map((p) => p.id));
   const pending = publishing.pending.filter((p) => !(p.status === "sent" && p.postId && feedIds.has(p.postId)));
+  const hasOwnPosts = pending.length > 0 || feed.posts.some((p) => p.author.id === viewer.id);
 
   const setTab = (t: FeedTab) => {
     setParams(t === "latest" ? {} : { tab: t }, { replace: true });
@@ -96,8 +98,10 @@ export default function HomeScreen() {
 
       {momentsEnabled && <MomentsRow />}
       {feed.followingCount !== null && (
-        <WelcomeCard followingCount={feed.followingCount} hasOwnPosts={pending.length > 0 || feed.posts.some((p) => p.author.id === viewer.id)} />
+        <WelcomeCard followingCount={feed.followingCount} hasOwnPosts={hasOwnPosts} />
       )}
+      {/* The notification opt-in waits until the welcome is skipped or you've posted, so it never greets a brand-new account. */}
+      {(isWelcomeDismissed(viewer.id) || hasOwnPosts) && <PushPrompt />}
 
       <div className="home-composer">
         <Composer variant="inline" />

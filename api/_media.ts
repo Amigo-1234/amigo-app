@@ -27,8 +27,12 @@ export function r2(): R2 | null {
   };
 }
 
-/** Keys are made by media_begin_upload: "<uuid>/<purpose>/[<uuid>/]<hex>.<ext>" (smaller copies: "<hex>-sm.<ext>", media_begin_variant). */
-export const KEY = /^[0-9a-f-]{36}\/(avatar|post|moment|dm)\/(?:[0-9a-f-]{36}\/)?[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif|mp4|webm|mov|bin)$/;
+/**
+ * Keys are made by media_begin_upload: "<uuid>/<purpose>/[<uuid>/]<hex>.<ext>", or for a business
+ * "b/<business>/<purpose>/<hex>.<ext>" (smaller copies: "<hex>-sm.<ext>", media_begin_variant).
+ */
+export const KEY =
+  /^(?:[0-9a-f-]{36}\/(avatar|post|moment|dm)\/(?:[0-9a-f-]{36}\/)?|b\/[0-9a-f-]{36}\/(business_logo|business_cover|business_post)\/)[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif|mp4|webm|mov|bin)$/;
 
 const objectUrl = (s: R2, key: string) => `${s.base}/${key.split("/").map(encodeURIComponent).join("/")}`;
 
@@ -68,6 +72,19 @@ export async function presignRead(s: R2, key: string, now = Date.now()) {
 
 /** One attempt (aws4fetch would retry a failure up to 10 times, holding up the upload it runs beside); the cleanup queue retries later. */
 export const remove = async (s: R2, key: string) => fetch(await s.client.sign(objectUrl(s, key), { method: "DELETE" }));
+
+export type Leased = { item_id: number | string; item_path: string; claim: string };
+
+/** Deletes leased queue items from the bucket; answers the ones confirmed gone (deleted now, or already gone after a crash). */
+export async function deleteLeased(s: R2, items: Leased[]) {
+  const done = await Promise.all(
+    items.map(async (q) => {
+      const res = await remove(s, q.item_path).catch(() => null);
+      return res && (res.ok || res.status === 404) ? { id: Number(q.item_id), claim: q.claim } : null;
+    }),
+  );
+  return done.filter((d) => d !== null);
+}
 
 /** Calls a Postgres function through the Data API as the person holding `token`. */
 export async function rpc<T>(token: string, fn: string, args: Record<string, unknown>): Promise<{ ok: true; data: T } | { ok: false; status: number; code?: string; message?: string }> {

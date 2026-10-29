@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useSearchParams } from "react-router";
-import { CircleAlert, Clock, Compass, SearchX, X } from "lucide-react";
+import { Link, useSearchParams } from "react-router";
+import { ChevronRight, CircleAlert, Clock, Compass, SearchX, Store, X } from "lucide-react";
 import type { Post, SearchTab } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
 import { addRecentSearch, clearRecentSearches, removeRecentSearch, useRecentSearches } from "../features/explore/recentSearches";
 import { SearchField } from "../features/explore/SearchField";
 import { useExploreFeed, useSearch } from "../features/explore/useSearch";
+import { useMyBusiness } from "../features/business/useMyBusiness";
 import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { MediaGrid } from "../features/profile/MediaGrid";
@@ -120,9 +121,17 @@ export default function ExploreScreen() {
 function ExploreHome({ onPickRecent }: { onPickRecent: (q: string) => void }) {
   const recent = useRecentSearches();
   const { state, retry } = useExploreFeed();
+  const businesses = useMyBusiness().state?.enabled;
 
   return (
     <>
+      {businesses && (
+        <Link to="/business" className="recent-item__main explore-business-link">
+          <Store size={18} aria-hidden="true" />
+          <span>Find businesses</span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </Link>
+      )}
       {recent.length > 0 && (
         <Section
           title="Recent searches"

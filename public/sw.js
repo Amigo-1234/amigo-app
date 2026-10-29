@@ -59,7 +59,7 @@ self.addEventListener("fetch", (event) => {
 const MAX_ENTRIES = 300;
 const MAX_ENTRY_BYTES = 4 * 1024 * 1024;
 const DAY = 24 * 3600 * 1000;
-const PHOTO_PATH = /^\/[^/]+\/[0-9a-f-]{36}\/(avatar|post|moment)\/(?:[0-9a-f-]{36}\/)?[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif)$/;
+const PHOTO_PATH = /^\/[^/]+\/(?:[0-9a-f-]{36}\/(avatar|post|moment)\/(?:[0-9a-f-]{36}\/)?|b\/[0-9a-f-]{36}\/business_(?:logo|cover|post)\/)[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif)$/;
 
 function isCacheablePhoto(req) {
   if (req.method !== "GET") return false;

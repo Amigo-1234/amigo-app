@@ -16,6 +16,7 @@ import { isNeon, supabase } from "./supabase/client";
 import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
+import { createBusinessApi } from "./supabase/business";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPushApi } from "./supabase/push";
 import * as worldsExtra from "./supabase/worldsExtra";
@@ -414,6 +415,9 @@ if (isNeon) {
   q.enableNotificationRequests();
 }
 const moderation = isNeon ? createModeration(supabase, invalidate) : null;
+// Business profiles need migration 20261028130000 and the media service (logos, covers, photos).
+if (isNeon && media) q.enableBusinessPosts();
+const business = isNeon && media ? createBusinessApi(supabase, media, invalidate) : undefined;
 
 export const supabaseSource: DataSource = {
   kind: isNeon ? "neon" : "supabase",
@@ -692,7 +696,14 @@ export const supabaseSource: DataSource = {
     pushActivity();
   },
 
-  getFollowingIds: (viewerId) => q.fetchFollowingIds(supabase, viewerId),
+  // People and businesses you follow (the Following feed shows both).
+  getFollowingIds: async (viewerId) => {
+    const [people, businesses] = await Promise.all([
+      q.fetchFollowingIds(supabase, viewerId),
+      business ? business.followedIds().catch(() => new Set<string>()) : new Set<string>(),
+    ]);
+    return new Set([...people, ...businesses]);
+  },
   getPeopleSuggestions: (viewerId, max) => q.fetchSuggestions(supabase, viewerId, max),
 
   async follow(viewerId, targetId) {
@@ -886,6 +897,7 @@ export const supabaseSource: DataSource = {
   // End-to-end encrypted; the crypto library loads on first use.
   messages: createSupabaseMessages(supabase, liveQuery, invalidate, { realtime: !isNeon, media, onSent: isNeon ? pushNewMessage : undefined }),
   push: isNeon ? push : undefined,
+  business,
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {

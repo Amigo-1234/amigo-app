@@ -70,7 +70,9 @@ export const PostCard = memo(function PostCard({
   const longText = collapsible && !expanded;
   const text = longText ? shorten(post.text, COLLAPSE_AT) : post.text;
   const nameId = `post-${post.id}-author`;
-  const authorHref = profileHref(post.author.handle);
+  // A business post is signed by the business (who runs it isn't shown) and links to its page.
+  const business = !!post.author.business;
+  const authorHref = business ? `/b/${post.author.handle}` : profileHref(post.author.handle);
   const replyToHref = post.replyTo ? profileHref(post.replyTo.handle) : null;
 
   const onCardClick = (e: MouseEvent<HTMLElement>) => {
@@ -108,7 +110,13 @@ export const PostCard = memo(function PostCard({
             </span>
           )}
           <span className="post__meta">
-            <span className="post__handle">@{post.author.handle}</span>
+            {business ? (
+              <span className="post__handle">
+                <span className="post__business">Business</span> /b/{post.author.handle}
+              </span>
+            ) : (
+              <span className="post__handle">@{post.author.handle}</span>
+            )}
             {!focus && !pending && (
               <>
                 <span aria-hidden="true"> · </span>

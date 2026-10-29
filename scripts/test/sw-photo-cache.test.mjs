@@ -88,6 +88,16 @@ r = await get(`${photo("post")}`);
 ok("unsigned requests aren't handled", !r.handled);
 r = await get(`https://elsewhere.example.com/${owner}/post/${"c".repeat(32)}.jpg?${amz(1)}`);
 ok("other hosts aren't handled", !r.handled);
+network.length = 0;
+for (const kind of ["business_logo", "business_cover", "business_post"]) {
+  r = await get(`${R2}/b/${owner}/${kind}/${"7".repeat(32)}.webp?${amz(1)}`);
+  ok(`business photos are handled (${kind})`, r.handled && r.res.ok);
+}
+r = await get(`${R2}/b/${owner}/business_other/${"7".repeat(32)}.webp?${amz(1)}`);
+ok("…but not other business paths", !r.handled);
+// Leave the cache as the tests below expect it.
+await caches.open("amigo-media-v1").then(async (c) => { for (const k of await c.keys()) if (k.url.includes("/b/")) await c.delete(k); });
+network.length = 0;
 
 respond = () => new Response("<html>", { status: 200, headers: { "content-type": "text/html" } });
 await get(`${photo("post", "d".repeat(32))}?${amz(1)}`);

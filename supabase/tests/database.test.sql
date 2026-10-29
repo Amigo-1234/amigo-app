@@ -968,6 +968,356 @@ select pg_temp.check('cleanup queue: after 10 attempts it is left for a person t
 delete from public.media_cleanup_queue where reason = 'test';
 delete from public.push_server;
 
+-- Media release (20261028120000): deleted posts, takedowns kept for review, unsend, expired
+-- Moments, old 'moment-media' rows, unused uploads, and the daily clean-up's own role.
+create temp table mr (k text primary key, v text);
+create function pg_temp.mr_file(p_key text, p_owner uuid, p_purpose text, p_status text default 'attached', p_conv uuid default null, p_age interval default '0') returns text language sql as $$
+  insert into public.media_objects (path, owner_id, purpose, conversation_id, mime, byte_size, status, created_at)
+  values (p_owner || '/' || p_purpose || '/' || coalesce(p_conv || '/', '') || md5(p_key) || case when p_purpose = 'dm' then '.bin' else '.jpg' end,
+          p_owner, p_purpose, p_conv, case when p_purpose = 'dm' then 'application/octet-stream' else 'image/jpeg' end, 100, p_status, now() - p_age)
+  returning path $$;
+create function pg_temp.mr_post(p_key text, p_author uuid) returns uuid language plpgsql as $$
+declare id uuid; f text;
+begin
+  insert into public.posts (author_id, body) values (p_author, 'media release ' || p_key) returning posts.id into id;
+  f := pg_temp.mr_file(p_key, p_author, 'post');
+  insert into public.post_media (post_id, owner_id, kind, storage_path, mime_type) values (id, p_author, 'image', f, 'image/jpeg');
+  insert into mr values (p_key, id::text), (p_key || ':file', f);
+  return id;
+end $$;
+create function pg_temp.queued(p_path text) returns bigint language sql as $$
+  select count(*) from public.media_cleanup_queue where bucket = 'r2' and path = p_path $$;
+create function pg_temp.mrv(p_key text) returns text language sql as $$ select v from mr where k = p_key $$;
+-- Runs p_sql as the daily clean-up's role; returns the result, or the error code.
+create function pg_temp.as_janitor(p_sql text) returns text language plpgsql as $$
+declare r text;
+begin
+  perform set_config('role', 'media_janitor', true);
+  begin
+    execute p_sql into r;
+  exception when others then r := 'ERR:' || sqlstate;
+  end;
+  perform pg_temp.act_as_admin();
+  return r;
+end $$;
+
+-- Deleted posts
+select pg_temp.mr_post('p1', :A);
+insert into public.media_objects (path, owner_id, purpose, mime, byte_size, status, variant_of)
+values (regexp_replace(pg_temp.mrv('p1:file'), '\.jpg$', '-sm.jpg'), :A, 'post', 'image/jpeg', 50, 'attached', pg_temp.mrv('p1:file'));
+select pg_temp.q(:A, format('select public.delete_post(%L)::text', pg_temp.mrv('p1')));
+select pg_temp.check('deleting a post releases its photo and its smaller copy (both queued once)',
+  pg_temp.queued(pg_temp.mrv('p1:file')) = 1 and pg_temp.queued(regexp_replace(pg_temp.mrv('p1:file'), '\.jpg$', '-sm.jpg')) = 1
+  and not exists (select 1 from public.media_objects where path like left(pg_temp.mrv('p1:file'), -4) || '%'));
+select pg_temp.must_fail('deleting it again is refused (nothing queued twice)', :A, format('select public.delete_post(%L)', pg_temp.mrv('p1')), 'P0002');
+select pg_temp.check('…still queued once', pg_temp.queued(pg_temp.mrv('p1:file')) = 1);
+select pg_temp.mr_post('p2', :A);
+select pg_temp.must_fail('someone else can''t delete your post', :B, format('select public.delete_post(%L)', pg_temp.mrv('p2')), 'P0002');
+select pg_temp.check('…and its photo stays', pg_temp.queued(pg_temp.mrv('p2:file')) = 0 and exists (select 1 from public.media_objects where path = pg_temp.mrv('p2:file')));
+
+-- Admin takedowns: kept for review, then released
+select pg_temp.mr_post('p3', :A);
+select pg_temp.q(:D, format('select public.admin_remove_post(%L, ''test'')::text', pg_temp.mrv('p3')));
+select pg_temp.check('a takedown keeps the photo and records when',
+  pg_temp.queued(pg_temp.mrv('p3:file')) = 0 and exists (select 1 from public.media_objects where path = pg_temp.mrv('p3:file'))
+  and (select taken_down_at is not null and deleted_at is not null from public.posts where id = pg_temp.mrv('p3')::uuid));
+select pg_temp.check('admins can see a taken-down photo; other people can''t',
+  pg_temp.q(:D, format('select public.media_can_read(%L)::text', pg_temp.mrv('p3:file'))) = 'true'
+  and pg_temp.q(:B, format('select public.media_can_read(%L)::text', pg_temp.mrv('p3:file'))) = 'false');
+select pg_temp.check('an author-deleted post''s photo isn''t readable by admins (it''s gone)',
+  pg_temp.q(:D, format('select public.media_can_read(%L)::text', pg_temp.mrv('p1:file'))) = 'false');
+select public.media_release_due(50);
+select pg_temp.check('within the retention period nothing is released', pg_temp.queued(pg_temp.mrv('p3:file')) = 0);
+update public.posts set taken_down_at = now() - public.media_takedown_retention() - interval '1 day' where id = pg_temp.mrv('p3')::uuid;
+insert into public.content_reports (reporter_id, target_type, target_id, reason) values (:B, 'post', pg_temp.mrv('p3')::uuid, 'spam');
+select public.media_release_due(50);
+select pg_temp.check('past retention, an open report keeps it', pg_temp.queued(pg_temp.mrv('p3:file')) = 0);
+update public.content_reports set status = 'reviewed' where target_id = pg_temp.mrv('p3')::uuid;
+select pg_temp.must_fail('only admins can hold removed media', :B, format('select public.admin_set_removed_media_hold(%L, ''appeal'')', pg_temp.mrv('p3')), '42501');
+select pg_temp.must_fail('…and only on a taken-down post', :D, format('select public.admin_set_removed_media_hold(%L, ''appeal'')', pg_temp.mrv('p2')), 'SP005');
+select pg_temp.q(:D, format('select public.admin_set_removed_media_hold(%L, ''appeal in progress'')::text', pg_temp.mrv('p3')));
+select public.media_release_due(50);
+select pg_temp.check('a hold keeps it past retention', pg_temp.queued(pg_temp.mrv('p3:file')) = 0);
+select pg_temp.q(:D, format('select public.admin_set_removed_media_hold(%L, '''')::text', pg_temp.mrv('p3')));
+select pg_temp.check('placing and lifting a hold are both audit-logged',
+  (select count(*) = 2 from public.admin_audit_log where target_id = pg_temp.mrv('p3')::uuid and action in ('post.media_hold', 'post.media_hold_released')));
+select public.media_release_due(50);
+select pg_temp.check('with no hold and no open report, it''s released after retention', pg_temp.queued(pg_temp.mrv('p3:file')) = 1);
+
+-- Unsend
+insert into mr values ('conv2', pg_temp.q(:A, $$select public.dm_open('00000000-0000-0000-0000-00000000000c')$$));
+insert into mr values
+  ('fa', pg_temp.mr_file('fa', :A, 'dm', 'pending', (select v::uuid from dm_t where k = 'conv'))),
+  ('fb', pg_temp.mr_file('fb', :B, 'dm', 'pending', (select v::uuid from dm_t where k = 'conv'))),
+  ('fc', pg_temp.mr_file('fc', :A, 'dm', 'pending', pg_temp.mrv('conv2')::uuid));
+insert into mr values ('m5', pg_temp.q(:A, format($$select id::text from public.dm_send_v3('00000000-0000-0000-0000-0000000005a1', %L, 'AAA3', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv'))));
+select pg_temp.must_fail('someone else can''t unsend your message (nothing released)', :B,
+  format('select public.dm_unsend(%L, %L)', pg_temp.mrv('m5'), array[pg_temp.mrv('fa')]), 'DM006');
+select pg_temp.check('…the photo is still there', pg_temp.queued(pg_temp.mrv('fa')) = 0);
+select pg_temp.q(:A, format('select public.dm_unsend(%L, %L)::text', pg_temp.mrv('m5'), array[pg_temp.mrv('fa'), pg_temp.mrv('fb'), pg_temp.mrv('fc'), 'not/a/file.bin']));
+select pg_temp.check('unsend releases only your own photo in that conversation',
+  pg_temp.queued(pg_temp.mrv('fa')) = 1 and pg_temp.queued(pg_temp.mrv('fb')) = 0 and pg_temp.queued(pg_temp.mrv('fc')) = 0
+  and exists (select 1 from public.media_objects where path = pg_temp.mrv('fb')) and exists (select 1 from public.media_objects where path = pg_temp.mrv('fc')));
+insert into mr values ('m6', pg_temp.q(:A, format($$select id::text from public.dm_send_v3('00000000-0000-0000-0000-0000000005a2', %L, 'AAA3', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv'))));
+select pg_temp.q(:A, format('select public.dm_unsend(%L)::text', pg_temp.mrv('m6')));
+select pg_temp.check('an older app''s unsend (no photo list) still works', not exists (select 1 from public.dm_messages where id = pg_temp.mrv('m6')::uuid));
+insert into mr select 'many' || g, pg_temp.mr_file('many' || g, :A, 'dm', 'pending', (select v::uuid from dm_t where k = 'conv')) from generate_series(1, 11) g;
+insert into mr values ('m7', pg_temp.q(:A, format($$select id::text from public.dm_send_v3('00000000-0000-0000-0000-0000000005a3', %L, 'AAA3', '{"algorithm":"m.megolm.v1.aes-sha2","ciphertext":"x","session_id":"s"}')$$, (select v from dm_t where k = 'conv'))));
+select pg_temp.q(:A, format('select public.dm_unsend(%L, %L)::text', pg_temp.mrv('m7'), (select array_agg(v order by k) from mr where k like 'many%')));
+select pg_temp.check('at most 10 photos per unsend', (select count(*) = 10 from mr where k like 'many%' and pg_temp.queued(v) = 1));
+
+-- Expired Moments and old 'moment-media' rows
+insert into mr values ('mo', pg_temp.mr_file('mo', :B, 'moment'));
+insert into public.moments (author_id, media_path, created_at, expires_at) values (:B, pg_temp.mrv('mo'), now() - interval '26 hours', now() - interval '2 hours');
+select pg_temp.check('an expired Moment''s photo is queued once, as r2, and no moment-media row is written',
+  pg_temp.queued(pg_temp.mrv('mo')) = 1 and not exists (select 1 from public.media_cleanup_queue where bucket = 'moment-media' and path = pg_temp.mrv('mo')));
+insert into mr values ('kept', pg_temp.mr_file('kept', :B, 'moment'));
+insert into public.media_cleanup_queue (bucket, path, reason) values
+  ('moment-media', :B || '/moment/' || md5('legacy-unused') || '.jpg', 'moment expired'),
+  ('moment-media', pg_temp.mrv('kept'), 'moment expired'),
+  ('moment-media', 'some/other/legacy.jpg', 'moment expired');
+insert into mr values ('legacy', (select public.media_requeue_legacy_moment_media()::text));
+select pg_temp.check('requeue moves only R2 Moment keys no longer in use; leaves the rest',
+  pg_temp.queued(:B || '/moment/' || md5('legacy-unused') || '.jpg') = 1
+  and exists (select 1 from public.media_cleanup_queue where bucket = 'moment-media' and path = pg_temp.mrv('kept'))
+  and exists (select 1 from public.media_cleanup_queue where bucket = 'moment-media' and path = 'some/other/legacy.jpg')
+  and (pg_temp.mrv('legacy')::jsonb ->> 'moved')::int = 1);
+
+-- Unused uploads
+insert into mr values
+  ('stale', pg_temp.mr_file('stale', :C, 'post', 'pending', null, '2 days')),
+  ('fresh', pg_temp.mr_file('fresh', :C, 'post', 'pending', null, '1 hour')),
+  ('olddm', pg_temp.mr_file('olddm', :A, 'dm', 'pending', (select v::uuid from dm_t where k = 'conv'), '2 days')),
+  ('oldused', pg_temp.mr_file('oldused', :C, 'avatar', 'attached', null, '2 days'));
+select public.media_release_due(50);
+select pg_temp.check('unused uploads over a day old are released for anyone; fresh, message and attached files stay',
+  pg_temp.queued(pg_temp.mrv('stale')) = 1 and pg_temp.queued(pg_temp.mrv('fresh')) = 0
+  and pg_temp.queued(pg_temp.mrv('olddm')) = 0 and pg_temp.queued(pg_temp.mrv('oldused')) = 0);
+
+-- The daily clean-up's role, and sharing leases with the upload route
+select pg_temp.check('the clean-up role can release what''s due', pg_temp.as_janitor('select public.media_janitor_release()::text') like '{%');
+select pg_temp.check('…but can''t read the queue or the registry',
+  pg_temp.as_janitor('select count(*)::text from public.media_cleanup_queue') = 'ERR:42501'
+  and pg_temp.as_janitor('select count(*)::text from public.media_objects') = 'ERR:42501');
+select pg_temp.check('…nor call the internal functions or anything else',
+  pg_temp.as_janitor('select count(*)::text from public.media_cleanup_lease(5)') = 'ERR:42501'
+  and pg_temp.as_janitor('select public.media_release_due(5)::text') = 'ERR:42501'
+  and pg_temp.as_janitor($$select public.delete_post('00000000-0000-0000-0000-000000000000')::text$$) = 'ERR:42501'
+  and pg_temp.as_janitor('select public.media_requeue_legacy_moment_media()::text') = 'ERR:42501');
+select pg_temp.must_fail('signed-in people can''t run the clean-up', :A, 'select public.media_janitor_take(5)', '42501');
+select pg_temp.must_fail('…nor release what''s due', :A, 'select public.media_janitor_release()', '42501');
+select pg_temp.must_fail('…nor confirm', :A, $$select public.media_janitor_done('[]')$$, '42501');
+select pg_temp.must_fail('signed out: neither', null, 'select public.media_janitor_take(5)', '42501');
+select pg_temp.must_fail('the internal release is not callable by users', :D, 'select public.media_release_due(5)', '42501');
+select pg_temp.must_fail('…nor the requeue', :D, 'select public.media_requeue_legacy_moment_media()', '42501');
+create temp table jl (item_id bigint, item_path text, claim uuid);
+insert into jl select * from public.media_janitor_take(20);
+select pg_temp.check('the clean-up leases queued files', (select count(*) >= 1 from jl));
+insert into public.push_server (key_hash) values (encode(sha256(convert_to('test-server-secret', 'UTF8')), 'hex'))
+  on conflict (id) do update set key_hash = excluded.key_hash;
+select pg_temp.check('the upload route doesn''t get files the clean-up has leased',
+  not exists (select 1 from public.media_cleanup_take('test-server-secret', 20) t join jl on jl.item_id = t.item_id));
+select pg_temp.check('a delete that failed (not confirmed) stays queued, then comes back after the lease',
+  (select count(*) from public.media_janitor_take(20) t join jl on jl.item_id = t.item_id) = 0);
+update public.media_cleanup_queue set claimed_at = now() - interval '11 minutes' where id in (select item_id from jl);
+create temp table jl2 as select * from public.media_janitor_take(20);
+select pg_temp.check('…counting the attempt', (select count(*) = (select count(*) from jl) from jl2 join jl using (item_id))
+  and (select bool_and(q.attempts = 2) from public.media_cleanup_queue q join jl on q.id = jl.item_id));
+select pg_temp.check('confirming with the current lease removes them',
+  public.media_janitor_done((select jsonb_agg(jsonb_build_object('id', item_id, 'claim', claim)) from (select * from jl2 limit 20) x)) >= 1);
+select pg_temp.check('a stale lease confirms nothing',
+  public.media_janitor_done((select jsonb_agg(jsonb_build_object('id', item_id, 'claim', claim)) from (select * from jl limit 20) x)) = 0);
+delete from public.push_server;
+
+-- Business profiles (20261028130000). A runs a business; B and C are other people; D is an admin.
+create temp table bz (k text primary key, v text);
+grant all on bz to authenticated, anon;
+create function pg_temp.bzv(p_key text) returns text language sql as $$ select v from bz where k = p_key $$;
+update auth.users set email_confirmed_at = now() where id in (:A, :C);
+
+-- Off until an admin turns it on
+select pg_temp.must_fail('business: off by default', :A, $$select public.create_business('acme_shop', 'Acme Shop', 'retail')$$, 'BZ001');
+select pg_temp.must_fail('business: only admins turn it on', :A, $$select public.admin_set_businesses_enabled(true)$$, '42501');
+select pg_temp.q(:D, $$select public.admin_set_businesses_enabled(true)::text$$);
+
+-- Eligibility, one each, handle and name rules, rate limit
+select pg_temp.must_fail('business: an unverified email can''t create one', :B, $$select public.create_business('bee_shop', 'Bee', 'retail')$$, 'BZ001');
+insert into public.account_suspensions (user_id, reason) values (:C, 'test');
+select pg_temp.must_fail('business: a suspended account can''t create one', :C, $$select public.create_business('cee_shop', 'Cee', 'retail')$$, 'BZ001');
+delete from public.account_suspensions where user_id = :C;
+select pg_temp.must_fail('business: reserved handles refused', :A, $$select public.create_business('admin', 'Acme', 'retail')$$, 'BZ002');
+select pg_temp.must_fail('business: badly formed handles refused', :A, $$select public.create_business('A!', 'Acme', 'retail')$$, 'BZ002');
+select pg_temp.must_fail('business: names can''t claim to be Amigo', :A, $$select public.create_business('acme_shop', 'Official Amigo Store', 'retail')$$, 'BZ003');
+select pg_temp.must_fail('business: unknown category refused', :A, $$select public.create_business('acme_shop', 'Acme', 'casino')$$, '22023');
+select pg_temp.must_fail('business: website must be https', :A, $$select public.create_business('acme_shop', 'Acme', 'retail', '', 'http://acme.test')$$, '22023');
+insert into bz values ('biz', pg_temp.q(:A, $$select public.create_business('Acme_Shop', 'Acme Shop', 'retail', 'Good things', 'https://acme.example.com', 'Hello@Acme.example.com', '+234 801 234 5678')::text$$));
+select pg_temp.check('business: a verified person creates one (handle lower-cased, email lower-cased)',
+  (select handle = 'acme_shop' and contact_email = 'hello@acme.example.com' and owner_id = :A from public.businesses where id = pg_temp.bzv('biz')::uuid));
+select pg_temp.must_fail('business: one per person', :A, $$select public.create_business('acme_two', 'Acme Two', 'retail')$$, 'BZ006');
+select pg_temp.must_fail('business: handles are unique', :C, $$select public.create_business('acme_shop', 'Copy', 'retail')$$, 'BZ002');
+select pg_temp.check('business: a handle may match a personal username (separate /b/ space)',
+  pg_temp.q(:C, format('select public.create_business(%L, %L, %L)::text', (select username from public.profiles where id = :B), 'Leo Things', 'other')) is not null);
+select pg_temp.q(:C, $$select public.delete_business()::text$$);
+select pg_temp.q(:C, $$select public.create_business('cee_one', 'Cee', 'other')::text$$);
+select pg_temp.q(:C, $$select public.delete_business()::text$$);
+select pg_temp.q(:C, $$select public.create_business('cee_two', 'Cee', 'other')::text$$);
+select pg_temp.q(:C, $$select public.delete_business()::text$$);
+select pg_temp.must_fail('business: at most 3 created a day', :C, $$select public.create_business('cee_three', 'Cee', 'other')$$, 'RL001');
+
+-- Editing (owner only), the 30-day handle rule
+select pg_temp.q(:A, $$select public.update_business('Acme Shop & Co', 'food_drink', 'Fresh', 'https://acme.example.com', null, null)::text$$);
+select pg_temp.check('business: the owner edits it', (select name = 'Acme Shop & Co' and category = 'food_drink' and contact_email is null from public.businesses where id = pg_temp.bzv('biz')::uuid));
+select pg_temp.must_fail('business: a handle change within 30 days is refused', :A,
+  $$select public.update_business('Acme', 'retail', '', null, null, null, 'acme_new')$$, 'BZ005');
+update public.businesses set handle_changed_at = now() - interval '31 days' where id = pg_temp.bzv('biz')::uuid;
+select pg_temp.q(:A, $$select public.update_business('Acme', 'retail', '', null, null, null, 'acme_new')::text$$);
+select pg_temp.check('business: …and allowed after 30 days', (select handle = 'acme_new' and handle_changed_at > now() - interval '1 minute' from public.businesses where id = pg_temp.bzv('biz')::uuid));
+select pg_temp.must_fail('business: someone without one can''t edit', :B, $$select public.update_business('X', 'retail', '', null, null, null)$$, 'BZ004');
+
+-- The owner stays private
+select pg_temp.must_fail('privacy: the owner column isn''t readable', :B, $$select owner_id from public.businesses$$, '42501');
+select pg_temp.check('privacy: the public columns are', pg_temp.q(:B, $$select handle from public.businesses where handle = 'acme_new'$$) = 'acme_new');
+select pg_temp.check('privacy: by handle, not marked as mine for others; mine for the owner',
+  pg_temp.q(:B, $$select mine::text from public.business_by_handle('acme_new')$$) = 'false'
+  and pg_temp.q(:A, $$select mine::text from public.business_by_handle('ACME_NEW')$$) = 'true');
+select pg_temp.check('privacy: my_business answers only the owner, never with owner_id',
+  pg_temp.q(:B, $$select (public.my_business() -> 'business')::text$$) = 'null'
+  and pg_temp.q(:A, $$select public.my_business() -> 'business' ->> 'handle'$$) = 'acme_new'
+  and pg_temp.q(:A, $$select (public.my_business() -> 'business') ? 'owner_id'$$) = 'false');
+
+-- Business posts
+insert into bz values ('bp', pg_temp.q(:A, $$select public.create_business_post('Fresh bread today')::text$$));
+select pg_temp.check('posts: created with no personal author',
+  (select author_id is null and business_id = pg_temp.bzv('biz')::uuid and visibility = 'public' from public.posts where id = pg_temp.bzv('bp')::uuid));
+select pg_temp.check('privacy: others see the post with no author and the business attached',
+  pg_temp.q(:B, format('select coalesce(author_id::text, %L) || %L || business_id from public.posts where id = %L', 'none', '|', pg_temp.bzv('bp'))) = 'none|' || pg_temp.bzv('biz'));
+select pg_temp.must_fail('privacy: post_media.owner_id isn''t readable', :B, $$select owner_id from public.post_media limit 1$$, '42501');
+select pg_temp.check('posts: …while the media columns the app uses still are', pg_temp.q(:B, $$select count(storage_path)::text from public.post_media$$) is not null);
+select pg_temp.must_fail('posts: someone else can''t post as the business', :B, $$select public.create_business_post('fake')$$, 'BZ004');
+select pg_temp.must_fail('posts: no direct insert with a business', :A,
+  format($$insert into public.posts (author_id, business_id, body) values ('00000000-0000-0000-0000-00000000000a', %L, 'x')$$, pg_temp.bzv('biz')), '42501');
+select pg_temp.must_fail('posts: nor as nobody', :A,
+  format($$insert into public.posts (author_id, business_id, body) values (null, %L, 'x')$$, pg_temp.bzv('biz')), '42501');
+select pg_temp.check('posts: not on the owner''s personal profile', not exists (select 1 from public.posts where author_id = :A and id = pg_temp.bzv('bp')::uuid));
+insert into bz values ('reply', pg_temp.q(:B, format('select id::text from public.create_post(%L, %L)', 'Looks good!', pg_temp.bzv('bp'))));
+select pg_temp.q(:B, format('select public.set_post_like(%L, true)::text', pg_temp.bzv('bp')));
+select pg_temp.check('posts: replies and likes stay personal and notify nobody',
+  (select author_id = :B from public.posts where id = pg_temp.bzv('reply')::uuid)
+  and (select like_count = 1 and reply_count = 1 from public.posts where id = pg_temp.bzv('bp')::uuid)
+  and not exists (select 1 from public.notifications where post_id in (pg_temp.bzv('bp')::uuid, pg_temp.bzv('reply')::uuid)));
+select pg_temp.q(:A, $$select public.create_business_post('post ' || g)::text from generate_series(1, 9) g limit 1$$);
+do $$ begin for g in 2..9 loop perform pg_temp.q('00000000-0000-0000-0000-00000000000a', format('select public.create_business_post(%L)::text', 'post ' || g)); end loop; end $$;
+select pg_temp.must_fail('posts: at most 10 in 10 minutes per business', :A, $$select public.create_business_post('one too many')$$, 'RL001');
+
+-- Feeds
+select pg_temp.check('feed: business posts are in Latest',
+  pg_temp.q(:B, format('select count(*)::text from public.feed_posts(%L, 100) where id = %L', 'latest', pg_temp.bzv('bp'))) = '1');
+select pg_temp.check('feed: …not in Following before you follow', pg_temp.q(:B, format('select count(*)::text from public.feed_posts(%L, 100) where id = %L', 'following', pg_temp.bzv('bp'))) = '0');
+
+-- Following
+select pg_temp.must_fail('follow: not your own business', :A, format('select public.follow_business(%L, true)', pg_temp.bzv('biz')), 'BZ004');
+select pg_temp.q(:B, format('select public.follow_business(%L, true)::text', pg_temp.bzv('biz')));
+select pg_temp.q(:B, format('select public.follow_business(%L, true)::text', pg_temp.bzv('biz')));
+select pg_temp.check('follow: counted once, however often', (select follower_count = 1 from public.businesses where id = pg_temp.bzv('biz')::uuid));
+select pg_temp.check('feed: …then in Following', pg_temp.q(:B, format('select count(*)::text from public.feed_posts(%L, 100) where id = %L', 'following', pg_temp.bzv('bp'))) = '1');
+select pg_temp.check('follow: listed for the app', pg_temp.q(:B, $$select string_agg(x::text, ',') from public.my_followed_businesses() x$$) = pg_temp.bzv('biz'));
+select pg_temp.must_fail('follow: the follow list isn''t readable directly', :A, $$select count(*) from public.business_follows$$, '42501');
+select pg_temp.q(:B, format('select public.follow_business(%L, false)::text', pg_temp.bzv('biz')));
+select pg_temp.check('follow: unfollow lowers the count', (select follower_count = 0 from public.businesses where id = pg_temp.bzv('biz')::uuid));
+insert into public.business_action_log (user_id, action) select :B, 'follow' from generate_series(1, 100);
+select pg_temp.must_fail('follow: at most 100 an hour', :B, format('select public.follow_business(%L, true)', pg_temp.bzv('biz')), 'RL001');
+delete from public.business_action_log where user_id = :B;
+select pg_temp.q(:B, format('select public.follow_business(%L, true)::text', pg_temp.bzv('biz')));
+
+-- Discovery
+select pg_temp.check('search: by name, handle and category',
+  pg_temp.q(:B, $$select count(*)::text from public.search_businesses('acme')$$) = '1'
+  and pg_temp.q(:B, $$select count(*)::text from public.search_businesses('ACME_N')$$) = '1'
+  and pg_temp.q(:B, $$select count(*)::text from public.search_businesses('', 'retail')$$) = '1'
+  and pg_temp.q(:B, $$select count(*)::text from public.search_businesses('', 'health')$$) = '0'
+  and pg_temp.q(:B, $$select following::text from public.search_businesses('acme')$$) = 'true');
+select pg_temp.check('search: wildcards in the query are literal', pg_temp.q(:B, $$select count(*)::text from public.search_businesses('%')$$) = '0');
+
+-- Reports and moderation
+select pg_temp.q(:B, format('select public.report_content(%L, %L, %L)::text', 'post', pg_temp.bzv('bp'), 'spam'));
+select pg_temp.must_fail('report: the owner can''t report their business''s post', :A, format('select public.report_content(%L, %L, %L)', 'post', pg_temp.bzv('bp'), 'spam'), 'RP001');
+select pg_temp.q(:B, format('select public.report_content(%L, %L, %L)::text', 'business', pg_temp.bzv('biz'), 'spam'));
+select pg_temp.must_fail('report: …nor their own business', :A, format('select public.report_content(%L, %L, %L)', 'business', pg_temp.bzv('biz'), 'spam'), 'RP001');
+select pg_temp.check('report: admins see the business post and the business, with who runs it',
+  pg_temp.q(:D, format('select target_label || %L || target_author_username from public.admin_content_reports(%L) where target_id = %L', '|', 'open', pg_temp.bzv('bp'))) = 'Business post|' || (select username from public.profiles where id = :A)
+  and pg_temp.q(:D, format('select target_label from public.admin_content_reports(%L) where target_id = %L', 'open', pg_temp.bzv('biz'))) = 'Business');
+insert into bz values ('bp2', pg_temp.q(:A, $$select id::text from public.posts where business_id is not null and body = 'post 2'$$));
+select pg_temp.q(:D, format('select public.admin_remove_post(%L, %L)::text', pg_temp.bzv('bp2'), 'test'));
+select pg_temp.check('moderation: admins can take down a business post (audit-logged)',
+  (select taken_down_at is not null from public.posts where id = pg_temp.bzv('bp2')::uuid)
+  and exists (select 1 from public.admin_audit_log where target_id = pg_temp.bzv('bp2')::uuid and summary like '%/b/acme_new%'));
+select pg_temp.must_fail('moderation: only admins suspend', :B, format('select public.admin_set_business_status(%L, true)', pg_temp.bzv('biz')), '42501');
+select pg_temp.q(:D, format('select public.admin_set_business_status(%L, true, %L)::text', pg_temp.bzv('biz'), 'test'));
+select pg_temp.check('moderation: a suspended business and its posts disappear for others',
+  pg_temp.q(:B, $$select count(*)::text from public.business_by_handle('acme_new')$$) = '0'
+  and pg_temp.q(:B, format('select count(*)::text from public.posts where id = %L', pg_temp.bzv('bp'))) = '0'
+  and pg_temp.q(:B, format('select count(*)::text from public.feed_posts(%L, 100) where id = %L', 'latest', pg_temp.bzv('bp'))) = '0'
+  and pg_temp.q(:B, $$select count(*)::text from public.search_businesses('acme')$$) = '0');
+select pg_temp.check('moderation: …admins still see it', pg_temp.q(:D, $$select count(*)::text from public.business_by_handle('acme_new')$$) = '1');
+select pg_temp.must_fail('moderation: a suspended business can''t be edited', :A, $$select public.update_business('X', 'retail', '', null, null, null)$$, 'BZ007');
+select pg_temp.must_fail('moderation: …or deleted by its owner', :A, $$select public.delete_business()$$, 'BZ007');
+select pg_temp.must_fail('moderation: …or post', :A, $$select public.create_business_post('x')$$, 'BZ007');
+select pg_temp.must_fail('moderation: …or delete its posts', :A, format('select public.delete_post(%L)', pg_temp.bzv('bp')), 'P0002');
+select pg_temp.check('moderation: …which stay for review', (select deleted_at is null from public.posts where id = pg_temp.bzv('bp')::uuid));
+select pg_temp.q(:D, format('select public.admin_set_business_status(%L, false)::text', pg_temp.bzv('biz')));
+select pg_temp.check('moderation: restore brings it back; both actions logged',
+  pg_temp.q(:B, $$select count(*)::text from public.business_by_handle('acme_new')$$) = '1'
+  and (select count(*) = 2 from public.admin_audit_log where target_id = pg_temp.bzv('biz')::uuid and action in ('business.suspend', 'business.restore')));
+
+-- Media: business keys, logo/cover lifecycle, post photos
+insert into bz values ('logo1', pg_temp.q(:A, format($$select public.media_begin_upload('business_logo', 'image/png', 1000, null, %L)$$, pg_temp.bzv('biz'))));
+select pg_temp.check('media: business files are named after the business, not the person',
+  pg_temp.bzv('logo1') like 'b/' || pg_temp.bzv('biz') || '/business_logo/%' and pg_temp.bzv('logo1') not like '%00000000-0000-0000-0000-00000000000a%');
+select pg_temp.must_fail('media: only the owner uploads for a business', :B,
+  format($$select public.media_begin_upload('business_logo', 'image/png', 1000, null, %L)$$, pg_temp.bzv('biz')), 'MD001');
+select pg_temp.must_fail('media: business purposes need the business', :A, $$select public.media_begin_upload('business_logo', 'image/png', 1000)$$, 'MD001');
+select pg_temp.must_fail('media: …and personal ones refuse it', :A,
+  format($$select public.media_begin_upload('post', 'image/png', 1000, null, %L)$$, pg_temp.bzv('biz')), 'MD001');
+select pg_temp.q(:A, format('select public.set_business_image(%L, %L)::text', 'logo', pg_temp.bzv('logo1')));
+select pg_temp.check('media: the logo is set and readable by others',
+  (select logo_url = '/api/media/' || pg_temp.bzv('logo1') from public.businesses where id = pg_temp.bzv('biz')::uuid)
+  and pg_temp.q(:B, format('select public.media_can_read(%L)::text', pg_temp.bzv('logo1'))) = 'true');
+select pg_temp.must_fail('media: someone else''s upload can''t become the logo', :A,
+  format('select public.set_business_image(%L, %L)', 'logo', 'b/' || pg_temp.bzv('biz') || '/business_logo/' || md5('x') || '.png'), 'MD001');
+insert into bz values ('logo2', pg_temp.q(:A, format($$select public.media_begin_upload('business_logo', 'image/png', 1000, null, %L)$$, pg_temp.bzv('biz'))));
+select pg_temp.q(:A, format('select public.set_business_image(%L, %L)::text', 'logo', pg_temp.bzv('logo2')));
+select pg_temp.check('media: replacing the logo queues the old file', pg_temp.queued(pg_temp.bzv('logo1')) = 1 and pg_temp.queued(pg_temp.bzv('logo2')) = 0);
+insert into bz values ('cover', pg_temp.q(:A, format($$select public.media_begin_upload('business_cover', 'image/jpeg', 1000, null, %L)$$, pg_temp.bzv('biz'))));
+select pg_temp.q(:A, format('select public.set_business_image(%L, %L)::text', 'cover', pg_temp.bzv('cover')));
+select pg_temp.q(:A, format('select public.set_business_image(%L, null)::text', 'cover'));
+select pg_temp.check('media: removing the cover queues it', pg_temp.queued(pg_temp.bzv('cover')) = 1 and (select cover_url is null from public.businesses where id = pg_temp.bzv('biz')::uuid));
+insert into bz values ('pf', pg_temp.q(:A, format($$select public.media_begin_upload('business_post', 'image/jpeg', 1000, null, %L)$$, pg_temp.bzv('biz'))));
+update public.media_objects set status = 'attached' where path = pg_temp.bzv('pf');
+update public.posts set created_at = now() - interval '1 hour' where business_id = pg_temp.bzv('biz')::uuid;
+insert into bz values ('bp3', pg_temp.q(:A, format($$select public.create_business_post('with photo', %L)::text$$,
+  jsonb_build_array(jsonb_build_object('kind', 'image', 'storage_path', pg_temp.bzv('pf'), 'mime_type', 'image/jpeg', 'width', 10, 'height', 10)))));
+select pg_temp.must_fail('media: a business post can''t use a personal or another business''s file', :A,
+  format($$select public.create_business_post('x', %L)$$, jsonb_build_array(jsonb_build_object('kind', 'image', 'storage_path',
+    '00000000-0000-0000-0000-00000000000a/post/' || md5('p') || '.jpg', 'mime_type', 'image/jpeg'))), 'MD001');
+select pg_temp.check('media: a business post''s photo is readable with the post', pg_temp.q(:B, format('select public.media_can_read(%L)::text', pg_temp.bzv('pf'))) = 'true');
+select pg_temp.must_fail('posts: someone else can''t delete a business post', :B, format('select public.delete_post(%L)', pg_temp.bzv('bp3')), 'P0002');
+select pg_temp.q(:A, format('select public.delete_post(%L)::text', pg_temp.bzv('bp3')));
+select pg_temp.check('posts: the owner deletes it; its photo is queued', pg_temp.queued(pg_temp.bzv('pf')) = 1);
+
+-- Deleting the business
+select pg_temp.q(:A, $$select public.delete_business()::text$$);
+select pg_temp.check('business: deleting it removes its posts and follows, and queues its logo',
+  not exists (select 1 from public.businesses where id = pg_temp.bzv('biz')::uuid)
+  and not exists (select 1 from public.posts where business_id = pg_temp.bzv('biz')::uuid or id = pg_temp.bzv('bp')::uuid)
+  and not exists (select 1 from public.business_follows where business_id = pg_temp.bzv('biz')::uuid)
+  and pg_temp.queued(pg_temp.bzv('logo2')) = 1);
+select pg_temp.check('grants: nothing new is callable by everyone, nor by signed-out users except the two policy helpers',
+  not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and has_function_privilege('public', p.oid, 'execute'))
+  and (select count(*) = 2 from pg_proc p where p.pronamespace = 'public'::regnamespace
+         and p.proname in ('business_is_active', 'viewer_follows_business', 'create_business', 'my_business', 'business_by_handle', 'search_businesses', 'follow_business', 'create_business_post', 'admin_businesses')
+         and has_function_privilege('anon', p.oid, 'execute')));
+select pg_temp.q(:D, $$select public.admin_set_businesses_enabled(false)::text$$);
+
 -- Message report review
 select pg_temp.must_fail('only admins review message reports', :A,
   format($$select public.admin_dm_report_set_status(%L, 'reviewed')$$, (select id from public.dm_reports limit 1)), '42501');

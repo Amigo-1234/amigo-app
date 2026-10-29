@@ -117,3 +117,14 @@
     margin-right: var(--space-2);
   }
 }
+
+/* "Find businesses" (only once business pages are switched on). */
+.explore-business-link {
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+}
+
+.explore-business-link span {
+  flex: 1;
+  font-weight: 600;
+}

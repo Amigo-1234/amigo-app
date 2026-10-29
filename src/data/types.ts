@@ -21,6 +21,8 @@ export interface Author {
   avatarUrl: string | null;
   /** Set only by Amigo admins (see AdminUsersApi). Shown as a badge beside the name. */
   verified?: boolean;
+  /** A business (posts by a business): id, handle (/b/:handle), name and logo are the business's own. */
+  business?: boolean;
 }
 
 /**
@@ -61,7 +63,7 @@ export interface Post {
   bookmarkedByViewer?: boolean;
 }
 
-export type ContentReportTarget = "post" | "profile" | "world";
+export type ContentReportTarget = "post" | "profile" | "world" | "business";
 
 /** Bookmarks, editing, deleting and reporting posts — where the backend supports them. */
 export interface PostToolsApi {
@@ -1519,6 +1521,8 @@ export interface DataSource {
   legal?: LegalApi;
   /** Notifications on a locked phone (Web Push). */
   push?: PushApi;
+  /** Business profiles (Neon only; see BusinessApi). */
+  business?: BusinessApi;
   /** Creator monetization overview (coming soon; nothing financial). */
   monetization?: MonetizationApi;
   /** Creator Programme: applications, status, dashboard, feedback. */
@@ -1577,4 +1581,124 @@ export interface DataSource {
   getPeopleSuggestions(viewerId: string, max: number): Promise<PersonSummary[]>;
   follow(viewerId: string, targetId: string): Promise<void>;
   unfollow(viewerId: string, targetId: string): Promise<void>;
+}
+
+// ------------------------------------------------------------------ businesses
+
+/** The fixed business categories (ids are stored; labels are shown). */
+export const BUSINESS_CATEGORIES = [
+  { id: "food_drink", label: "Food & drink" },
+  { id: "retail", label: "Retail & shopping" },
+  { id: "beauty_wellness", label: "Beauty & wellness" },
+  { id: "health", label: "Health" },
+  { id: "services", label: "Services" },
+  { id: "education", label: "Education" },
+  { id: "technology", label: "Technology" },
+  { id: "creative_media", label: "Creative & media" },
+  { id: "events_entertainment", label: "Events & entertainment" },
+  { id: "travel_hospitality", label: "Travel & hospitality" },
+  { id: "nonprofit_community", label: "Nonprofit & community" },
+  { id: "other", label: "Other" },
+] as const;
+export type BusinessCategory = (typeof BUSINESS_CATEGORIES)[number]["id"];
+
+/** A business as anyone sees it. Who owns it is never part of this. */
+export interface Business {
+  id: string;
+  handle: string;
+  name: string;
+  category: BusinessCategory;
+  description: string;
+  logoUrl: string | null;
+  coverUrl: string | null;
+  website: string | null;
+  email: string | null;
+  phone: string | null;
+  followerCount: number;
+  postCount: number;
+  createdAt: Date;
+  following: boolean;
+  /** The viewer owns it. */
+  mine: boolean;
+}
+
+/** Your own business, with what only the owner sees. */
+export interface MyBusiness extends Business {
+  status: "active" | "suspended";
+  canChangeHandleAt: Date;
+}
+
+export type BusinessSummary = Pick<Business, "id" | "handle" | "name" | "category" | "description" | "logoUrl" | "followerCount" | "following">;
+
+export interface BusinessInput {
+  name: string;
+  category: BusinessCategory;
+  description: string;
+  website: string;
+  email: string;
+  phone: string;
+  /** Required to create; to rename, at most once every 30 days. */
+  handle?: string;
+}
+
+export type BusinessErrorCode =
+  | "off" // not available yet
+  | "not-eligible" // email not verified, or account suspended
+  | "handle" // taken, reserved or badly formed
+  | "name" // not allowed
+  | "handle-too-soon"
+  | "already-have-one"
+  | "suspended"
+  | "invalid" // a field doesn't pass its checks
+  | "slow-down"
+  | "unknown";
+
+export class BusinessError extends Error {
+  code: BusinessErrorCode;
+  constructor(code: BusinessErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+export interface AdminBusiness {
+  id: string;
+  handle: string;
+  name: string;
+  category: BusinessCategory;
+  status: "active" | "suspended";
+  suspendedNote: string | null;
+  followerCount: number;
+  postCount: number;
+  ownerHandle: string;
+  createdAt: Date;
+}
+
+/**
+ * Business profiles: one per person (verified email, not suspended), shown at /b/:handle.
+ * Business posts are top-level and public; likes and replies stay personal. Who owns a
+ * business is never part of any answer (except to admins).
+ */
+export interface BusinessApi {
+  /** Whether businesses are switched on, and yours if you have one. */
+  mine(): Promise<{ enabled: boolean; business: MyBusiness | null }>;
+  create(input: BusinessInput & { handle: string }): Promise<string>;
+  update(input: BusinessInput): Promise<void>;
+  remove(): Promise<void>;
+  /** Uploads and sets the logo or cover; null removes it. */
+  setImage(kind: "logo" | "cover", image: Blob | null): Promise<void>;
+  byHandle(handle: string): Promise<Business | null>;
+  posts(businessId: string, limit: number): Promise<Post[]>;
+  search(query: string, category: BusinessCategory | null): Promise<BusinessSummary[]>;
+  /** Answers the new follower count. */
+  follow(businessId: string, follow: boolean): Promise<number>;
+  followedIds(): Promise<Set<string>>;
+  createPost(text: string, images: NewMediaInput[]): Promise<string>;
+  /** Deletes a post of your own business (business posts can't be edited). */
+  deletePost(postId: string): Promise<void>;
+  admin: {
+    list(status: "all" | "active" | "suspended"): Promise<AdminBusiness[]>;
+    setStatus(businessId: string, suspend: boolean, note: string): Promise<void>;
+    setEnabled(enabled: boolean): Promise<void>;
+  };
 }

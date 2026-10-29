@@ -11,6 +11,15 @@ import "./WelcomeCard.css";
 
 const key = (id: string) => `amigo.welcome.done.${id}`;
 
+/** Skipped on this device (Home shows other cards only after the welcome is out of the way). */
+export function isWelcomeDismissed(id: string) {
+  try {
+    return localStorage.getItem(key(id)) === "1";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * First-run welcome on Home: a few people to follow and the next steps. One
  * card, skippable at any time; it goes away for good once dismissed (per
@@ -19,13 +28,7 @@ const key = (id: string) => `amigo.welcome.done.${id}`;
 export function WelcomeCard({ followingCount, hasOwnPosts }: { followingCount: number; hasOwnPosts: boolean }) {
   const viewer = useViewer();
   const composer = useComposer();
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return localStorage.getItem(key(viewer.id)) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [dismissed, setDismissed] = useState(() => isWelcomeDismissed(viewer.id));
   const [people, setPeople] = useState<PersonSummary[] | null>(null);
   const [followed, setFollowed] = useState(0);
   const done = dismissed || (followingCount + followed > 0 && hasOwnPosts);

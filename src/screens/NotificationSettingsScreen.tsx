@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { ArrowLeft, BellRing, Check, Heart, Mail, Orbit, PanelTop, Smartphone, Trash2, Volume2 } from "lucide-react";
 import { dataSource, type NotificationPrefs, type PushDevice } from "../data";
 import { alertPrefs, playAlertSound, setAlertPrefs, type AlertPrefs } from "../features/inapp/alertPrefs";
+import { PUSH_DETAIL, pushErrorText } from "../features/notifications/pushCopy";
 import { disablePush, enablePush, pushStatus, type PushStatus } from "../lib/push";
 import { timeAgoLong } from "../lib/time";
 import { ScreenHeader } from "../shell/ScreenHeader";
@@ -85,15 +86,6 @@ function InAppAlertSettings() {
   );
 }
 
-const PUSH_DETAIL: Record<PushStatus, string> = {
-  on: "On. You'll be told about new messages even when Amigo is closed or your phone is locked.",
-  off: "Get told about new messages even when Amigo is closed or your phone is locked.",
-  "ios-home-screen": "On iPhone and iPad, notifications work once Amigo is on your Home Screen: in Safari tap Share → Add to Home Screen, open Amigo from there, then turn them on here.",
-  denied: "Notifications are blocked for Amigo. Allow them in your browser's site settings (or your phone's Settings → Notifications), then come back here.",
-  unsupported: "This browser can't show notifications from websites. Try Chrome, Edge, Firefox or Safari.",
-  "not-configured": "Notifications aren't available on this version of Amigo yet.",
-};
-
 /** Locked-screen notifications for this device, what to be notified about, and your other devices. */
 function PushSettings() {
   const api = dataSource.push!;
@@ -131,15 +123,8 @@ function PushSettings() {
       }
     } catch (e) {
       // The reason only (e.g. "Registration failed - push service error"); no keys or endpoints.
-      const reason = e instanceof Error ? e.message : String(e);
-      console.warn("push:", reason);
-      // Chrome refuses push in private/incognito windows with this error, after permission was granted.
-      toast(
-        /Registration failed - permission denied/i.test(reason)
-          ? "This window can't receive notifications. Private or incognito windows don't support them — try a normal window."
-          : "Couldn't change notifications. Try again.",
-        "error",
-      );
+      console.warn("push:", e instanceof Error ? e.message : String(e));
+      toast(pushErrorText(e), "error");
       setStatus(await pushStatus(api).catch(() => "unsupported" as const));
     } finally {
       setBusy(false);
