@@ -1,9 +1,9 @@
 /**
  * Emails for username reservations (api/reserve.ts). Same look as the sign-in
- * emails (_authEmail.ts). They go only to the address that was typed, so they
+ * emails (_emailShell.ts). They go only to the address that was typed, so they
  * may say what that address holds; the reservation page itself never does.
  */
-import { C, esc, FONT, MONO, p, shell, URL_ } from "./_authEmail";
+import { C, esc, FONT, MONO, p, shell, URL_ } from "./_emailShell";
 
 export type ReserveEmail = { subject: string; html: string; text: string };
 

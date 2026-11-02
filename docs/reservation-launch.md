@@ -45,6 +45,8 @@ Deploying `7061af6` to Production ships everything since the live version `d7185
 
 ## 3. Privacy Policy 0.2 — complete draft (for approval — not published)
 
+Final review copies, with the operator name filled in: `docs/legal-drafts/privacy-0.2.md` and `docs/legal-drafts/terms-0.2.md`. The text below is the working draft.
+
 Decisions applied (2 Nov 2026):
 - **Operator:** an individual. The full legal name stays a placeholder until you provide and approve it.
 - **Privacy contact:** olamidesamson841@gmail.com.
@@ -181,21 +183,31 @@ We'll tell you about material changes in the app and, where required, ask you to
 3. **Postal address:** the Terms ask for one "if required"; a lawyer should confirm whether it's needed.
 4. **Publishing** means adding `privacy-0.2.md` and `terms-0.2.md` to the app, and registering both versions in the Production database. That's a Production change, which needs your approval at the time.
 
-## 4. Real-email test (Preview and verify-1029 only)
-Waiting for your test email address. When you send it, I will:
-1. Recreate a throwaway login on verify-1029 (allowed to run only the 3 reservation functions).
-2. Put real values back into the two branch-only Preview entries.
-3. Redeploy the Preview.
-4. Open reservations on verify-1029 only.
-5. Give you a share link.
+## 4. Real-email test (Preview and verify-1029 only) — PASSED 2 Nov 2026
 
-**You then:**
-1. Open the link and pick a test username.
-2. Enter your email and receive the code.
-3. Type the real code.
-4. Check that the confirmation email arrives.
+The owner ran it in their own browser on the Preview of `7061af6` (deployment `dpl_4sXCK2wPQdukrmyqXJ682LpA5GsH`), with the route pointed at verify-1029 through a throwaway test login.
 
-**I then** confirm the reservation's status and expiry in verify-1029 and check the logs. After that I delete the test reservation and attempt log, close reservations, drop the login, and reset the two entries to placeholders. Results go in this section.
+| Step | Result | Evidence |
+|---|---|---|
+| Request a code | Sent | Log 21:11:39 UTC `code-sent` (not a renewal); no `send-failed` |
+| Receive the real email and type the code | Accepted | Log 21:12:05 UTC `verified`; `code_attempts = 0`; code hash cleared |
+| Reservation | `@amigoisaboy22` **active**, created 21:11:39, verified 21:12:05, expires **2027-05-01 21:12:05 UTC** (180 days) | verify-1029 `username_reservations` |
+| Confirmation email | Sent; the success page and the owner confirmed it | No `send-failed` after verifying |
+| Privacy | Email stored lower-case; the attempt log has no plain emails or IPs (19 fingerprints only) | SQL check |
+
+Note: the reservation was made with a Gmail address other than the privacy contact (it's 25 characters long; the address isn't recorded here). Only that exact address can claim `@amigoisaboy22`.
+
+After recording: the test login `reserve_web_test` was dropped, reservations on verify-1029 were closed again, and the two Preview entries were reset to `removed-after-test`. The test reservation row is kept on verify-1029 as evidence.
+
+## 4a. Permanent page — recommended set-up: a separate Vercel project
+Putting the page on the existing `amigo-app` project would mean deploying the whole app release with it (new navigation, username-screen changes). To leave the main app untouched, the page and its route go in **their own small project**, `amigo-reserve`. It uses the same repository and builds only a `reserve/` folder:
+- `reserve/index.html`, `reserve/fonts/`, `reserve/favicon.svg`: the page, including the 18+ box.
+- `reserve/api/reserve.ts` and the email helpers: the route, unchanged apart from its location.
+- `reserve/vercel.json`: every path except `/api/reserve`, fonts and the icon serves the page. Strict security headers, including a content policy that allows only this site and, if enabled, Cloudflare Turnstile.
+- No main-app code, no sign-in, no `/neon` proxy and no other API on that domain.
+- The main app's `/reserve` copy and its reserve-host rules are removed, so there's one source of truth. The main app links to reserve.amigoworld.com.ng when it next ships.
+
+Until the main app's next release, Admin → Reservations isn't live. Opening, closing and reviewing reservations is done for you with the same database functions (each action shown first). The database rule protects reserved names in sign-up and renaming either way. The current app shows a generic error if someone tries a reserved name, instead of "isn't available".
 
 ## 5. Vercel clean-up (after the real-email test)
 Branch-only Preview entries created for testing (none exist in Production):
@@ -210,41 +222,40 @@ To delete them:
 4. Don't touch any entry marked *Production*, or the other branch entries (`RESEND_API_KEY`, `EMAIL_FROM`, the `VITE_*` ones).
 5. Afterwards, searching `RESERVE_` should show nothing until you add the Production pair in step A3 below.
 
-## 6. Production setup — your manual tasks (never paste secrets into chat)
-1. **Approve** the release contents and the Privacy Policy (decisions 1–2).
-2. **Wait until I've applied the migration** (step B2). It creates the `username_reserver` role.
-3. **Create the login** in the Neon Console. Use project **rough-lab-16727045**, branch **production** (`br-shiny-night-za6izma0`), database **neondb**, in the **SQL Editor** — not the Roles page, which gives broad admin rights:
-   ```sql
-   create role reserve_web login password 'PASTE-A-NEW-PASSWORD-HERE';
-   grant username_reserver to reserve_web;
-   ```
-   Make the password with `openssl rand -hex 32` on your computer.
-4. **Generate the pepper:** `openssl rand -hex 32`. It's a different value from the password. Never change it while reservations are open.
-5. **Add two Production variables in Vercel**, both type **Sensitive** and environment **Production** only:
-   - `RESERVE_DATABASE_URL` = `postgresql://reserve_web:<password>@ep-dry-mode-zano9y8g.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require` (direct host, not `-pooler`)
-   - `RESERVE_PEPPER` = the pepper value
+## 6. Production setup for reserve.amigoworld.com.ng (separate `amigo-reserve` project)
 
-   Optional: `TURNSTILE_SECRET` and `TURNSTILE_SITE_KEY`, if you choose Turnstile.
-6. **DNS at host-ww.net:** add a CNAME record with host/name `reserve` and target `160f47bcd5fe080c.vercel-dns-017.com.`. Do this **after** step B4 attaches the domain.
-7. **Resend:** check your plan's daily and monthly limits. Each reservation sends 2 emails, plus any resends or notices; the free plan allows 100 a day and 3,000 a month.
-8. **Give the final approval** to open reservations (step B7).
+Everything below leaves the main app (`amigo-app`, amigoworld.com.ng) untouched: no deploy, no setting changes, registration unchanged. Reservations stay **closed** until you approve opening them.
 
-## 7. Deployment sequence (each B step only after your explicit approval)
-| Step | Who | Action | Check |
+**The standalone project lives in `reserve/`:**
+- `public/` holds the only files served: the page (with the required 18+ box), fonts and icon.
+- `api/` holds `reserve.ts`, the only route, which accepts browser calls only from https://reserve.amigoworld.com.ng and refuses a start without `adult: true`. It sits with its email templates.
+- `vercel.json`: every unknown path shows the page; strict security headers with a content policy limited to this site and, if enabled, Cloudflare Turnstile.
+
+**Tested locally on 2 Nov:**
+- the route compiles in strict mode and passes 42/42 end-to-end checks;
+- the page shows "Reservations aren't open right now" while closed, and its fonts load from the new paths;
+- the main app still builds, and its `vercel.json` and sign-in emails are identical to the live versions.
+
+## 7. Step-by-step Production sequence (each step shown to you and approved before it runs)
+
+| # | Who | Action | Leaves alone |
 |---|---|---|---|
-| B1 | me | Production restore branch `pre-reservations-YYYYMMDD` | Branch exists |
-| B2 | me | Apply `20261103090000_username_reservations` then `20261103100000_reservation_housekeeping` (not the football migration) | Functions match the tested versions; 0 reservations; `open = false` |
-| B3 | me | Refresh the Production data service by re-saving its current settings unchanged | Settings read back identical |
-| A3–A5 | you | `reserve_web` login, then the two Vercel variables | — |
-| B4 | me | Attach `reserve.amigoworld.com.ng` to project amigo-app | Domain listed |
-| A6 | you | CNAME at host-ww.net | Vercel shows the domain as verified |
-| B5 | me | Production deploy of the approved commit | Ready, and aliased to amigoworld.com.ng |
-| B6 | me | Checks: feed and profile load; `/reserve` and `https://reserve.amigoworld.com.ng` show the page; other paths on the reserve address show the page too; `GET /api/reserve` returns `open:false`; Admin → Reservations loads | Logs clean |
-| B7 | me, after your go-ahead | Briefly open reservations in Admin. Reserve a test name with your email (you type the code). Revoke it. Close again until public launch. | Real email received |
-| — | you | Final approval: Admin → Reservations → **Open** | — |
+| 1 | me | Commit (18+, standalone project, legal drafts as drafts only, checklist) and push the branch | Production |
+| 2 | me | Create Vercel project **amigo-reserve**: same GitHub repo, Root Directory `reserve`, no framework, no build command | amigo-app |
+| 3 | me | Production database: restore branch `pre-reservations-YYYYMMDD`, then migrations `20261103090000` and `20261103100000`, then refresh the data service with its settings unchanged. Reservations stay closed. | App code; registration stays open |
+| 4 | **you** | Neon SQL Editor (project rough-lab-16727045, branch production, database neondb): `create role reserve_web login password '<openssl rand -hex 32>'; grant username_reserver to reserve_web;` | — |
+| 5 | **you** | In Vercel → **amigo-reserve** → Settings → Environment Variables, add as Sensitive, Production: `RESERVE_DATABASE_URL` (`postgresql://reserve_web:<password>@ep-dry-mode-zano9y8g.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require`), `RESERVE_PEPPER` (`openssl rand -hex 32`), `RESEND_API_KEY` (same key as amigo-app), `EMAIL_FROM` (`Amigo World <no-reply@amigoworld.com.ng>`) | amigo-app variables |
+| 6 | me | Deploy amigo-reserve to Production from the pushed commit; check the page, `GET /api/reserve` → `open:false`, refusal of other origins, and the logs | amigo-app |
+| 7 | me | Attach `reserve.amigoworld.com.ng` to **amigo-reserve** and read back the exact CNAME target Vercel gives | — |
+| 8 | **you** | At host-ww.net: CNAME, name `reserve`, target = the value from step 7 | Other DNS records |
+| 9 | me | Confirm the domain is verified and HTTPS works; final checks on https://reserve.amigoworld.com.ng | — |
+| 10 | **you** | Approve opening; then I run `admin_set_reservation_settings(true, 180, 1)` | — |
+
+**Viewing reservations (usernames, emails, expiry):** Admin → Reservations is part of the main app update (`7061af6`). It goes live when you approve deploying the main app; that's a separate decision, not needed for the reservation page. Until then I can show you the same list, read-only, from the database whenever you ask. The emails are visible only to you and never written to the audit log.
 
 ## 8. Rollback
-- **Page or app problem:** redeploy `d718521` (the current live version) as Production. The database update can stay, because the old app doesn't use it. If you want the reserve address to stop answering, remove the CNAME.
+- **Reservation page problem:** close reservations (instant), or redeploy the previous amigo-reserve deployment, or remove the domain from amigo-reserve. The main app is unaffected throughout.
+- **Main app:** not deployed in this sequence, so there is nothing to roll back there.
 - **Reservations misbehaving:** Admin → Reservations → **Close** takes effect immediately and needs no deploy.
 - **Database:** restore from the B1 restore branch, or reverse just these changes. Reversing means dropping the trigger `profiles_username_guard` and the new tables and functions, then restoring `generate_username` and `handle_new_user` from `20261006120000_core_schema.sql`. Any reservations made before the rollback are lost either way.
 - **Credentials:** `drop role reserve_web;` and remove the two Vercel variables.

@@ -1,5 +1,6 @@
 /**
- * Username reservations: the only server route behind reserve.amigoworld.com.ng.
+ * Username reservations: the only server route of the amigo-reserve project
+ * (reserve.amigoworld.com.ng), separate from the main Amigo World app.
  *
  *   GET  /api/reserve                     → { open, holdDays, turnstileSiteKey }
  *   POST /api/reserve { action: "check",  username }               → { username, status }
@@ -27,7 +28,7 @@ import { alreadyYoursEmail, codeEmail, confirmedEmail, limitEmail, type ReserveE
 export const config = { runtime: "edge" };
 
 const ENV = (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
-const ORIGINS = ["https://reserve.amigoworld.com.ng", "https://amigoworld.com.ng", "https://www.amigoworld.com.ng"];
+const ORIGINS = ["https://reserve.amigoworld.com.ng"];
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });

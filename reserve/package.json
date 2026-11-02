@@ -1,0 +1,6 @@
+{
+  "name": "amigo-reserve",
+  "private": true,
+  "type": "module",
+  "description": "reserve.amigoworld.com.ng: the standalone username reservation page and its one API route."
+}
