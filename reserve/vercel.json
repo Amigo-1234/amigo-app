@@ -6,8 +6,8 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/((?!api/|fonts/|favicon\\.svg).*)",
-      "destination": "/index.html"
+      "source": "/((?!api/|fonts/|favicon\\.svg|privacy).*)",
+      "destination": "/"
     }
   ],
   "headers": [

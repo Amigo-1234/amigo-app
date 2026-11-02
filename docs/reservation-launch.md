@@ -243,13 +243,29 @@ Everything below leaves the main app (`amigo-app`, amigoworld.com.ng) untouched:
 | 1 | me | Commit (18+, standalone project, legal drafts as drafts only, checklist) and push the branch | Production |
 | 2 | me | Create Vercel project **amigo-reserve**: same GitHub repo, Root Directory `reserve`, no framework, no build command | amigo-app |
 | 3 | me | Production database: restore branch `pre-reservations-YYYYMMDD`, then migrations `20261103090000` and `20261103100000`, then refresh the data service with its settings unchanged. Reservations stay closed. | App code; registration stays open |
-| 4 | **you** | Neon SQL Editor (project rough-lab-16727045, branch production, database neondb): `create role reserve_web login password '<openssl rand -hex 32>'; grant username_reserver to reserve_web;` | — |
+| 4 | **you** | Neon SQL Editor (project rough-lab-16727045, branch **main** = `br-shiny-night-za6izma0`, database neondb; confirm with `select current_setting('neon.endpoint_id', true)` → `ep-dry-mode-zano9y8g`): `create role reserve_web login password '<openssl rand -hex 32>'; grant username_reserver to reserve_web;` | — |
 | 5 | **you** | In Vercel → **amigo-reserve** → Settings → Environment Variables, add as Sensitive, Production: `RESERVE_DATABASE_URL` (`postgresql://reserve_web:<password>@ep-dry-mode-zano9y8g.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require`), `RESERVE_PEPPER` (`openssl rand -hex 32`), `RESEND_API_KEY` (same key as amigo-app), `EMAIL_FROM` (`Amigo World <no-reply@amigoworld.com.ng>`) | amigo-app variables |
 | 6 | me | Deploy amigo-reserve to Production from the pushed commit; check the page, `GET /api/reserve` → `open:false`, refusal of other origins, and the logs | amigo-app |
 | 7 | me | Attach `reserve.amigoworld.com.ng` to **amigo-reserve** and read back the exact CNAME target Vercel gives | — |
 | 8 | **you** | At host-ww.net: CNAME, name `reserve`, target = the value from step 7 | Other DNS records |
 | 9 | me | Confirm the domain is verified and HTTPS works; final checks on https://reserve.amigoworld.com.ng | — |
 | 10 | **you** | Approve opening; then I run `admin_set_reservation_settings(true, 180, 1)` | — |
+
+**Progress (2 Nov 2026):**
+- **Steps 1–3 done:** commit `d1fc97e` pushed; project `prj_AnrX2TjttlmpgFkpZEiAuy1PTFK5` created; restore branch `br-divine-haze-zajjqy91` taken, both migrations applied and matching verify-1029, all 13 usernames unchanged, data service refreshed with identical settings.
+- **Steps 4–5 done by the owner:** `reserve_web` is on Neon branch `main`. It can log in and has no superuser, create-role, create-database, replication or row-level-security bypass rights. Its only membership is `username_reserver`, and its only functions are `reserve_check`, `reserve_start` and `reserve_verify`. Its only schema access is `public`, where it can read or write no tables. Neon's two built-in, readable-by-everyone statistics views sit in `admin_private`, which it can't reach. The four Sensitive Production variables are on amigo-reserve.
+- **Steps 7–8 done by the owner, earlier than planned:** `reserve.amigoworld.com.ng` is attached to amigo-reserve and verified, and the host-ww.net CNAME points to `23634c8ab192550d.vercel-dns-016.com`. Vercel reports it correctly configured. amigo-app's domains are unchanged.
+- **Reservations:** still closed, with 0 reservations.
+- **Step 6 done (2 Nov, 22:48 UTC):** Production deployment `dpl_G9GfQgri96A9k9Ywp3oNcbTuiJRK` of commit `d1fc97e`, serving https://reserve.amigoworld.com.ng. Checks:
+  - `GET /api/reserve` → `{"open":false,"holdDays":180}`, which proves the `reserve_web` password, the pepper and the database link work.
+  - The page loads with its 18+ box, fonts and icon.
+  - Starting a reservation → 403 "closed"; without the 18+ confirmation → 400 "age"; a protected name → `not_allowed`; another site's origin → 403.
+  - Main-app routes (`/api/neon`, `/neon/auth/…`, `/api/media`, `/api/auth-email`) → 404; `/api/reserve.ts` only redirects to the route, so no source code is served.
+  - Security headers are present: content policy, frame blocking (DENY), HTTPS-only (HSTS), nosniff, referrer and permissions policies.
+  - Database after the checks: still closed, 0 reservations, 4 attempt-log fingerprints with no plain data, and all 13 usernames unchanged.
+  - amigoworld.com.ng → 200.
+  - Minor, cosmetic: unknown paths show Vercel's plain 404 instead of the page; the rule meant to show the page there isn't taking effect.
+- **Prepared, not deployed (3 Nov):** `reserve/public/privacy.html`, the reservation Privacy Notice v1.0. It's built from the Privacy 0.2 draft: operator Muftau Idris, contact olamidesamson841@gmail.com, 18+, 180 days, renewal in the final 30 days, deletion 30 days after a reservation ends, abuse-prevention fingerprints kept for at most 2 days, the processors, and your rights. The page's footer now links to `/privacy` ("Privacy Notice & reservation rules") instead of the main app's 0.1 policy and Terms. The rule for unknown paths now points to `/` so they show the page. Shipping both needs an amigo-reserve deploy, with your approval. **Wording approved by the owner on 3 Nov 2026.**
 
 **Viewing reservations (usernames, emails, expiry):** Admin → Reservations is part of the main app update (`7061af6`). It goes live when you approve deploying the main app; that's a separate decision, not needed for the reservation page. Until then I can show you the same list, read-only, from the database whenever you ask. The emails are visible only to you and never written to the audit log.
 
