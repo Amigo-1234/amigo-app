@@ -9,10 +9,10 @@
         "--mode",
         "demo",
         "--port",
-        "5173",
+        "5174",
         "--strictPort"
       ],
-      "port": 5173
+      "port": 5174
     },
     {
       "name": "verify-1029",

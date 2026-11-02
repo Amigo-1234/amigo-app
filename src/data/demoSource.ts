@@ -6,6 +6,7 @@
  * (?demo=business turns business profiles on.)
  */
 import { mentionedHandles } from "../lib/mentions";
+import { createDemoReservations } from "./demoReservations";
 import { clearDemoState, loadDemoState, saveDemoState } from "./demoPersist";
 import { createDemoBusiness } from "./demoBusiness";
 import { createDemoMarketplace } from "./demoMarketplace";
@@ -427,7 +428,12 @@ const demoMoments = createDemoMoments({
   audit: demoSupport.audit,
 });
 
-const demoAdmin = { ...demoSupport.admin, messageReports: demoMessages.adminReports, moments: demoMoments.admin };
+const demoAdmin = {
+  ...demoSupport.admin,
+  messageReports: demoMessages.adminReports,
+  moments: demoMoments.admin,
+  reservations: createDemoReservations((name) => [...people.values()].some((p) => p.handle === name)),
+};
 const demoMessagesApi = { ...demoMessages.api, security: demoSecurity.api };
 
 // ------------------------------------------------------------- persistence

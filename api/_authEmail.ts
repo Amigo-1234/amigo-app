@@ -11,10 +11,10 @@ export type AuthEmailKind = "email-verification" | "forget-password" | "sign-in"
 
 export type AuthEmail = { subject: string; html: string; text: string };
 
-const SITE = "amigoworld.com.ng";
-const URL_ = `https://${SITE}`;
+export const SITE = "amigoworld.com.ng";
+export const URL_ = `https://${SITE}`;
 
-const C = {
+export const C = {
   page: "#0c0c0e",
   card: "#151518",
   line: "#2a2a30",
@@ -25,10 +25,10 @@ const C = {
   onCoral: "#1d0a05",
   codeBg: "#1e1e23",
 };
-const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-const MONO = "'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
+export const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+export const MONO = "'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace";
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 /**
  * How long Neon made the code valid for, in whole minutes: its own expiry minus its own issue time
@@ -80,7 +80,7 @@ const MARK = `<table role="presentation" cellpadding="0" cellspacing="0" border=
 <td style="padding-left:12px;font:700 20px/1 ${FONT};color:${C.text};letter-spacing:-0.3px">Amigo World</td>
 </tr></table>`;
 
-function shell(preheader: string, body: string): string {
+export function shell(preheader: string, body: string, footnote = "This is an automated message about your account. Replies aren't read."): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -104,7 +104,7 @@ function shell(preheader: string, body: string): string {
 <tr><td class="card" style="background:${C.card};border:1px solid ${C.line};border-radius:20px;padding:36px 32px">${body}</td></tr>
 <tr><td style="padding:24px 8px 0;font:13px/1.6 ${FONT};color:${C.faint};text-align:center">
 Amigo World · <a href="${URL_}" style="color:${C.muted};text-decoration:none">${SITE}</a><br>
-This is an automated message about your account. Replies aren't read.
+${esc(footnote)}
 </td></tr>
 </table>
 </td></tr>
@@ -113,7 +113,7 @@ This is an automated message about your account. Replies aren't read.
 </html>`;
 }
 
-const p = (s: string, extra = "") => `<p style="margin:0 0 12px;font:16px/1.6 ${FONT};color:${C.muted}${extra}">${s}</p>`;
+export const p = (s: string, extra = "") => `<p style="margin:0 0 12px;font:16px/1.6 ${FONT};color:${C.muted}${extra}">${s}</p>`;
 
 export function codeEmail(kind: AuthEmailKind, code: string, minutes: number | null): AuthEmail {
   const c = COPY[kind];

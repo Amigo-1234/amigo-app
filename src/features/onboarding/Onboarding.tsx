@@ -426,7 +426,7 @@ function ProfileStep({ interests, onNext, onEditInterests }: { interests: Intere
     invalid: "3–24 characters: lowercase letters, numbers and _ only.",
     checking: "Checking…",
     available: "Available",
-    taken: "That username is taken — try another.",
+    taken: "That username isn’t available — try another.",
   };
 
   return (

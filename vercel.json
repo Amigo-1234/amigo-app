@@ -11,6 +11,30 @@
   ],
   "rewrites": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "reserve.amigoworld.com.ng"
+        }
+      ],
+      "destination": "/reserve/index.html"
+    },
+    {
+      "source": "/((?!api/reserve|reserve/|favicon).*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "reserve.amigoworld.com.ng"
+        }
+      ],
+      "destination": "/reserve/index.html"
+    },
+    {
+      "source": "/reserve",
+      "destination": "/reserve/index.html"
+    },
+    {
       "source": "/neon/:path*",
       "destination": "/api/neon?path=:path*"
     },
@@ -74,6 +98,15 @@
     },
     {
       "source": "/index.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    },
+    {
+      "source": "/reserve/index.html",
       "headers": [
         {
           "key": "Cache-Control",

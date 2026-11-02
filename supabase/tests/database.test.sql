@@ -1933,5 +1933,173 @@ select pg_temp.check('cannot list other people''s files',
 select pg_temp.check('RLS enabled on every public table',
   not exists (select 1 from pg_tables where schemaname = 'public' and not rowsecurity));
 
+
+-- ------------------------------------------------------- username reservations (20261103090000)
+-- The reservation route runs as username_reserver; D is an admin; E (ama2@example.com) has a confirmed email.
+
+create temp table ur (k text primary key, v text);
+grant all on ur to authenticated, anon, username_reserver;
+create function pg_temp.urv(p_key text) returns text language sql as $$ select v from ur where k = p_key $$;
+-- Runs p_sql as the reservation route's role and returns the jsonb result as text.
+create function pg_temp.rq(p_sql text) returns text language plpgsql as $$
+declare r text;
+begin
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'username_reserver', true);
+  execute p_sql into r;
+  perform pg_temp.act_as_admin();
+  return r;
+end $$;
+create function pg_temp.h(p text) returns text language sql immutable as $$ select encode(sha256(convert_to(p, 'UTF8')), 'hex') $$;
+update auth.users set email_confirmed_at = now() where id = '00000000-0000-0000-0000-00000000000e';
+
+-- Protected names and the one rule.
+select pg_temp.must_fail('names: a protected name can''t be taken by renaming', :A, $$update public.profiles set username = 'support' where id = '00000000-0000-0000-0000-00000000000a'$$, 'UR001');
+select pg_temp.check('names: protected names aren''t offered as available', pg_temp.q(:A, $$select public.username_available('amigo')::text$$) = 'false');
+select pg_temp.check('names: someone else''s name isn''t available', pg_temp.q(:A, $$select public.username_available('leo_park')::text$$) = 'false');
+select pg_temp.check('names: a free name is available', pg_temp.q(:A, $$select public.username_available('brand_new_1')::text$$) = 'true');
+select pg_temp.check('names: your own name counts as available', pg_temp.q(:A, $$select public.username_available('ama_mensah')::text$$) = 'true');
+select pg_temp.must_fail('names: signed out can''t ask', null, $$select public.username_available('brand_new_1')$$, '42501');
+insert into auth.users (id, email, raw_user_meta_data) values ('00000000-0000-0000-0000-0000000000a1', 'sup@example.com', '{"display_name":"Support"}');
+select pg_temp.check('names: a new account named after a protected word gets a suffix',
+  (select username ~ '^support_[0-9]{4}$' from public.profiles where id = '00000000-0000-0000-0000-0000000000a1'));
+
+-- Who may call what.
+select pg_temp.must_fail('reserve: signed-in people can''t call the route''s functions', :A, $$select public.reserve_check('x_name', repeat('a', 64))$$, '42501');
+select pg_temp.must_fail('reserve: nor can anon', null, $$select public.reserve_start('x_name', 'x@example.com', repeat('a', 64), repeat('a', 64))$$, '42501');
+select pg_temp.check('reserve: the route''s role can''t read reservations',
+  (select not has_table_privilege('username_reserver', 'public.username_reservations', 'select')
+      and not has_function_privilege('username_reserver', 'public.admin_reservations(text, text)', 'execute')
+      and not has_function_privilege('username_reserver', 'public.claim_reserved_username(uuid)', 'execute')));
+select pg_temp.check('reserve: nobody reads the tables directly',
+  (select not has_table_privilege('authenticated', 'public.username_reservations', 'select')
+      and not has_table_privilege('anon', 'public.protected_usernames', 'select')
+      and not has_table_privilege('authenticated', 'public.reservation_attempts', 'select')));
+
+-- Closed until an admin opens it.
+select pg_temp.check('reserve: closed by default', (pg_temp.rq($$select public.reserve_check('kemi_art', repeat('1', 64))::text$$)::jsonb ->> 'open') = 'false');
+select pg_temp.check('reserve: no reservations while closed',
+  (pg_temp.rq($$select public.reserve_start('kemi_art', 'kemi@example.com', repeat('b', 64), repeat('1', 64))::text$$)::jsonb ->> 'error') = 'closed');
+select pg_temp.must_fail('reserve: only admins open it', :A, $$select public.admin_set_reservation_settings(true, 180, 1)$$, null);
+select pg_temp.q(:D, $$select public.admin_set_reservation_settings(true, 180, 1)::text$$);
+
+-- Availability.
+select pg_temp.check('check: taken / not allowed / invalid / available',
+  (pg_temp.rq($$select public.reserve_check('Leo_Park', repeat('1', 64))::text$$)::jsonb ->> 'status') = 'taken'
+  and (pg_temp.rq($$select public.reserve_check('admin', repeat('1', 64))::text$$)::jsonb ->> 'status') = 'not_allowed'
+  and (pg_temp.rq($$select public.reserve_check('no', repeat('1', 64))::text$$)::jsonb ->> 'status') = 'invalid'
+  and (pg_temp.rq($$select public.reserve_check(' Kemi_Art ', repeat('1', 64))::text$$)::jsonb ->> 'status') = 'available');
+select pg_temp.check('check: never says who has a name', pg_temp.rq($$select public.reserve_check('leo_park', repeat('1', 64))::text$$) not like '%@%');
+
+-- Start → verify.
+insert into ur values ('r1', pg_temp.rq(format($$select public.reserve_start('Kemi_Art', 'Kemi@Example.com', %L, repeat('1', 64))::text$$, pg_temp.h('123456'))));
+select pg_temp.check('start: a code is to be sent, with the name lower-cased', (pg_temp.urv('r1')::jsonb ->> 'action') = 'code' and (pg_temp.urv('r1')::jsonb ->> 'username') = 'kemi_art');
+select pg_temp.check('start: only the code''s hash is stored',
+  (select code_hash = pg_temp.h('123456') and email = 'kemi@example.com' and status = 'pending' from public.username_reservations where username = 'kemi_art'));
+select pg_temp.check('check: a pending one shows as reserved', (pg_temp.rq($$select public.reserve_check('kemi_art', repeat('1', 64))::text$$)::jsonb ->> 'status') = 'reserved');
+select pg_temp.check('start: someone else can''t take a pending name',
+  (pg_temp.rq(format($$select public.reserve_start('kemi_art', 'other@example.com', %L, repeat('2', 64))::text$$, pg_temp.h('999999')))::jsonb ->> 'error') = 'unavailable');
+select pg_temp.check('start: a resend waits a minute',
+  (pg_temp.rq(format($$select public.reserve_start('kemi_art', 'kemi@example.com', %L, repeat('1', 64))::text$$, pg_temp.h('222222')))::jsonb ->> 'error') = 'wait');
+select pg_temp.check('names: a pending reservation doesn''t block the app (only verified ones do)', pg_temp.q(:A, $$select public.username_available('kemi_art')::text$$) = 'true');
+
+insert into ur values ('w1', pg_temp.rq(format($$select public.reserve_verify(%L, %L, repeat('1', 64))::text$$, pg_temp.urv('r1')::jsonb ->> 'id', pg_temp.h('000000'))));
+select pg_temp.check('verify: a wrong code is counted', (pg_temp.urv('w1')::jsonb ->> 'error') = 'wrong_code' and (pg_temp.urv('w1')::jsonb ->> 'tries_left') = '4'
+  and (select code_attempts = 1 from public.username_reservations where username = 'kemi_art'));
+insert into ur values ('v1', pg_temp.rq(format($$select public.reserve_verify(%L, %L, repeat('1', 64))::text$$, pg_temp.urv('r1')::jsonb ->> 'id', pg_temp.h('123456'))));
+select pg_temp.check('verify: the right code holds the name for 180 days',
+  (select status = 'active' and code_hash is null and expires_at between now() + interval '179 days' and now() + interval '181 days'
+     from public.username_reservations where username = 'kemi_art')
+  and (pg_temp.urv('v1')::jsonb ->> 'email') = 'kemi@example.com');
+select pg_temp.check('verify: a used code can''t be used again',
+  (pg_temp.rq(format($$select public.reserve_verify(%L, %L, repeat('1', 64))::text$$, pg_temp.urv('r1')::jsonb ->> 'id', pg_temp.h('123456')))::jsonb ->> 'error') = 'expired');
+
+-- A verified reservation protects the name everywhere.
+select pg_temp.must_fail('names: nobody else can rename to a reserved name', :A, $$update public.profiles set username = 'kemi_art' where id = '00000000-0000-0000-0000-00000000000a'$$, 'UR002');
+select pg_temp.check('names: a reserved name isn''t offered', pg_temp.q(:A, $$select public.username_available('kemi_art')::text$$) = 'false');
+insert into auth.users (id, email, raw_user_meta_data) values ('00000000-0000-0000-0000-0000000000a2', 'sneaky@example.com', '{"display_name":"Kemi","username":"kemi_art"}');
+select pg_temp.check('names: signing up with a reserved name gets a different one',
+  (select username <> 'kemi_art' from public.profiles where id = '00000000-0000-0000-0000-0000000000a2'));
+select pg_temp.check('start: the holder asking again early is told by email, not on screen',
+  (pg_temp.rq(format($$select public.reserve_start('kemi_art', 'kemi@example.com', %L, repeat('3', 64))::text$$, pg_temp.h('333333')))::jsonb ->> 'action') = 'notice_active');
+select pg_temp.check('start: one name per email (by default), told by email',
+  (pg_temp.rq(format($$select public.reserve_start('kemi_two', 'kemi@example.com', %L, repeat('3', 64))::text$$, pg_temp.h('333333')))::jsonb ->> 'action') = 'notice_limit'
+  and not exists (select 1 from public.username_reservations where username = 'kemi_two'));
+
+-- Five wrong codes and the code is gone.
+insert into ur values ('r2', pg_temp.rq(format($$select public.reserve_start('bola_b', 'bola@example.com', %L, repeat('4', 64))::text$$, pg_temp.h('555555'))));
+select pg_temp.rq(format($$select public.reserve_verify(%L, %L, repeat('4', 64))::text$$, pg_temp.urv('r2')::jsonb ->> 'id', pg_temp.h('1'))) from generate_series(1, 5);
+select pg_temp.check('verify: after five wrong codes even the right one fails',
+  (pg_temp.rq(format($$select public.reserve_verify(%L, %L, repeat('4', 64))::text$$, pg_temp.urv('r2')::jsonb ->> 'id', pg_temp.h('555555')))::jsonb ->> 'error') = 'expired');
+
+-- Rate limits (per IP).
+select pg_temp.rq(format($$select public.reserve_start('flood_%s', 'flood%s@example.com', %L, repeat('5', 64))::text$$, i, i, pg_temp.h('1'))) from generate_series(1, 10) i;
+select pg_temp.check('limits: the 11th start in an hour from one IP is refused',
+  (pg_temp.rq(format($$select public.reserve_start('flood_x', 'floodx@example.com', %L, repeat('5', 64))::text$$, pg_temp.h('1')))::jsonb ->> 'error') = 'slow_down');
+
+-- Claiming: E reserves with E's own (confirmed) email, then claims.
+insert into ur values ('r3', pg_temp.rq(format($$select public.reserve_start('ama_creates', 'ama2@example.com', %L, repeat('6', 64))::text$$, pg_temp.h('654321'))));
+select pg_temp.rq(format($$select public.reserve_verify(%L, %L, repeat('6', 64))::text$$, pg_temp.urv('r3')::jsonb ->> 'id', pg_temp.h('654321')));
+select pg_temp.check('claim: the holder sees it once signed in with that email',
+  pg_temp.q('00000000-0000-0000-0000-00000000000e', $$select string_agg(username, ',') from public.my_reservations()$$) = 'ama_creates'
+  and pg_temp.q(:A, $$select count(*)::text from public.my_reservations()$$) = '0');
+select pg_temp.must_fail('claim: nobody else can claim it', :A, format($$select public.claim_reserved_username(%L)$$, pg_temp.urv('r3')::jsonb ->> 'id'), 'UR00');
+select pg_temp.check('claim: the holder may rename to it directly too', pg_temp.q('00000000-0000-0000-0000-00000000000e', $$select public.username_available('ama_creates')::text$$) = 'true');
+select pg_temp.q('00000000-0000-0000-0000-00000000000e', format($$select public.claim_reserved_username(%L)$$, pg_temp.urv('r3')::jsonb ->> 'id'));
+select pg_temp.check('claim: the name moves to the account and the reservation closes',
+  (select username = 'ama_creates' from public.profiles where id = '00000000-0000-0000-0000-00000000000e')
+  and (select status = 'claimed' and claimed_by = '00000000-0000-0000-0000-00000000000e' from public.username_reservations where username = 'ama_creates'));
+update auth.users set email_confirmed_at = null where id = '00000000-0000-0000-0000-00000000000b';
+select pg_temp.must_fail('claim: needs a confirmed email', :B, format($$select public.claim_reserved_username(%L)$$, pg_temp.urv('r1')::jsonb ->> 'id'), 'UR008');
+
+-- Expiry frees the name.
+update public.username_reservations set expires_at = now() - interval '1 minute' where username = 'kemi_art';
+select pg_temp.check('expiry: an expired hold no longer protects the name',
+  (pg_temp.rq($$select public.reserve_check('kemi_art', repeat('7', 64))::text$$)::jsonb ->> 'status') = 'available'
+  and pg_temp.q(:A, $$select public.username_available('kemi_art')::text$$) = 'true');
+-- (The suite is one transaction, so now() doesn't move: age the last code past the one-minute wait.)
+update public.username_reservations set expires_at = now() + interval '10 days', code_sent_at = now() - interval '2 minutes' where username = 'kemi_art';
+select pg_temp.check('renewal: in the last 30 days the holder gets a new code',
+  (pg_temp.rq(format($$select public.reserve_start('kemi_art', 'kemi@example.com', %L, repeat('7', 64))::text$$, pg_temp.h('777777')))::jsonb ->> 'renewal') = 'true');
+select pg_temp.rq(format($$select public.reserve_verify(%L, %L, repeat('7', 64))::text$$, pg_temp.urv('r1')::jsonb ->> 'id', pg_temp.h('777777')));
+select pg_temp.check('renewal: the hold restarts', (select expires_at > now() + interval '170 days' from public.username_reservations where username = 'kemi_art'));
+
+-- Admin tools.
+select pg_temp.check('admin: sees reservations with their emails',
+  pg_temp.q(:D, $$select email from public.admin_reservations('live', 'kemi') limit 1$$) = 'kemi@example.com');
+select pg_temp.must_fail('admin: others can''t list reservations', :A, $$select * from public.admin_reservations()$$, null);
+select pg_temp.q(:D, format($$select public.admin_extend_reservation(%L, 30)::text$$, pg_temp.urv('r1')::jsonb ->> 'id'));
+select pg_temp.must_fail('admin: revoking needs a reason', :D, format($$select public.admin_revoke_reservation(%L, '')$$, pg_temp.urv('r1')::jsonb ->> 'id'), '22023');
+select pg_temp.q(:D, format($$select public.admin_revoke_reservation(%L, 'Impersonating a known artist')::text$$, pg_temp.urv('r1')::jsonb ->> 'id'));
+select pg_temp.check('admin: a revoked name is free again', (pg_temp.rq($$select public.reserve_check('kemi_art', repeat('8', 64))::text$$)::jsonb ->> 'status') = 'available');
+select pg_temp.check('admin: the audit log never holds the email',
+  exists (select 1 from public.admin_audit_log where action = 'reservations.revoke')
+  and not exists (select 1 from public.admin_audit_log where action like 'reservations.%' and (summary like '%@example.com%' or details::text like '%@example.com%')));
+select pg_temp.q(:D, $$select public.admin_protect_username('Lagos_Official', 'brand')::text$$);
+select pg_temp.check('admin: newly protected names are refused', (pg_temp.rq($$select public.reserve_check('lagos_official', repeat('8', 64))::text$$)::jsonb ->> 'status') = 'not_allowed');
+select pg_temp.q(:D, $$select public.admin_set_username('00000000-0000-0000-0000-00000000000d', 'support', 'Official support account')::text$$);
+select pg_temp.check('admin: can give an official account a protected name',
+  (select username = 'support' from public.profiles where id = '00000000-0000-0000-0000-00000000000d')
+  and exists (select 1 from public.admin_audit_log where action = 'reservations.assign' and target_id = :D));
+select pg_temp.must_fail('admin: the override doesn''t leak past the admin''s own change', :A,
+  $$update public.profiles set username = 'help' where id = '00000000-0000-0000-0000-00000000000a'$$, 'UR001');
+-- Housekeeping (20261103100000): real status in the admin list, emails deleted 30 days after closing.
+select pg_temp.check('check: tells the page how long a hold lasts', (pg_temp.rq($$select public.reserve_check('x_y_z', repeat('9', 64))::text$$)::jsonb ->> 'hold_days') = '180');
+insert into public.username_reservations (username, email, status, verified_at, expires_at, created_at)
+values ('old_hold', 'old@example.com', 'active', now() - interval '200 days', now() - interval '1 day', now() - interval '200 days');
+select pg_temp.check('admin: a hold whose time ran out shows as expired, not live',
+  pg_temp.q(:D, $$select count(*)::text from public.admin_reservations('live', 'old_hold')$$) = '0'
+  and pg_temp.q(:D, $$select status from public.admin_reservations('expired', 'old_hold')$$) = 'expired');
+update public.username_reservations set closed_at = now() - interval '31 days' where username = 'kemi_art';
+select pg_temp.must_fail('housekeeping: not for other people', :A, $$select public.admin_reservation_housekeeping()$$, null);
+select pg_temp.check('housekeeping: the route''s role can''t run it directly',
+  not has_function_privilege('username_reserver', 'public.reservation_housekeeping()', 'execute'));
+select pg_temp.q(:D, $$select public.admin_reservation_housekeeping()::text$$);
+select pg_temp.check('housekeeping: closed over 30 days ago → deleted with its email; recent ones kept',
+  not exists (select 1 from public.username_reservations where username = 'kemi_art')
+  and exists (select 1 from public.username_reservations where username = 'ama_creates' and status = 'claimed')
+  and (select status = 'expired' and closed_at is not null from public.username_reservations where username = 'old_hold'));
+select pg_temp.q(:D, $$select public.admin_set_reservation_settings(false, 180, 1)::text$$);
+
 rollback;
 \echo 'ALL DATABASE TESTS PASSED'

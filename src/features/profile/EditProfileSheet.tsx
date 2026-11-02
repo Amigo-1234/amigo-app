@@ -115,7 +115,7 @@ function EditProfileForm({ profile, onClose, onSaved }: { profile: Profile; onCl
     invalid: "3–24 characters: lowercase letters, numbers and underscores.",
     checking: "Checking…",
     available: "Available",
-    taken: "That username is taken.",
+    taken: "That username isn’t available.",
   };
 
   return (
@@ -178,6 +178,7 @@ function EditProfileForm({ profile, onClose, onSaved }: { profile: Profile; onCl
             {handleHint[handleState]}
           </span>
         </label>
+        <ReservedNames onClaimed={(h) => onSaved(true, h)} />
 
         <label className="field">
           <span className="field__label">
@@ -203,5 +204,53 @@ function EditProfileForm({ profile, onClose, onSaved }: { profile: Profile; onCl
         )}
       </div>
     </form>
+  );
+}
+
+/**
+ * Usernames this account's confirmed email reserved before Amigo opened. Claiming
+ * moves the name onto the account straight away (the database checks the email).
+ */
+function ReservedNames({ onClaimed }: { onClaimed: (handle: string) => void }) {
+  const toast = useToast();
+  const [names, setNames] = useState<{ id: string; username: string }[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    dataSource.usernames?.mine().then((r) => live && setNames(r), () => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+  if (!names.length) return null;
+  return (
+    <div className="edit-profile__reserved" role="group" aria-label="Your reserved usernames">
+      {names.map((n) => (
+        <p key={n.id}>
+          <span>
+            You reserved <strong>@{n.username}</strong>.
+          </span>
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={busy === n.id}
+            disabled={!!busy}
+            onClick={async () => {
+              setBusy(n.id);
+              try {
+                const handle = await dataSource.usernames!.claim(n.id);
+                toast(`@${handle} is yours`);
+                onClaimed(handle);
+              } catch (e) {
+                toast(e instanceof Error ? e.message : "Couldn't claim it. Try again.", "error");
+                setBusy(null);
+              }
+            }}
+          >
+            Use it
+          </Button>
+        </p>
+      ))}
+    </div>
   );
 }
