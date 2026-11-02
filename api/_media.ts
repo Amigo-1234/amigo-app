@@ -32,7 +32,7 @@ export function r2(): R2 | null {
  * "b/<business>/<purpose>/<hex>.<ext>" (smaller copies: "<hex>-sm.<ext>", media_begin_variant).
  */
 export const KEY =
-  /^(?:[0-9a-f-]{36}\/(avatar|post|moment|dm)\/(?:[0-9a-f-]{36}\/)?|b\/[0-9a-f-]{36}\/(business_logo|business_cover|business_post)\/)[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif|mp4|webm|mov|bin)$/;
+  /^(?:[0-9a-f-]{36}\/(avatar|post|moment|dm)\/(?:[0-9a-f-]{36}\/)?|b\/[0-9a-f-]{36}\/(business_logo|business_cover|business_post|business_listing)\/)[0-9a-f]{32}(?:-sm)?\.(jpg|png|webp|gif|mp4|webm|mov|bin)$/;
 
 const objectUrl = (s: R2, key: string) => `${s.base}/${key.split("/").map(encodeURIComponent).join("/")}`;
 

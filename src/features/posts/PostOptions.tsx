@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Ban, Bookmark, Flag, Link2, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-import { dataSource, POST_MAX_LENGTH, type ContentReportTarget, type MessageReportReason, type Post } from "../../data";
+import { dataSource, POST_MAX_LENGTH, type ContentReportReason, type ContentReportTarget, type Post } from "../../data";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Button, IconButton } from "../../ui/Button";
 import { Sheet } from "../../ui/Sheet";
-import { REPORT_REASONS } from "../reports/reasons";
+import { LISTING_REPORT_REASONS, REPORT_REASONS } from "../reports/reasons";
 import { publicUrl } from "../../lib/publicUrl";
 import { businessApi, businessPostsChanged, useMyBusiness } from "../business/useMyBusiness";
 
@@ -227,7 +227,7 @@ function ConfirmDelete({ onConfirm, onCancel }: { onConfirm: () => Promise<void>
 export function ReportForm({ target, targetId, what, onDone }: { target: ContentReportTarget; targetId: string; what: string; onDone: () => void }) {
   const viewer = useViewer();
   const toast = useToast();
-  const [reason, setReason] = useState<MessageReportReason | null>(null);
+  const [reason, setReason] = useState<ContentReportReason | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   return (
@@ -235,7 +235,7 @@ export function ReportForm({ target, targetId, what, onDone }: { target: Content
       <h2 className="sheet-form__title">Report {what}</h2>
       <fieldset className="sheet-form__choices">
         <legend className="sheet-form__body">{"What's wrong?"}</legend>
-        {REPORT_REASONS.map((r) => (
+        {(target === "listing" ? LISTING_REPORT_REASONS : REPORT_REASONS).map((r) => (
           <label key={r.id} className="choice">
             <input type="radio" name={`report-${targetId}`} checked={reason === r.id} onChange={() => setReason(r.id)} />
             {r.label}

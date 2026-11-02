@@ -1,4 +1,4 @@
-import type { MessageReportReason } from "../../data";
+import type { ContentReportReason, MessageReportReason } from "../../data";
 
 /** The reasons people can report something for (messages, Moments). */
 export const REPORT_REASONS: { id: MessageReportReason; label: string }[] = [
@@ -6,6 +6,12 @@ export const REPORT_REASONS: { id: MessageReportReason; label: string }[] = [
   { id: "harassment", label: "Harassment or bullying" },
   { id: "inappropriate", label: "Inappropriate content" },
   { id: "other", label: "Something else" },
+];
+
+/** Listings can also be reported as prohibited or counterfeit. */
+export const LISTING_REPORT_REASONS: { id: ContentReportReason; label: string }[] = [
+  ...REPORT_REASONS,
+  { id: "prohibited", label: "Prohibited or counterfeit item" },
 ];
 
 export const reportReasonLabel = (id: MessageReportReason) => REPORT_REASONS.find((r) => r.id === id)?.label ?? id;

@@ -2,34 +2,53 @@
  * Business profiles in demo mode: in memory, for UI work and browser tests. Off unless the page
  * is opened with ?demo=business (as on a real backend, where an admin turns them on).
  */
-import { BusinessError, type AdminBusiness, type Business, type BusinessApi, type BusinessInput, type MyBusiness, type Post, type Viewer } from "./types";
+import { BusinessError, type AdminBusiness, type Business, type BusinessApi, type BusinessInput, type ListingCard, type MyBusiness, type Post, type Viewer } from "./types";
 
-type Rec = Omit<Business, "following" | "mine" | "postCount"> & { ownerId: string; status: "active" | "suspended"; handleChangedAt: Date };
+export type DemoBusinessRec = Omit<Business, "following" | "mine" | "postCount"> & { ownerId: string; status: "active" | "suspended"; handleChangedAt: Date };
+type Rec = DemoBusinessRec;
+
+/** What the demo Marketplace needs from the demo businesses (and gives back: listing cards on posts). */
+export interface DemoBusinessBridge {
+  records: () => DemoBusinessRec[];
+  mine: () => DemoBusinessRec | null;
+  listingCard: (id: string) => ListingCard | null;
+  listingCount: (businessId: string) => number;
+  /** A deleted listing leaves the posts that shared it (as posts.listing_id is set null). */
+  listingDeleted: (id: string) => void;
+}
 
 const HANDLE = /^[a-z0-9_]{3,24}$/;
 const RESERVED = new Set(["amigo", "amigoworld", "admin", "support", "official", "help", "team", "security", "staff", "moderator"]);
 
-export function createDemoBusiness(deps: { enabled: boolean; viewer: () => Viewer; later: <T>(fn: () => T, ms?: number) => Promise<T> }): BusinessApi {
+export function createDemoBusiness(deps: { enabled: boolean; viewer: () => Viewer; later: <T>(fn: () => T, ms?: number) => Promise<T> }): BusinessApi & { bridge: DemoBusinessBridge } {
   let enabled = deps.enabled;
   const days = (n: number) => new Date(Date.now() - n * 86_400_000);
   const recs: Rec[] = [
-    { id: "biz-kitchen", ownerId: "kofi", handle: "kofis_kitchen", name: "Kofi's Kitchen", category: "food_drink", description: "Jollof, suya and weekend specials. Delivery across the island.", logoUrl: null, coverUrl: null, website: "https://kofis-kitchen.example.com", email: null, phone: "+234 801 000 0000", followerCount: 128, createdAt: days(40), status: "active", handleChangedAt: days(40) },
+    { id: "biz-kitchen", ownerId: "kofi", handle: "kofis_kitchen", name: "Kofi's Kitchen", category: "food_drink", description: "Jollof, suya and weekend specials. Delivery across the island.", logoUrl: null, coverUrl: null, website: "https://kofis-kitchen.example.com", email: null, phone: "+234 801 000 0000", followerCount: 128, createdAt: days(40), status: "active", handleChangedAt: days(40), area: "Victoria Island, Lagos", hours: { mon: [["10:00", "21:00"]], tue: [["10:00", "21:00"]], wed: [["10:00", "21:00"]], thu: [["10:00", "21:00"]], fri: [["10:00", "23:00"]], sat: [["12:00", "23:00"]] } },
     { id: "biz-studio", ownerId: "mira", handle: "mira_studio", name: "Mira Studio", category: "creative_media", description: "Portraits, events and product photography.", logoUrl: null, coverUrl: null, website: null, email: "hello@mirastudio.example.com", phone: null, followerCount: 54, createdAt: days(12), status: "active", handleChangedAt: days(12) },
     { id: "biz-tech", ownerId: "leo", handle: "leo_repairs", name: "Leo Phone Repairs", category: "technology", description: "Screens, batteries and same-day fixes.", logoUrl: null, coverUrl: null, website: null, email: null, phone: null, followerCount: 9, createdAt: days(3), status: "active", handleChangedAt: days(3) },
   ];
-  const posts: { id: string; businessId: string; text: string; createdAt: Date }[] = [
+  const posts: { id: string; businessId: string; text: string; createdAt: Date; listingId?: string | null }[] = [
     { id: "bp-1", businessId: "biz-kitchen", text: "Weekend special: smoky party jollof with grilled chicken. Order by Friday!", createdAt: days(1) },
-    { id: "bp-2", businessId: "biz-studio", text: "A few spots left for October portrait sessions.", createdAt: days(2) },
+    { id: "bp-2", businessId: "biz-studio", text: "A few spots left for October portrait sessions.", createdAt: days(2), listingId: "lst-portrait" },
   ];
   const follows = new Set<string>(["biz-kitchen"]);
   const me = () => deps.viewer().id;
   const mine = () => recs.find((r) => r.ownerId === me()) ?? null;
   const live = (r: Rec) => r.status === "active";
+  const bridge: DemoBusinessBridge = {
+    records: () => recs,
+    mine: () => mine(),
+    listingCard: () => null,
+    listingCount: () => 0,
+    listingDeleted: (id) => posts.forEach((p) => p.listingId === id && (p.listingId = null)),
+  };
   const view = (r: Rec): Business => ({
     ...r,
     following: follows.has(r.id),
     mine: r.ownerId === me(),
     postCount: posts.filter((p) => p.businessId === r.id).length,
+    listingCount: bridge.listingCount(r.id),
   });
   const check = (input: BusinessInput, handle: string) => {
     if (!HANDLE.test(handle) || RESERVED.has(handle)) throw new BusinessError("handle", "that handle isn't available");
@@ -48,10 +67,12 @@ export function createDemoBusiness(deps: { enabled: boolean; viewer: () => Viewe
       likeCount: 0,
       likedByViewer: false,
       replyCount: 0,
+      listing: p.listingId ? { id: p.listingId, card: bridge.listingCard(p.listingId) } : null,
     };
   };
 
   return {
+    bridge,
     mine: () =>
       deps.later(() => {
         const r = mine();
@@ -134,14 +155,22 @@ export function createDemoBusiness(deps: { enabled: boolean; viewer: () => Viewe
         return r.followerCount;
       }, 200),
     followedIds: () => deps.later(() => new Set(follows), 50),
-    createPost: (text, images) =>
+    setDetails: (area, hours) =>
       deps.later(() => {
         const r = mine();
         if (!r) throw new BusinessError("unknown");
         if (!live(r)) throw new BusinessError("suspended");
-        if (!text.trim() && images.length === 0) throw new BusinessError("invalid");
+        r.area = area?.trim() || null;
+        r.hours = hours;
+      }),
+    createPost: (text, images, listingId) =>
+      deps.later(() => {
+        const r = mine();
+        if (!r) throw new BusinessError("unknown");
+        if (!live(r)) throw new BusinessError("suspended");
+        if (!text.trim() && images.length === 0 && !listingId) throw new BusinessError("invalid");
         const id = `bp-${posts.length + 1}-${Date.now()}`;
-        posts.push({ id, businessId: r.id, text: text.trim(), createdAt: new Date() });
+        posts.push({ id, businessId: r.id, text: text.trim(), createdAt: new Date(), listingId: listingId ?? null });
         return id;
       }),
     deletePost: (postId) =>

@@ -1318,6 +1318,231 @@ select pg_temp.check('grants: nothing new is callable by everyone, nor by signed
          and has_function_privilege('anon', p.oid, 'execute')));
 select pg_temp.q(:D, $$select public.admin_set_businesses_enabled(false)::text$$);
 
+-- Marketplace (20261102090000). A and E run businesses; B and C are customers; D is an admin.
+create temp table mk (k text primary key, v text);
+grant all on mk to authenticated, anon;
+create function pg_temp.mkv(p_key text) returns text language sql as $$ select v from mk where k = p_key $$;
+select pg_temp.q(:D, $$select public.admin_set_businesses_enabled(true)::text$$);
+update auth.users set email_confirmed_at = now() where id in (:A, '00000000-0000-0000-0000-00000000000e');
+insert into mk values ('biz', pg_temp.q(:A, $$select public.create_business('acme_mk', 'Acme Market', 'retail', 'Shoes and more')::text$$));
+insert into mk values ('biz2', pg_temp.q('00000000-0000-0000-0000-00000000000e', $$select public.create_business('eve_mk', 'Eve Studio', 'services')::text$$));
+
+-- Off until an admin turns it on
+select pg_temp.must_fail('market: off by default', :A,
+  $$select public.create_listing(p_kind => 'product', p_title => 'Red shoes', p_description => '', p_category => 'fashion', p_price_minor => 1500000)$$, 'MK001');
+select pg_temp.check('market: nothing to find while off', pg_temp.q(:B, $$select count(*)::text from public.search_listings()$$) = '0');
+select pg_temp.check('market: the switch list is empty while off', pg_temp.q(:B, $$select cardinality(public.enabled_features())::text$$) = '0');
+select pg_temp.must_fail('market: only admins switch it on', :A, $$select public.admin_set_feature('marketplace', true)$$, '42501');
+select pg_temp.must_fail('market: switches aren''t readable directly', :A, $$select count(*) from public.app_features$$, '42501');
+select pg_temp.q(:D, $$select public.admin_set_feature('marketplace', true)::text$$);
+select pg_temp.check('market: on, audit-logged, and listed for the app',
+  pg_temp.q(:B, $$select array_to_string(public.enabled_features(), ',')$$) = 'marketplace'
+  and exists (select 1 from public.admin_audit_log where action = 'feature.enable' and summary like '%marketplace%'));
+
+-- Who can list, and field rules
+select pg_temp.must_fail('market: only businesses sell (for now)', :B,
+  $$select public.create_listing(p_kind => 'product', p_title => 'My bike', p_description => '', p_category => 'sports_outdoors', p_price_minor => 100)$$, 'MK001');
+select pg_temp.must_fail('market: the category must suit the kind', :A,
+  $$select public.create_listing(p_kind => 'service', p_title => 'Shoe repair', p_description => '', p_category => 'fashion', p_price_minor => 100)$$, 'MK002');
+select pg_temp.must_fail('market: services have no condition', :A,
+  $$select public.create_listing(p_kind => 'service', p_title => 'Shoe repair', p_description => '', p_category => 'repairs', p_price_minor => 100, p_condition => 'new')$$, 'MK002');
+select pg_temp.must_fail('market: titles need 3+ characters', :A,
+  $$select public.create_listing(p_kind => 'product', p_title => 'x', p_description => '', p_category => 'fashion', p_price_minor => 100)$$, 'MK002');
+select pg_temp.must_fail('market: no negative prices', :A,
+  $$select public.create_listing(p_kind => 'product', p_title => 'Odd', p_description => '', p_category => 'fashion', p_price_minor => -1)$$, 'MK002');
+select pg_temp.must_fail('market: the owner can''t list as removed', :A,
+  $$select public.create_listing(p_kind => 'product', p_title => 'Odd', p_description => '', p_category => 'fashion', p_price_minor => 1, p_status => 'removed')$$, 'MK002');
+insert into mk values ('shoes', pg_temp.q(:A, $$select public.create_listing(p_kind => 'product', p_title => 'Red running shoes', p_description => 'Light, size 42',
+  p_category => 'fashion', p_price_minor => 1500000, p_condition => 'new', p_area => 'Lekki, Lagos', p_fulfilment => array['delivery', 'collection'])::text$$));
+insert into mk values ('bag', pg_temp.q(:A, $$select public.create_listing(p_kind => 'product', p_title => 'Leather bag', p_description => 'Brown',
+  p_category => 'fashion', p_price_minor => 4500000, p_condition => 'good', p_area => 'Ikeja, Lagos')::text$$));
+insert into mk values ('draft', pg_temp.q(:A, $$select public.create_listing(p_kind => 'product', p_title => 'Secret launch', p_description => '',
+  p_category => 'fashion', p_price_minor => null, p_status => 'draft')::text$$));
+insert into mk values ('svc', pg_temp.q('00000000-0000-0000-0000-00000000000e', $$select public.create_listing(p_kind => 'service', p_title => 'Portrait session',
+  p_description => 'One hour in studio', p_category => 'events_media', p_price_minor => 2500000, p_price_unit => 'session', p_section => 'Photography')::text$$));
+select pg_temp.check('market: listings are created for the business (prices in kobo, NGN)',
+  (select business_id = pg_temp.mkv('biz')::uuid and price_minor = 1500000 and currency = 'NGN' and status = 'available' from public.listings where id = pg_temp.mkv('shoes')::uuid));
+select pg_temp.check('market: drafts are visible to the business only',
+  pg_temp.q(:B, format('select count(*)::text from public.listings where id = %L', pg_temp.mkv('draft'))) = '0'
+  and pg_temp.q(:B, format('select (public.listing_view(%L) is null)::text', pg_temp.mkv('draft'))) = 'true'
+  and pg_temp.q(:A, format('select count(*)::text from public.listings where id = %L', pg_temp.mkv('draft'))) = '1');
+select pg_temp.check('market: anyone signed in reads an available listing',
+  pg_temp.q(:B, format('select title from public.listings where id = %L', pg_temp.mkv('shoes'))) = 'Red running shoes'
+  and pg_temp.q(:B, format($$select public.listing_view(%L) -> 'business' ->> 'handle'$$, pg_temp.mkv('shoes'))) = 'acme_mk'
+  and pg_temp.q(:B, format($$select (public.listing_view(%L) ->> 'mine')$$, pg_temp.mkv('shoes'))) = 'false'
+  and pg_temp.q(:A, format($$select (public.listing_view(%L) ->> 'mine')$$, pg_temp.mkv('shoes'))) = 'true');
+select pg_temp.must_fail('market: the admin''s removal note isn''t readable', :B, $$select removed_note from public.listings limit 1$$, '42501');
+select pg_temp.check('market: who runs it is never in the listing', pg_temp.q(:B, format('select public.listing_view(%L)::text', pg_temp.mkv('shoes'))) not like '%00000000-0000-0000-0000-00000000000a%');
+select pg_temp.must_fail('market: no direct writes', :A,
+  format($$insert into public.listings (business_id, kind, title, category_id) values (%L, 'product', 'Sneaky', 'fashion')$$, pg_temp.mkv('biz')), '42501');
+select pg_temp.must_fail('market: …nor direct updates', :A, format($$update public.listings set price_minor = 1 where id = %L$$, pg_temp.mkv('shoes')), '42501');
+
+-- Editing and status
+select pg_temp.q(:A, format($$select public.update_listing(%L, 'product', 'Red running shoes', 'Light, size 42 and 43', 'fashion', 1400000, 'item', 'new',
+  null, 'Lekki, Lagos', array['delivery'], 'Same-day in Lagos', 'available', null)::text$$, pg_temp.mkv('shoes')));
+select pg_temp.check('market: the owner edits a listing', (select price_minor = 1400000 and delivery_note = 'Same-day in Lagos' from public.listings where id = pg_temp.mkv('shoes')::uuid));
+select pg_temp.must_fail('market: another business can''t edit it', '00000000-0000-0000-0000-00000000000e',
+  format($$select public.set_listing_status(%L, 'sold')$$, pg_temp.mkv('shoes')), 'MK003');
+select pg_temp.must_fail('market: …nor a customer', :B, format($$select public.delete_listing(%L)$$, pg_temp.mkv('shoes')), 'MK003');
+select pg_temp.q(:A, format($$select public.set_listing_status(%L, 'reserved')::text$$, pg_temp.mkv('bag')));
+select pg_temp.check('market: reserved listings still show in search',
+  pg_temp.q(:B, format('select status from public.search_listings() where id = %L', pg_temp.mkv('bag'))) = 'reserved');
+select pg_temp.q(:A, format($$select public.set_listing_status(%L, 'sold')::text$$, pg_temp.mkv('bag')));
+select pg_temp.check('market: sold listings leave search but their page still says sold',
+  pg_temp.q(:B, format('select count(*)::text from public.search_listings() where id = %L', pg_temp.mkv('bag'))) = '0'
+  and pg_temp.q(:B, format($$select public.listing_view(%L) -> 'listing' ->> 'status'$$, pg_temp.mkv('bag'))) = 'sold');
+select pg_temp.check('market: the owner sees every status in Manage', pg_temp.q(:A, $$select count(*)::text from public.my_listings()$$) = '3');
+
+-- Search
+select pg_temp.check('market: words match by prefix', pg_temp.q(:B, $$select string_agg(title, ',') from public.search_listings('red sho')$$) = 'Red running shoes');
+select pg_temp.check('market: …and the description and section', pg_temp.q(:B, $$select string_agg(title, ',') from public.search_listings('photo')$$) = 'Portrait session');
+select pg_temp.check('market: category, kind and business filters',
+  pg_temp.q(:B, $$select count(*)::text from public.search_listings(p_category => 'events_media')$$) = '1'
+  and pg_temp.q(:B, $$select count(*)::text from public.search_listings(p_kind => 'product')$$) = '1'
+  and pg_temp.q(:B, format('select count(*)::text from public.search_listings(p_business => %L)', pg_temp.mkv('biz2'))) = '1');
+select pg_temp.check('market: price range and area',
+  pg_temp.q(:B, $$select string_agg(title, ',') from public.search_listings(p_min_price => 2000000)$$) = 'Portrait session'
+  and pg_temp.q(:B, $$select string_agg(title, ',') from public.search_listings(p_max_price => 1500000)$$) = 'Red running shoes'
+  and pg_temp.q(:B, $$select string_agg(title, ',') from public.search_listings(p_area => 'lekki')$$) = 'Red running shoes');
+select pg_temp.check('market: sort by price', pg_temp.q(:B, $$select string_agg(title, ',') from public.search_listings(p_sort => 'price_desc')$$) = 'Portrait session,Red running shoes');
+select pg_temp.check('market: odd input is harmless (wildcards literal, punctuation ignored)',
+  pg_temp.q(:B, $$select count(*)::text from public.search_listings(p_area => '%')$$) = '0'
+  and pg_temp.q(:B, $$select count(*)::text from public.search_listings(''' & | ! :* (')$$) = '2');
+select pg_temp.check('market: categories are listed for the app', pg_temp.q(:B, $$select count(*)::text from public.listing_category_list()$$) = '21');
+
+-- Saved listings
+select pg_temp.q(:B, format('select public.save_listing(%L, true)::text', pg_temp.mkv('shoes')));
+select pg_temp.q(:B, format('select public.save_listing(%L, true)::text', pg_temp.mkv('shoes')));
+select pg_temp.check('market: saves count once and show as saved',
+  (select save_count = 1 from public.listings where id = pg_temp.mkv('shoes')::uuid)
+  and pg_temp.q(:B, format('select saved::text from public.search_listings() where id = %L', pg_temp.mkv('shoes'))) = 'true'
+  and pg_temp.q(:B, $$select string_agg(x::text, ',') from public.my_saved_listings() x$$) = pg_temp.mkv('shoes'));
+select pg_temp.must_fail('market: drafts can''t be saved', :B, format('select public.save_listing(%L, true)', pg_temp.mkv('draft')), 'MK003');
+select pg_temp.must_fail('market: saves are private', :A, $$select count(*) from public.listing_saves$$, '42501');
+insert into public.listing_action_log (user_id, action) select :C, 'save' from generate_series(1, 200);
+select pg_temp.must_fail('market: at most 200 saves an hour', :C, format('select public.save_listing(%L, true)', pg_temp.mkv('shoes')), 'RL001');
+delete from public.listing_action_log where user_id = :C;
+select pg_temp.q(:B, format('select public.save_listing(%L, false)::text', pg_temp.mkv('shoes')));
+select pg_temp.check('market: unsave lowers the count', (select save_count = 0 from public.listings where id = pg_temp.mkv('shoes')::uuid));
+
+-- Rate limits
+insert into public.listing_action_log (business_id, action) select pg_temp.mkv('biz2')::uuid, 'create' from generate_series(1, 20);
+select pg_temp.must_fail('market: at most 20 new listings a day', '00000000-0000-0000-0000-00000000000e',
+  $$select public.create_listing(p_kind => 'service', p_title => 'One more', p_description => '', p_category => 'events_media', p_price_minor => 1)$$, 'RL001');
+delete from public.listing_action_log where business_id = pg_temp.mkv('biz2')::uuid;
+
+-- Photos
+insert into mk values ('p1', pg_temp.q(:A, format($$select public.media_begin_upload('business_listing', 'image/jpeg', 1000, null, %L)$$, pg_temp.mkv('biz'))));
+insert into mk values ('p2', pg_temp.q(:A, format($$select public.media_begin_upload('business_listing', 'image/jpeg', 1000, null, %L)$$, pg_temp.mkv('biz'))));
+insert into mk values ('p3', pg_temp.q(:A, format($$select public.media_begin_upload('business_listing', 'image/png', 1000, null, %L)$$, pg_temp.mkv('biz'))));
+select pg_temp.check('media: listing photos are named after the business',
+  pg_temp.mkv('p1') like 'b/' || pg_temp.mkv('biz') || '/business_listing/%' and pg_temp.mkv('p1') not like '%00000000-0000-0000-0000-00000000000a%');
+select pg_temp.must_fail('media: only the business uploads its listing photos', '00000000-0000-0000-0000-00000000000e',
+  format($$select public.media_begin_upload('business_listing', 'image/jpeg', 1000, null, %L)$$, pg_temp.mkv('biz')), 'MD001');
+select pg_temp.must_fail('media: listing photos are images only', :A,
+  format($$select public.media_begin_upload('business_listing', 'video/mp4', 1000, null, %L)$$, pg_temp.mkv('biz')), 'MD002');
+select pg_temp.q(:A, format($$select public.update_listing(%L, 'product', 'Red running shoes', 'Light', 'fashion', 1400000, 'item', 'new',
+  null, 'Lekki, Lagos', array['delivery'], null, 'available', %L)::text$$, pg_temp.mkv('shoes'),
+  jsonb_build_array(jsonb_build_object('storage_path', pg_temp.mkv('p1'), 'mime_type', 'image/jpeg', 'width', 10, 'height', 10),
+                    jsonb_build_object('storage_path', pg_temp.mkv('p2'), 'mime_type', 'image/jpeg', 'width', 10, 'height', 10))));
+select pg_temp.check('media: photos are attached in order and the first is the cover',
+  pg_temp.q(:B, format('select cover_path from public.search_listings() where id = %L', pg_temp.mkv('shoes'))) = pg_temp.mkv('p1')
+  and pg_temp.q(:B, format($$select jsonb_array_length(public.listing_view(%L) -> 'media')::text$$, pg_temp.mkv('shoes'))) = '2');
+select pg_temp.check('media: customers can open a listing''s photos', pg_temp.q(:B, format('select public.media_can_read(%L)::text', pg_temp.mkv('p1'))) = 'true');
+select pg_temp.must_fail('media: another business''s photo can''t be used', '00000000-0000-0000-0000-00000000000e',
+  format($$select public.update_listing(%L, 'service', 'Portrait session', '', 'events_media', 2500000, 'session', null, null, null, '{}', null, 'available', %L)$$,
+    pg_temp.mkv('svc'), jsonb_build_array(jsonb_build_object('storage_path', pg_temp.mkv('p3'), 'mime_type', 'image/png'))), 'MD001');
+select pg_temp.q(:A, format($$select public.update_listing(%L, 'product', 'Red running shoes', 'Light', 'fashion', 1400000, 'item', 'new',
+  null, 'Lekki, Lagos', array['delivery'], null, 'available', %L)::text$$, pg_temp.mkv('shoes'),
+  jsonb_build_array(jsonb_build_object('storage_path', pg_temp.mkv('p2'), 'mime_type', 'image/jpeg'),
+                    jsonb_build_object('storage_path', pg_temp.mkv('p3'), 'mime_type', 'image/png'))));
+select pg_temp.check('media: reordering keeps photos; one left out is queued for deletion',
+  pg_temp.q(:B, format('select cover_path from public.search_listings() where id = %L', pg_temp.mkv('shoes'))) = pg_temp.mkv('p2')
+  and pg_temp.queued(pg_temp.mkv('p1')) = 1 and pg_temp.queued(pg_temp.mkv('p2')) = 0 and pg_temp.queued(pg_temp.mkv('p3')) = 0);
+select pg_temp.must_fail('media: at most 8 photos', :A,
+  format($$select public.update_listing(%L, 'product', 'Red running shoes', 'Light', 'fashion', 1, 'item', 'new', null, null, '{}', null, 'available', %L)$$,
+    pg_temp.mkv('shoes'), (select jsonb_agg(jsonb_build_object('storage_path', pg_temp.mkv('p2'))) from generate_series(1, 9))), 'MK002');
+
+-- Sharing a listing in a business post
+insert into mk values ('post', pg_temp.q(:A, format($$select public.create_business_post('New in!', '[]', %L)::text$$, pg_temp.mkv('shoes'))));
+select pg_temp.check('posts: a business post shares its listing',
+  pg_temp.q(:B, format('select listing_id::text from public.posts where id = %L', pg_temp.mkv('post'))) = pg_temp.mkv('shoes'));
+select pg_temp.must_fail('posts: not another business''s listing', '00000000-0000-0000-0000-00000000000e',
+  format($$select public.create_business_post('Look', '[]', %L)$$, pg_temp.mkv('shoes')), 'MK003');
+select pg_temp.must_fail('posts: not a sold one', :A, format($$select public.create_business_post('Look', '[]', %L)$$, pg_temp.mkv('bag')), 'MK003');
+select pg_temp.must_fail('posts: personal posts can''t carry a listing (no direct writes)', :B,
+  format($$insert into public.posts (author_id, body, listing_id) values ('00000000-0000-0000-0000-00000000000b', 'x', %L)$$, pg_temp.mkv('shoes')), '42501');
+select pg_temp.check('posts: …and the table refuses one anyway', (select pg_get_constraintdef(oid) like '%business_id IS NOT NULL%' from pg_constraint where conname = 'posts_listing_business'));
+
+-- Business details
+select pg_temp.q(:A, $$select public.set_business_details('Lekki, Lagos', '{"mon": [["09:00", "17:00"]], "sat": [["10:00", "14:00"], ["15:00", "18:00"]]}')::text$$);
+select pg_temp.check('business: area, hours and open listings on the page',
+  pg_temp.q(:B, $$select area || '|' || (hours -> 'mon' -> 0 ->> 1) || '|' || listing_count from public.business_by_handle('acme_mk')$$) = 'Lekki, Lagos|17:00|1');
+select pg_temp.must_fail('business: hours are checked', :A, $$select public.set_business_details(null, '{"mon": [["18:00", "09:00"]]}')$$, '22023');
+select pg_temp.must_fail('business: …days too', :A, $$select public.set_business_details(null, '{"someday": []}')$$, '22023');
+
+-- Reports and moderation
+select pg_temp.q(:B, format('select public.report_content(%L, %L, %L)::text', 'listing', pg_temp.mkv('shoes'), 'prohibited'));
+select pg_temp.must_fail('report: not your own listing', :A, format('select public.report_content(%L, %L, %L)', 'listing', pg_temp.mkv('shoes'), 'spam'), 'RP001');
+select pg_temp.must_fail('report: "prohibited item" is for listings', :B, format('select public.report_content(%L, %L, %L)', 'post', pg_temp.mkv('post'), 'prohibited'), 'RP001');
+select pg_temp.must_fail('report: not a draft you can''t see', :B, format('select public.report_content(%L, %L, %L)', 'listing', pg_temp.mkv('draft'), 'spam'), 'RP001');
+select pg_temp.check('report: admins see listing reports with the business owner',
+  pg_temp.q(:D, format('select target_label || %L || target_author_username from public.admin_content_reports(%L) where target_id = %L', '|', 'open', pg_temp.mkv('shoes')))
+    = 'Listing|' || (select username from public.profiles where id = :A));
+select pg_temp.must_fail('moderation: only admins remove listings', :B, format('select public.admin_remove_listing(%L)', pg_temp.mkv('shoes')), '42501');
+select pg_temp.q(:D, format('select public.admin_remove_listing(%L, %L)::text', pg_temp.mkv('shoes'), 'counterfeit'));
+select pg_temp.check('moderation: a removed listing disappears for customers; reports closed; audit-logged',
+  pg_temp.q(:B, format('select count(*)::text from public.search_listings() where id = %L', pg_temp.mkv('shoes'))) = '0'
+  and pg_temp.q(:B, format('select (public.listing_view(%L) is null)::text', pg_temp.mkv('shoes'))) = 'true'
+  and pg_temp.q(:B, format('select public.media_can_read(%L)::text', pg_temp.mkv('p2'))) = 'false'
+  and pg_temp.q(:D, format('select public.media_can_read(%L)::text', pg_temp.mkv('p2'))) = 'true'
+  and not exists (select 1 from public.content_reports where target_id = pg_temp.mkv('shoes')::uuid and status = 'open')
+  and exists (select 1 from public.admin_audit_log where action = 'listing.remove' and target_id = pg_temp.mkv('shoes')::uuid));
+select pg_temp.check('moderation: the shared post now points at nothing visible',
+  pg_temp.q(:B, format('select count(*)::text from public.listings where id = (select listing_id from public.posts where id = %L)', pg_temp.mkv('post'))) = '0');
+select pg_temp.must_fail('moderation: the business can''t edit a removed listing', :A, format($$select public.set_listing_status(%L, 'available')$$, pg_temp.mkv('shoes')), 'MK004');
+select pg_temp.must_fail('moderation: …or delete it (kept for review)', :A, format('select public.delete_listing(%L)', pg_temp.mkv('shoes')), 'MK004');
+select pg_temp.check('moderation: the business still sees it, marked removed', pg_temp.q(:A, format($$select public.listing_view(%L) ->> 'removed_by_admin'$$, pg_temp.mkv('shoes'))) = 'true');
+select pg_temp.q(:D, format('select public.admin_restore_listing(%L)::text', pg_temp.mkv('shoes')));
+select pg_temp.check('moderation: restore returns it as a draft', (select status = 'draft' and removed_by_admin_at is null from public.listings where id = pg_temp.mkv('shoes')::uuid));
+select pg_temp.check('moderation: admins list listings with who runs them',
+  pg_temp.q(:D, format('select owner_username from public.admin_listings() where id = %L', pg_temp.mkv('shoes'))) = (select username from public.profiles where id = :A));
+select pg_temp.q(:A, format($$select public.set_listing_status(%L, 'available')::text$$, pg_temp.mkv('shoes')));
+
+-- Suspended businesses
+select pg_temp.q(:D, format('select public.admin_set_business_status(%L, true, %L)::text', pg_temp.mkv('biz'), 'test'));
+select pg_temp.check('suspension: its listings disappear',
+  pg_temp.q(:B, format('select count(*)::text from public.search_listings(p_business => %L)', pg_temp.mkv('biz'))) = '0'
+  and pg_temp.q(:B, format('select count(*)::text from public.listings where business_id = %L', pg_temp.mkv('biz'))) = '0');
+select pg_temp.must_fail('suspension: no new listings', :A,
+  $$select public.create_listing(p_kind => 'product', p_title => 'Blue shoes', p_description => '', p_category => 'fashion', p_price_minor => 1)$$, 'BZ007');
+select pg_temp.must_fail('suspension: no edits', :A, format($$select public.set_listing_status(%L, 'sold')$$, pg_temp.mkv('shoes')), 'BZ007');
+select pg_temp.must_fail('suspension: no listing photos', :A,
+  format($$select public.media_begin_upload('business_listing', 'image/jpeg', 1000, null, %L)$$, pg_temp.mkv('biz')), 'MD001');
+select pg_temp.q(:D, format('select public.admin_set_business_status(%L, false)::text', pg_temp.mkv('biz')));
+
+-- Deleting
+select pg_temp.q('00000000-0000-0000-0000-00000000000e', format('select public.delete_listing(%L)::text', pg_temp.mkv('svc')));
+select pg_temp.check('delete: the owner deletes a listing', not exists (select 1 from public.listings where id = pg_temp.mkv('svc')::uuid));
+select pg_temp.q(:A, $$select public.delete_business()::text$$);
+select pg_temp.check('delete: deleting the business removes its listings and queues their photos',
+  not exists (select 1 from public.listings where business_id = pg_temp.mkv('biz')::uuid)
+  and pg_temp.queued(pg_temp.mkv('p2')) = 1 and pg_temp.queued(pg_temp.mkv('p3')) = 1);
+
+-- Off again
+select pg_temp.q(:D, $$select public.admin_set_feature('marketplace', false)::text$$);
+select pg_temp.check('market: off hides everything again', pg_temp.q(:B, $$select count(*)::text from public.search_listings()$$) = '0');
+select pg_temp.must_fail('market: …and stops new listings', '00000000-0000-0000-0000-00000000000e',
+  $$select public.create_listing(p_kind => 'service', p_title => 'Headshots', p_description => '', p_category => 'events_media', p_price_minor => 1)$$, 'MK001');
+select pg_temp.must_fail('market: …and listing photos', '00000000-0000-0000-0000-00000000000e',
+  format($$select public.media_begin_upload('business_listing', 'image/jpeg', 1000, null, %L)$$, pg_temp.mkv('biz2')), 'MD001');
+select pg_temp.check('grants: none of the marketplace functions are callable signed out or by everyone',
+  not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and has_function_privilege('public', p.oid, 'execute'))
+  and not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace
+         and (p.proname like '%listing%' or p.proname in ('feature_enabled', 'enabled_features', 'admin_set_feature', 'business_can_manage', 'set_business_details'))
+         and has_function_privilege('anon', p.oid, 'execute')));
+select pg_temp.q(:D, $$select public.admin_set_businesses_enabled(false)::text$$);
+
 -- Message report review
 select pg_temp.must_fail('only admins review message reports', :A,
   format($$select public.admin_dm_report_set_status(%L, 'reviewed')$$, (select id from public.dm_reports limit 1)), '42501');

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, CircleAlert, Store } from "lucide-react";
-import { BUSINESS_CATEGORIES, type BusinessCategory, type BusinessInput, type MyBusiness } from "../data";
+import { ArrowLeft, CircleAlert, Plus, Store } from "lucide-react";
+import { BUSINESS_CATEGORIES, WEEKDAYS, type BusinessCategory, type BusinessHours, type BusinessInput, type ListingCard, type ListingStatus, type MyBusiness, type Weekday } from "../data";
+import { formatPrice, marketApi, marketErrorText, STATUS_LABEL, useMarketplace } from "../features/marketplace/shared";
 import { businessApi, useMyBusiness } from "../features/business/useMyBusiness";
 import { BusinessLogo, businessErrorText, HANDLE_RE } from "../features/business/shared";
 import { ImageError, prepareAvatar, processImage } from "../lib/image";
@@ -32,7 +33,11 @@ export default function BusinessManageScreen() {
       {!state ? (
         <p className="settings-muted" aria-busy="true" style={{ padding: "0 16px" }}>Loading…</p>
       ) : state.business ? (
-        <BusinessForm key={state.business.id} business={state.business} onSaved={reload} />
+        <>
+          <ManageListings business={state.business} />
+          <BusinessDetails key={`d-${state.business.id}`} business={state.business} onSaved={reload} />
+          <BusinessForm key={state.business.id} business={state.business} onSaved={reload} />
+        </>
       ) : !state.enabled ? (
         <StateMessage icon={<Store size={24} />} title="Business pages aren't available yet" body="We'll let you know when you can create one." />
       ) : (
@@ -269,5 +274,160 @@ function DeleteBusiness({ name, onDeleted }: { name: string; onDeleted: () => vo
         </>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- listings
+
+/** Manage Business → Listings: every listing with its status (drafts included). */
+function ManageListings({ business }: { business: MyBusiness }) {
+  const navigate = useNavigate();
+  const toast = useToast();
+  const { enabled } = useMarketplace();
+  const [rows, setRows] = useState<(ListingCard & { removedByAdmin: boolean })[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    marketApi!.mine().then(setRows, () => setRows([]));
+  }, [enabled]);
+  if (!enabled) return null;
+  const suspended = business.status === "suspended";
+
+  return (
+    <section className="biz-form" aria-labelledby="listings-title" style={{ paddingBottom: 0 }}>
+      <div className="mk-toolbar">
+        <h2 id="listings-title" className="sheet-form__title" style={{ fontSize: "var(--text-lg)" }}>
+          Products & services
+        </h2>
+        <Button size="sm" icon={<Plus size={16} aria-hidden="true" />} disabled={suspended} onClick={() => navigate("/market/sell")}>
+          Add a listing
+        </Button>
+      </div>
+      {!rows ? (
+        <p className="settings-muted" aria-busy="true">Loading…</p>
+      ) : rows.length === 0 ? (
+        <p className="settings-muted">No listings yet. They show on your business page and in the Marketplace.</p>
+      ) : (
+        <ul className="mk-rows">
+          {rows.map((l) => (
+            <li key={l.id} className="mk-row">
+              <span className="mk-row__text">
+                <Link to={`/l/${l.id}`}>
+                  <strong>{l.title}</strong>
+                </Link>
+                <span>
+                  {formatPrice(l.priceMinor, l.currency, l.priceUnit)} · {l.kind === "service" ? "Service" : "Product"}
+                  {l.saveCount > 0 ? ` · saved ${l.saveCount}×` : ""}
+                </span>
+              </span>
+              {l.removedByAdmin ? (
+                <span className="mk-badge mk-badge--inline mk-badge--removed">{STATUS_LABEL.removed}</span>
+              ) : (
+                <select
+                  aria-label={`Status of ${l.title}`}
+                  value={l.status}
+                  disabled={busy === l.id || suspended}
+                  onChange={async (e) => {
+                    const status = e.target.value as Exclude<ListingStatus, "removed">;
+                    setBusy(l.id);
+                    try {
+                      await marketApi!.setStatus(l.id, status);
+                      setRows((list) => list?.map((x) => (x.id === l.id ? { ...x, status } : x)) ?? null);
+                      toast(`Marked ${STATUS_LABEL[status].toLowerCase()}`);
+                    } catch (err) {
+                      toast(marketErrorText(err), "error");
+                    } finally {
+                      setBusy(null);
+                    }
+                  }}
+                >
+                  {(["available", "reserved", "sold", "draft"] as const).map((st) => (
+                    <option key={st} value={st}>
+                      {STATUS_LABEL[st]}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// ------------------------------------------------------------ area and hours
+
+const DAY_SHORT: Record<Weekday, string> = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
+
+/** Area and opening hours (one range a day here; the API allows two). */
+function BusinessDetails({ business, onSaved }: { business: MyBusiness; onSaved: () => void }) {
+  const toast = useToast();
+  const [area, setArea] = useState(business.area ?? "");
+  const [hours, setHours] = useState<Record<Weekday, { open: boolean; from: string; to: string }>>(() =>
+    Object.fromEntries(
+      WEEKDAYS.map((d) => {
+        const r = business.hours?.[d]?.[0];
+        return [d, { open: !!r, from: r?.[0] ?? "09:00", to: r?.[1] ?? "17:00" }];
+      }),
+    ) as Record<Weekday, { open: boolean; from: string; to: string }>,
+  );
+  const [busy, setBusy] = useState(false);
+  const anyOpen = WEEKDAYS.some((d) => hours[d].open);
+  const valid = WEEKDAYS.every((d) => !hours[d].open || hours[d].from < hours[d].to);
+
+  return (
+    <form
+      className="biz-form"
+      style={{ paddingBottom: 0 }}
+      onSubmit={async (e) => {
+        e.preventDefault();
+        if (!valid) return;
+        setBusy(true);
+        try {
+          const h: BusinessHours = {};
+          for (const d of WEEKDAYS) if (hours[d].open) h[d] = [[hours[d].from, hours[d].to]];
+          await businessApi!.setDetails(area.trim() || null, anyOpen ? h : null);
+          toast("Area and hours saved");
+          onSaved();
+        } catch (err) {
+          toast(businessErrorText(err), "error");
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <h2 className="sheet-form__title" style={{ fontSize: "var(--text-lg)" }}>Area and opening hours</h2>
+      <label className="field">
+        <span className="field__label">Area (shown on your page, e.g. "Lekki, Lagos")</span>
+        <input className="field__input" value={area} maxLength={60} onChange={(e) => setArea(e.target.value)} disabled={business.status === "suspended"} />
+      </label>
+      <fieldset className="mk-form__checks" style={{ display: "grid", gap: 8 }}>
+        <legend>Opening hours (leave every day off to hide them)</legend>
+        {WEEKDAYS.map((d) => (
+          <div key={d} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <label className="choice" style={{ minWidth: 72 }}>
+              <input type="checkbox" checked={hours[d].open} onChange={(e) => setHours((h) => ({ ...h, [d]: { ...h[d], open: e.target.checked } }))} />
+              {DAY_SHORT[d]}
+            </label>
+            {hours[d].open ? (
+              <>
+                <input type="time" className="field__input" style={{ height: 40, width: 120 }} aria-label={`${DAY_SHORT[d]} opens`} value={hours[d].from} onChange={(e) => setHours((h) => ({ ...h, [d]: { ...h[d], from: e.target.value } }))} />
+                <span aria-hidden="true">–</span>
+                <input type="time" className="field__input" style={{ height: 40, width: 120 }} aria-label={`${DAY_SHORT[d]} closes`} value={hours[d].to} onChange={(e) => setHours((h) => ({ ...h, [d]: { ...h[d], to: e.target.value } }))} />
+              </>
+            ) : (
+              <span className="settings-muted">Closed</span>
+            )}
+          </div>
+        ))}
+      </fieldset>
+      {!valid && <p className="form-error">Closing time must be after opening time.</p>}
+      <div className="biz-form__actions">
+        <Button type="submit" variant="secondary" loading={busy} disabled={!valid || business.status === "suspended"}>
+          Save area and hours
+        </Button>
+      </div>
+    </form>
   );
 }

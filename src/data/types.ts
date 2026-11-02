@@ -53,17 +53,22 @@ export interface Post {
   likeCount: number;
   likedByViewer: boolean;
   replyCount: number;
-  /** Set when this post is a reply (shown on profile "Replies" tabs). */
-  replyTo?: { postId: string; handle: string } | null;
+  /** Set when this post is a reply (shown on profile "Replies" tabs). business: replying to a business post (/b/:handle). */
+  replyTo?: { postId: string; handle: string; business?: boolean } | null;
   /** Set when the post was made inside a World (shown as a chip linking to it). */
   world?: { slug: string; title: string; entry: boolean } | null;
   /** The author changed the text after posting. */
   edited?: boolean;
   /** Saved to your bookmarks (backends with post tools only). */
   bookmarkedByViewer?: boolean;
+  /**
+   * A business post sharing one of its listings: the listing as it is now. `null` listing with an id
+   * means it's no longer available (removed, deleted, or the Marketplace is off).
+   */
+  listing?: { id: string; card: ListingCard | null } | null;
 }
 
-export type ContentReportTarget = "post" | "profile" | "world" | "business";
+export type ContentReportTarget = "post" | "profile" | "world" | "business" | "listing";
 
 /** Bookmarks, editing, deleting and reporting posts — where the backend supports them. */
 export interface PostToolsApi {
@@ -75,7 +80,7 @@ export interface PostToolsApi {
   /** Your own post, for everyone. */
   remove(viewerId: string, postId: string): Promise<void>;
   /** Reports go to the Amigo team; reporting twice while open counts once. */
-  report(viewerId: string, target: ContentReportTarget, targetId: string, input: { reason: MessageReportReason; note: string }): Promise<void>;
+  report(viewerId: string, target: ContentReportTarget, targetId: string, input: { reason: ContentReportReason; note: string }): Promise<void>;
 }
 
 /** Your account's standing (suspended accounts can read, report and delete, but not post or message). */
@@ -1136,6 +1141,8 @@ export interface NewMessageInput {
 }
 
 export type MessageReportReason = "spam" | "harassment" | "inappropriate" | "other";
+/** Posts, profiles, businesses and listings ("prohibited": listings only). */
+export type ContentReportReason = MessageReportReason | "prohibited";
 
 /** peer-unavailable: end-to-end encrypted backends only — they have no device that can receive messages yet. */
 /**
@@ -1523,6 +1530,8 @@ export interface DataSource {
   push?: PushApi;
   /** Business profiles (Neon only; see BusinessApi). */
   business?: BusinessApi;
+  /** Marketplace: business listings, search and saves (needs migration 20261102090000; off until an admin switches it on). */
+  marketplace?: MarketplaceApi;
   /** Creator monetization overview (coming soon; nothing financial). */
   monetization?: MonetizationApi;
   /** Creator Programme: applications, status, dashboard, feedback. */
@@ -1620,7 +1629,17 @@ export interface Business {
   following: boolean;
   /** The viewer owns it. */
   mine: boolean;
+  /** Coarse area, e.g. "Lekki, Lagos". */
+  area?: string | null;
+  hours?: BusinessHours | null;
+  /** Open (available or reserved) listings; 0 while the Marketplace is off. */
+  listingCount?: number;
 }
+
+export const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
+export type Weekday = (typeof WEEKDAYS)[number];
+/** Up to two "HH:MM" ranges a day; a missing day is closed. */
+export type BusinessHours = Partial<Record<Weekday, [string, string][]>>;
 
 /** Your own business, with what only the owner sees. */
 export interface MyBusiness extends Business {
@@ -1693,12 +1712,156 @@ export interface BusinessApi {
   /** Answers the new follower count. */
   follow(businessId: string, follow: boolean): Promise<number>;
   followedIds(): Promise<Set<string>>;
-  createPost(text: string, images: NewMediaInput[]): Promise<string>;
+  /** A post as the business; listingId shares one of its open listings. */
+  createPost(text: string, images: NewMediaInput[], listingId?: string | null): Promise<string>;
   /** Deletes a post of your own business (business posts can't be edited). */
   deletePost(postId: string): Promise<void>;
+  /** Area and opening hours (null clears them). */
+  setDetails(area: string | null, hours: BusinessHours | null): Promise<void>;
   admin: {
     list(status: "all" | "active" | "suspended"): Promise<AdminBusiness[]>;
     setStatus(businessId: string, suspend: boolean, note: string): Promise<void>;
     setEnabled(enabled: boolean): Promise<void>;
+  };
+}
+
+// ------------------------------------------------------------------ marketplace
+
+export type ListingKind = "product" | "service";
+export type ListingStatus = "draft" | "available" | "reserved" | "sold" | "removed";
+export type ListingCondition = "new" | "like_new" | "good" | "fair";
+export type ListingPriceUnit = "item" | "hour" | "session" | "day" | "from";
+export type ListingFulfilment = "collection" | "delivery" | "online" | "on_site";
+export type ListingSort = "newest" | "updated" | "price_asc" | "price_desc" | "relevance";
+
+export interface ListingCategory {
+  id: string;
+  label: string;
+  kind: ListingKind;
+}
+
+/** What a list or a shared post shows. Prices are whole kobo (NGN); null = price on request. */
+export interface ListingCard {
+  id: string;
+  title: string;
+  kind: ListingKind;
+  categoryId: string;
+  section: string | null;
+  priceMinor: number | null;
+  currency: string;
+  priceUnit: ListingPriceUnit;
+  condition: ListingCondition | null;
+  status: ListingStatus;
+  area: string | null;
+  coverUrl: string | null;
+  coverPreview: string | null;
+  saveCount: number;
+  saved: boolean;
+  business: { id: string; handle: string; name: string; logoUrl: string | null };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ListingPhoto {
+  url: string;
+  /** The stored key (kept when editing). */
+  key: string;
+  width: number | null;
+  height: number | null;
+  alt: string | null;
+  preview: string | null;
+}
+
+/** A listing's page. */
+export interface Listing extends ListingCard {
+  description: string;
+  fulfilment: ListingFulfilment[];
+  deliveryNote: string | null;
+  photos: ListingPhoto[];
+  /** The viewer runs the business. */
+  mine: boolean;
+  /** Removed by Amigo (only its business still sees it). */
+  removedByAdmin: boolean;
+  businessContact: { area: string | null; website: string | null; email: string | null; phone: string | null };
+}
+
+export interface ListingInput {
+  kind: ListingKind;
+  title: string;
+  description: string;
+  categoryId: string;
+  section: string;
+  priceMinor: number | null;
+  priceUnit: ListingPriceUnit;
+  condition: ListingCondition | null;
+  area: string;
+  fulfilment: ListingFulfilment[];
+  deliveryNote: string;
+  status: Exclude<ListingStatus, "removed">;
+  /** Photos in order: kept ones by key, new ones as images to upload. */
+  photos: ({ key: string } | NewMediaInput)[];
+}
+
+export interface ListingSearch {
+  query?: string;
+  categoryId?: string | null;
+  kind?: ListingKind | null;
+  minPrice?: number | null;
+  maxPrice?: number | null;
+  area?: string;
+  condition?: ListingCondition | null;
+  businessId?: string | null;
+  sort?: ListingSort;
+  offset?: number;
+}
+
+export type MarketplaceErrorCode = "off" | "not-allowed" | "invalid" | "not-found" | "removed" | "suspended" | "slow-down" | "unknown";
+
+export class MarketplaceError extends Error {
+  code: MarketplaceErrorCode;
+  constructor(code: MarketplaceErrorCode, message?: string) {
+    super(message ?? code);
+    this.code = code;
+  }
+}
+
+export interface AdminListing {
+  id: string;
+  title: string;
+  status: ListingStatus;
+  kind: ListingKind;
+  priceMinor: number | null;
+  currency: string;
+  business: { id: string; handle: string; name: string };
+  ownerHandle: string;
+  removedNote: string | null;
+  openReports: number;
+  createdAt: Date;
+}
+
+/**
+ * Marketplace (phase 1: businesses sell). Reads return nothing while the Marketplace is switched off
+ * (admins excepted). Who runs a business is never part of an answer, except to admins.
+ */
+export interface MarketplaceApi {
+  /** Feature switches that are on (e.g. "marketplace"). */
+  features(): Promise<string[]>;
+  categories(): Promise<ListingCategory[]>;
+  search(params: ListingSearch, limit: number): Promise<ListingCard[]>;
+  get(listingId: string): Promise<Listing | null>;
+  /** Your business's listings, every status. */
+  mine(): Promise<(ListingCard & { removedByAdmin: boolean })[]>;
+  create(input: ListingInput): Promise<string>;
+  update(listingId: string, input: ListingInput): Promise<void>;
+  setStatus(listingId: string, status: Exclude<ListingStatus, "removed">): Promise<void>;
+  remove(listingId: string): Promise<void>;
+  /** Answers the new save count. */
+  save(listingId: string, saved: boolean): Promise<number>;
+  saved(): Promise<ListingCard[]>;
+  admin: {
+    list(status: ListingStatus | "all", query: string): Promise<AdminListing[]>;
+    remove(listingId: string, note: string): Promise<void>;
+    restore(listingId: string): Promise<void>;
+    setFeature(key: string, enabled: boolean): Promise<void>;
   };
 }

@@ -45,7 +45,8 @@
     "test:notification-settings": "node scripts/test/notification-settings.test.mjs",
     "test:media-cron": "node scripts/test/media-cron.test.mjs",
     "test:push-prompt": "node scripts/test/push-prompt.test.mjs",
-    "test:business": "node scripts/test/business.test.mjs"
+    "test:business": "node scripts/test/business.test.mjs",
+    "test:marketplace": "node scripts/test/marketplace.test.mjs"
   },
   "dependencies": {
     "@fontsource-variable/bricolage-grotesque": "^5.3.0",

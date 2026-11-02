@@ -2,7 +2,7 @@
  * Business profiles on Neon (migration 20261028130000_business_profiles.sql). Everything goes
  * through checked functions; nothing here can read who owns a business.
  */
-import { BusinessError, type AdminBusiness, type Business, type BusinessApi, type BusinessCategory, type BusinessErrorCode, type MyBusiness } from "../types";
+import { BusinessError, type AdminBusiness, type Business, type BusinessApi, type BusinessCategory, type BusinessErrorCode, type BusinessHours, type MyBusiness } from "../types";
 import { makePreview } from "../../lib/image";
 import type { MediaStore } from "./mediaStore";
 import { dataError, POST_SELECT, toPost, type Db, type PostRow } from "./queries";
@@ -47,6 +47,9 @@ interface BusinessRow {
   mine?: boolean;
   status?: "active" | "suspended";
   can_change_handle_at?: string;
+  area?: string | null;
+  hours?: BusinessHours | null;
+  listing_count?: number;
 }
 
 const toBusiness = (r: BusinessRow): Business => ({
@@ -65,6 +68,9 @@ const toBusiness = (r: BusinessRow): Business => ({
   createdAt: new Date(r.created_at),
   following: !!r.following,
   mine: !!r.mine,
+  area: r.area ?? null,
+  hours: r.hours ?? null,
+  listingCount: Number(r.listing_count ?? 0),
 });
 
 const fields = (i: { name: string; category: string; description: string; website: string; email: string; phone: string }) => ({
@@ -76,9 +82,13 @@ const fields = (i: { name: string; category: string; description: string; websit
   p_phone: i.phone || null,
 });
 
+/** The signed-in person's business id (for listing photos); set by createBusinessApi. */
+export let businessIdOf: () => Promise<string | null> = async () => null;
+
 export function createBusinessApi(db: Db, media: MediaStore, onPostsChanged: () => void): BusinessApi {
   let mineId: string | null = null;
   const myId = async () => mineId ?? (await api.mine()).business?.id ?? null;
+  businessIdOf = myId;
 
   const api: BusinessApi = {
     async mine() {
@@ -140,7 +150,10 @@ export function createBusinessApi(db: Db, media: MediaStore, onPostsChanged: () 
       const ids = await call<string[]>(db, "my_followed_businesses");
       return new Set(ids);
     },
-    async createPost(text, images) {
+    async setDetails(area, hours) {
+      await call(db, "set_business_details", { p_area: area, p_hours: hours });
+    },
+    async createPost(text, images, listingId) {
       const businessId = await myId();
       if (!businessId) throw new BusinessError("unknown", "no business");
       const items = await Promise.all(
@@ -149,7 +162,7 @@ export function createBusinessApi(db: Db, media: MediaStore, onPostsChanged: () 
           return { kind: "image", storage_path: key, mime_type: m.blob.type, width: m.width, height: m.height, byte_size: m.blob.size, preview, alt: m.alt ?? "" };
         }),
       );
-      const id = await call<string>(db, "create_business_post", { p_body: text, p_media: items });
+      const id = await call<string>(db, "create_business_post", { p_body: text, p_media: items, ...(listingId ? { p_listing: listingId } : {}) });
       onPostsChanged();
       return id;
     },

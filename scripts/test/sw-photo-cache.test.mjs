@@ -89,7 +89,7 @@ ok("unsigned requests aren't handled", !r.handled);
 r = await get(`https://elsewhere.example.com/${owner}/post/${"c".repeat(32)}.jpg?${amz(1)}`);
 ok("other hosts aren't handled", !r.handled);
 network.length = 0;
-for (const kind of ["business_logo", "business_cover", "business_post"]) {
+for (const kind of ["business_logo", "business_cover", "business_post", "business_listing"]) {
   r = await get(`${R2}/b/${owner}/${kind}/${"7".repeat(32)}.webp?${amz(1)}`);
   ok(`business photos are handled (${kind})`, r.handled && r.res.ok);
 }

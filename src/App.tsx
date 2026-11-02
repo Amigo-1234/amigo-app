@@ -49,6 +49,9 @@ const BlockedScreen = lazy(() => import("./screens/BlockedScreen"));
 const BusinessScreen = lazy(() => import("./screens/BusinessScreen"));
 const BusinessProfileScreen = lazy(() => import("./screens/BusinessProfileScreen"));
 const BusinessManageScreen = lazy(() => import("./screens/BusinessManageScreen"));
+const MarketplaceScreen = lazy(() => import("./screens/MarketplaceScreen"));
+const ListingScreen = lazy(() => import("./screens/ListingScreen"));
+const ListingEditScreen = lazy(() => import("./screens/ListingEditScreen"));
 
 function Splash() {
   return <LoadingScreen />;
@@ -143,6 +146,16 @@ const router = createBrowserRouter([
             { path: "business", element: <BusinessScreen /> },
             { path: "b/:handle", element: <BusinessProfileScreen /> },
             { path: "settings/business", element: <BusinessManageScreen /> },
+          ]
+        : []),
+      // Marketplace (businesses sell). The screens say "not open yet" until an admin switches it on.
+      ...(dataSource.marketplace
+        ? [
+            { path: "market", element: <MarketplaceScreen /> },
+            { path: "market/saved", element: <MarketplaceScreen saved /> },
+            { path: "market/sell", element: <ListingEditScreen /> },
+            { path: "l/:id", element: <ListingScreen /> },
+            { path: "l/:id/edit", element: <ListingEditScreen /> },
           ]
         : []),
       ...(dataSource.messages?.security

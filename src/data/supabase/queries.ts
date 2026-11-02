@@ -5,7 +5,7 @@
  * local PostgREST.
  */
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
-import { ProfileError, SupportError, WorldError, type AdminAuditEntry, type Verification, type VerificationType, type PersonSummary as Person, type AppNotification, type NewSupportRequest, type SupportAdminAction, type SupportConfig, type SupportErrorCode, type SupportFeedback, type SupportProfileStats, type SupportReaction, type SupportReport, type SupportRequest, type SupportSection, type SupportStatus, type SupportWallet, type SuspiciousSupport, type LeaderboardEntry, type MessageReport, type MessageReportReason, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
+import { ProfileError, SupportError, WorldError, type AdminAuditEntry, type Verification, type VerificationType, type PersonSummary as Person, type AppNotification, type NewSupportRequest, type SupportAdminAction, type SupportConfig, type SupportErrorCode, type SupportFeedback, type SupportProfileStats, type SupportReaction, type SupportReport, type SupportRequest, type SupportSection, type SupportStatus, type SupportWallet, type SuspiciousSupport, type LeaderboardEntry, type MessageReport, type MessageReportReason, type World, type WorldChatMessage, type WorldErrorCode, type NotificationPage, type ExploreFeed, type PostSearchOrder, type FeedScope, type FollowListKind, type ListingCard, type MediaItem, type PersonSummary, type Post, type Profile, type ProfileTab, type Reply } from "../types";
 import type { Database, Json } from "./database.types";
 
 export type Db = SupabaseClient<Database>;
@@ -37,7 +37,10 @@ export type PostRow = {
   /** Set on business posts (author is then null): the business, never its owner. */
   business?: { id: string; handle: string; name: string; logo_url: string | null } | null;
   media: MediaRow[];
-  parent?: { id: string; author: { username: string } | null } | null;
+  parent?: { id: string; author: { username: string } | null; business?: { handle: string } | null } | null;
+  /** A business post sharing a listing (migration 20261102090000); the embed is null when it's no longer visible. */
+  listing_id?: string | null;
+  listing?: ListingEmbed | null;
 };
 
 const POST_SELECT_BASE =
@@ -61,10 +64,42 @@ export function enablePostTools() {
   MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
 }
 
+/** Replies name a business parent too ("Replying to /b/handle"). */
+let businessParents = false;
+
 /** Backends with migration 20261028130000: business posts carry their business (and no author). */
 export function enableBusinessPosts() {
+  businessParents = true;
   POST_SELECT += ", business:businesses!posts_business_id_fkey(id, handle, name, logo_url)";
   MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
+}
+
+/** Backends with migration 20261102090000: a business post can share a listing (shown as a card). */
+let listingCards = false;
+export function enableListingCards() {
+  listingCards = true;
+  POST_SELECT +=
+    ", listing_id, listing:listings!posts_listing_id_fkey(id, title, kind, category_id, section, price_minor, currency, price_unit, condition, status, area, save_count, created_at, updated_at, photos:listing_media(storage_path, preview, position))";
+  MEDIA_SELECT = POST_SELECT.replace("media:post_media(", "media:post_media!inner(");
+}
+
+type ListingEmbed = {
+  id: string; title: string; kind: ListingCard["kind"]; category_id: string; section: string | null; price_minor: number | null; currency: string;
+  price_unit: ListingCard["priceUnit"]; condition: ListingCard["condition"]; status: ListingCard["status"]; area: string | null; save_count: number;
+  created_at: string; updated_at: string; photos: { storage_path: string; preview: string | null; position: number }[] | null;
+};
+
+function toListingCard(db: Db, l: ListingEmbed, business: NonNullable<PostRow["business"]>): ListingCard {
+  const cover = [...(l.photos ?? [])].sort((a, b) => a.position - b.position)[0];
+  return {
+    id: l.id, title: l.title, kind: l.kind, categoryId: l.category_id, section: l.section,
+    priceMinor: l.price_minor === null ? null : Number(l.price_minor), currency: l.currency, priceUnit: l.price_unit,
+    condition: l.condition, status: l.status, area: l.area,
+    coverUrl: cover ? mediaUrl(db, "listing", cover.storage_path) : null, coverPreview: cover?.preview ?? null,
+    saveCount: l.save_count, saved: false,
+    business: { id: business.id, handle: business.handle, name: business.name, logoUrl: business.logo_url },
+    createdAt: new Date(l.created_at), updatedAt: new Date(l.updated_at),
+  };
 }
 
 const toBusinessAuthor = (b: NonNullable<PostRow["business"]>) => ({ id: b.id, name: b.name, handle: b.handle, avatarUrl: b.logo_url, business: true });
@@ -98,7 +133,11 @@ function toMedia(db: Db, rows: MediaRow[]): MediaItem[] {
 
 export function toPost(db: Db, row: PostRow, liked: Set<string>): Post {
   return {
-    replyTo: row.parent?.author ? { postId: row.parent.id, handle: row.parent.author.username } : null,
+    replyTo: row.parent?.author
+      ? { postId: row.parent.id, handle: row.parent.author.username }
+      : row.parent?.business
+        ? { postId: row.parent.id, handle: row.parent.business.handle, business: true }
+        : null,
     id: row.id,
     author: row.business ? toBusinessAuthor(row.business) : toAuthor(row.author),
     text: row.body,
@@ -110,6 +149,9 @@ export function toPost(db: Db, row: PostRow, liked: Set<string>): Post {
     world: row.world ? { slug: row.world.slug, title: row.world.title, entry: Boolean(row.is_entry) } : null,
     edited: !!row.edited_at,
     bookmarkedByViewer: row.saved ? row.saved.length > 0 : undefined,
+    listing: listingCards && row.listing_id
+      ? { id: row.listing_id, card: row.listing && row.business ? toListingCard(db, row.listing, row.business) : null }
+      : null,
   };
 }
 
@@ -329,9 +371,9 @@ async function attachParents(db: Db, rows: PostRow[]) {
   if (ids.length === 0) return;
   const { data, error } = await db
     .from("posts")
-    .select("id, author:profiles!posts_author_id_fkey(username)")
+    .select(businessParents ? "id, author:profiles!posts_author_id_fkey(username), business:businesses!posts_business_id_fkey(handle)" : "id, author:profiles!posts_author_id_fkey(username)")
     .in("id", ids)
-    .returns<{ id: string; author: { username: string } | null }[]>();
+    .returns<{ id: string; author: { username: string } | null; business?: { handle: string } | null }[]>();
   if (error) throw dataError(error);
   const byId = new Map(data.map((p) => [p.id, p]));
   for (const r of rows) r.parent = r.parent_id ? byId.get(r.parent_id) ?? null : null;

@@ -8,6 +8,7 @@
 import { mentionedHandles } from "../lib/mentions";
 import { clearDemoState, loadDemoState, saveDemoState } from "./demoPersist";
 import { createDemoBusiness } from "./demoBusiness";
+import { createDemoMarketplace } from "./demoMarketplace";
 import { createDemoMessages } from "./demoMessages";
 import { createDemoMoments } from "./demoMoments";
 import { createDemoSecurity } from "./demoSecurity";
@@ -546,6 +547,9 @@ const emitViewer = () => {
 /** ?demo=postfail: the first publish attempt fails, so retry can be tested. */
 let failNextPost = scenario === "postfail";
 
+// ?demo=business turns business pages on; ?demo=market also turns the Marketplace on.
+const demoBusiness = createDemoBusiness({ enabled: scenario === "business" || scenario === "market", viewer: () => viewerFromPerson(people.get("me")!), later });
+
 export const demoSource: DataSource = {
   kind: "demo",
 
@@ -756,7 +760,8 @@ export const demoSource: DataSource = {
       }, 200),
   },
 
-  business: createDemoBusiness({ enabled: scenario === "business", viewer: () => viewerFromPerson(people.get("me")!), later }),
+  business: demoBusiness,
+  marketplace: createDemoMarketplace({ enabled: scenario === "market", viewer: () => viewerFromPerson(people.get("me")!), later, businesses: demoBusiness.bridge }),
 
   profiles: {
     getProfile: (handle, viewerId) =>

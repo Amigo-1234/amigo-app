@@ -99,7 +99,7 @@ export default function PostScreen() {
             </Link>
           )}
           <PostCard post={post.data} variant="focus" />
-          <ReplyComposer postId={post.data.id} replyingTo={post.data.author.handle} />
+          <ReplyComposer postId={post.data.id} replyingTo={post.data.author.business ? `/b/${post.data.author.handle}` : `@${post.data.author.handle}`} />
           <section aria-label="Replies">
             {replies.status === "loading" && <ReplySkeletons />}
             {replies.status === "error" && <p className="replies-note">Replies couldn't load right now.</p>}
@@ -212,14 +212,14 @@ function ReplyComposer({ postId, replyingTo }: { postId: string; replyingTo: str
   return (
     <form className="reply-composer" onSubmit={submit} aria-labelledby={labelId}>
       <span id={labelId} className="visually-hidden">
-        Reply to @{replyingTo}
+        Reply to {replyingTo}
       </span>
       <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="sm" />
       <div className="reply-composer__field">
         <input
           id="reply-input"
           className="reply-composer__input"
-          placeholder={`Reply to @${replyingTo}`}
+          placeholder={`Reply to ${replyingTo}`}
           value={text}
           maxLength={POST_MAX_LENGTH}
           onChange={(e) => setText(e.target.value)}

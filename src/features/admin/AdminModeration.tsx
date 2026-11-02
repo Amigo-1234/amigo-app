@@ -5,12 +5,15 @@ import { timeAgo } from "../../lib/time";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Button } from "../../ui/Button";
-import { REPORT_REASONS } from "../reports/reasons";
+import { LISTING_REPORT_REASONS } from "../reports/reasons";
 import { supportErrorText } from "../support/useSupport";
 
-const reasonLabel = (id: string) => REPORT_REASONS.find((r) => r.id === id)?.label ?? id;
+const reasonLabel = (id: string) => LISTING_REPORT_REASONS.find((r) => r.id === id)?.label ?? id;
 const targetHref = (r: ContentReport) =>
-  r.targetType === "post" ? `/post/${r.targetId}` : r.targetType === "profile" && r.targetAuthor ? `/u/${r.targetAuthor.handle}` : null;
+  r.targetType === "post" ? `/post/${r.targetId}`
+  : r.targetType === "listing" ? `/l/${r.targetId}`
+  : r.targetType === "profile" && r.targetAuthor ? `/u/${r.targetAuthor.handle}`
+  : null;
 
 /** Admin → Reports: posts, replies, profiles and Worlds people reported. */
 export function AdminContentReports({ onSuspended }: { onSuspended?: () => void }) {
@@ -83,6 +86,20 @@ export function AdminContentReports({ onSuspended }: { onSuspended?: () => void 
                       }}
                     >
                       Remove post
+                    </Button>
+                  )}
+                  {r.targetType === "listing" && !r.targetRemoved && dataSource.marketplace && (
+                    <Button
+                      size="sm"
+                      variant="danger"
+                      loading={busy === r.id + "rl"}
+                      onClick={() => {
+                        const note = window.prompt("Remove this listing for everyone? Add a note for the audit log (optional).", "");
+                        if (note === null) return;
+                        void act(r.id + "rl", () => dataSource.marketplace!.admin.remove(r.targetId, note), "Listing removed");
+                      }}
+                    >
+                      Remove listing
                     </Button>
                   )}
                   {r.targetAuthor && (

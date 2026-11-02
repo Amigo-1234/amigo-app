@@ -11,6 +11,7 @@ import { useMediaViewer } from "./MediaViewer";
 import { useLike, useSharePost } from "./usePostActions";
 import { PostOptions, useBookmark } from "./PostOptions";
 import { profileHref } from "../profile/links";
+import { ListingPostCard } from "../marketplace/shared";
 import "./PostCard.css";
 import { VerifiedBadge } from "../../ui/VerifiedBadge";
 
@@ -73,7 +74,8 @@ export const PostCard = memo(function PostCard({
   // A business post is signed by the business (who runs it isn't shown) and links to its page.
   const business = !!post.author.business;
   const authorHref = business ? `/b/${post.author.handle}` : profileHref(post.author.handle);
-  const replyToHref = post.replyTo ? profileHref(post.replyTo.handle) : null;
+  const replyToHref = post.replyTo ? (post.replyTo.business ? `/b/${post.replyTo.handle}` : profileHref(post.replyTo.handle)) : null;
+  const replyToName = post.replyTo ? (post.replyTo.business ? `/b/${post.replyTo.handle}` : `@${post.replyTo.handle}`) : "";
 
   const onCardClick = (e: MouseEvent<HTMLElement>) => {
     if (focus || pending) return;
@@ -136,7 +138,7 @@ export const PostCard = memo(function PostCard({
       {post.replyTo && (
         <p className="post__reply-to">
           Replying to{" "}
-          {replyToHref ? <Link to={replyToHref}>@{post.replyTo.handle}</Link> : <span>@{post.replyTo.handle}</span>}
+          {replyToHref ? <Link to={replyToHref}>{replyToName}</Link> : <span>{replyToName}</span>}
         </p>
       )}
 
@@ -164,6 +166,7 @@ export const PostCard = memo(function PostCard({
       )}
 
       <PostMedia media={post.media} onOpen={(i) => openMedia(post.media, i)} />
+      {post.listing && <ListingPostCard id={post.listing.id} card={post.listing.card} />}
 
       {focus && (
         <p className="post__timestamp">

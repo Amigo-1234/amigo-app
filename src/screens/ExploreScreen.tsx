@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import { ChevronRight, CircleAlert, Clock, Compass, SearchX, Store, X } from "lucide-react";
+import { ChevronRight, CircleAlert, Clock, Compass, SearchX, ShoppingBag, Store, X } from "lucide-react";
 import type { Post, SearchTab } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
@@ -8,6 +8,7 @@ import { addRecentSearch, clearRecentSearches, removeRecentSearch, useRecentSear
 import { SearchField } from "../features/explore/SearchField";
 import { useExploreFeed, useSearch } from "../features/explore/useSearch";
 import { useMyBusiness } from "../features/business/useMyBusiness";
+import { useMarketplace } from "../features/marketplace/shared";
 import { PostCard } from "../features/posts/PostCard";
 import { FeedSkeleton } from "../features/posts/PostSkeleton";
 import { MediaGrid } from "../features/profile/MediaGrid";
@@ -122,9 +123,17 @@ function ExploreHome({ onPickRecent }: { onPickRecent: (q: string) => void }) {
   const recent = useRecentSearches();
   const { state, retry } = useExploreFeed();
   const businesses = useMyBusiness().state?.enabled;
+  const market = useMarketplace().enabled === true;
 
   return (
     <>
+      {market && (
+        <Link to="/market" className="recent-item__main explore-business-link">
+          <ShoppingBag size={18} aria-hidden="true" />
+          <span>Marketplace</span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </Link>
+      )}
       {businesses && (
         <Link to="/business" className="recent-item__main explore-business-link">
           <Store size={18} aria-hidden="true" />

@@ -6,7 +6,7 @@ import { track } from "../../lib/perf";
  * link the server signs for one key, type and size; reads go through
  * /api/media/<key>, which checks visibility before every signed link.
  */
-export type MediaPurpose = "avatar" | "post" | "moment" | "dm" | "business_logo" | "business_cover" | "business_post";
+export type MediaPurpose = "avatar" | "post" | "moment" | "dm" | "business_logo" | "business_cover" | "business_post" | "business_listing";
 
 export interface MediaStore {
   /** Uploads and returns the object key Postgres assigned. */
@@ -78,7 +78,7 @@ export function createMediaStore(token: () => Promise<string | null>): MediaStor
     async upload(purpose, blob, opts = {}) {
       const type = purpose === "dm" ? "application/octet-stream" : blob.type;
       // Made while the original is being signed and sent.
-      const small = purpose === "post" || purpose === "moment" || purpose === "business_post" ? makeSmallCopy(blob).catch(() => null) : null;
+      const small = purpose === "post" || purpose === "moment" || purpose === "business_post" || purpose === "business_listing" ? makeSmallCopy(blob).catch(() => null) : null;
       const { key, url } = await begin({ purpose, mime: type, size: blob.size, conversationId: opts.conversationId ?? null, businessId: opts.businessId ?? null });
       const smallDone = small ? uploadSmall(key, small).catch(() => track("upload_small_fail", 1)) : null;
       // One retry for a flaky connection; the link is valid for 10 minutes.

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
-import { ArrowLeft, CircleAlert, Feather, Flag, Globe, Image as ImageIcon, Link2, Mail, MoreHorizontal, Phone, Settings, Store, X } from "lucide-react";
-import { dataSource, POST_MAX_LENGTH, type Business, type NewMediaInput, type Post } from "../data";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { ArrowLeft, CircleAlert, Clock, Feather, Flag, Globe, Image as ImageIcon, Link2, Mail, MapPin, MoreHorizontal, Package, Phone, Plus, Settings, Store, X } from "lucide-react";
+import { dataSource, POST_MAX_LENGTH, WEEKDAYS, type Business, type BusinessCategory, type ListingCard, type ListingKind, type NewMediaInput, type Post } from "../data";
+import { ListingTile, marketApi, useMarketplace } from "../features/marketplace/shared";
 import { BusinessFollowButton } from "./BusinessScreen";
 import { businessApi, onBusinessPostsChanged, useMyBusiness } from "../features/business/useMyBusiness";
 import { BusinessLogo, businessErrorText, categoryLabel } from "../features/business/shared";
@@ -19,6 +20,8 @@ import { useToast } from "../state/toast";
 import { Button, IconButton } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
 import { StateMessage } from "../ui/StateMessage";
+import "./ProfileScreen.css";
+import "./SettingsScreen.css";
 
 const PAGE = 30;
 
@@ -90,6 +93,13 @@ function BusinessPage({ business, onChange }: { business: Business; onChange: (b
   // A post deleted from its menu leaves the list.
   useEffect(() => onBusinessPostsChanged(loadPosts), [loadPosts]);
 
+  // Tabs adapt to the business: service businesses lead with Services, a restaurant's products are its Menu.
+  const market = useMarketplace().enabled === true;
+  const tabs = businessTabs(business.category, market, !!(business.area || business.hours || business.description));
+  const [params, setParams] = useSearchParams();
+  const tab = (tabs.find((t) => t.id === params.get("tab")) ?? tabs[0]).id;
+  const setTab = (t: string) => setParams(t === tabs[0].id ? {} : { tab: t }, { replace: true });
+
   return (
     <>
       <div className="biz-cover">{business.coverUrl && <MediaImg src={business.coverUrl} alt="" decoding="async" />}</div>
@@ -107,6 +117,20 @@ function BusinessPage({ business, onChange }: { business: Business; onChange: (b
         <p className="biz-profile__handle">
           <span className="post__business">Business</span> /b/{business.handle} · {categoryLabel(business.category)}
         </p>
+        {(business.area || business.hours) && (
+          <p className="biz-profile__handle" style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>
+            {business.area && (
+              <span>
+                <MapPin size={14} aria-hidden="true" style={{ verticalAlign: -2 }} /> {business.area}
+              </span>
+            )}
+            {business.hours && (
+              <span>
+                <Clock size={14} aria-hidden="true" style={{ verticalAlign: -2 }} /> {openNow(business.hours)}
+              </span>
+            )}
+          </p>
+        )}
         {business.description && (
           <p className="biz-profile__desc">
             <RichText text={business.description} />
@@ -150,8 +174,17 @@ function BusinessPage({ business, onChange }: { business: Business; onChange: (b
         </p>
       </section>
 
+      <BusinessTabs business={business} tab={tab} onTab={setTab} tabs={tabs} />
+
+      {tab === "products" || tab === "services" ? (
+        <BusinessListings business={business} kind={tab === "products" ? "product" : "service"} menu={tab === "products" && business.category === "food_drink"} />
+      ) : tab === "about" ? (
+        <BusinessAbout business={business} />
+      ) : (
+      <>
       {business.mine && (
         <BusinessComposer
+          canShareListings={!!market}
           onPosted={() => {
             onChange({ ...business, postCount: business.postCount + 1 });
             loadPosts();
@@ -170,6 +203,8 @@ function BusinessPage({ business, onChange }: { business: Business; onChange: (b
           posts.map((p) => <PostCard key={p.id} post={p} />)
         )}
       </section>
+      </>
+      )}
     </>
   );
 }
@@ -218,7 +253,7 @@ function BusinessOptions({ business }: { business: Business }) {
 }
 
 /** Owner only: a public post as the business. Text and up to 4 photos; it can be deleted, not edited. */
-function BusinessComposer({ onPosted }: { onPosted: () => void }) {
+function BusinessComposer({ onPosted, canShareListings }: { onPosted: () => void; canShareListings: boolean }) {
   const toast = useToast();
   const { state } = useMyBusiness();
   const [text, setText] = useState("");
@@ -229,7 +264,13 @@ function BusinessComposer({ onPosted }: { onPosted: () => void }) {
   const urls = useRef(new Set<string>());
   const suspended = state?.business?.status === "suspended";
   const trimmed = text.trim();
-  const canPost = !busy && !picking && !suspended && trimmed.length <= POST_MAX_LENGTH && (trimmed.length > 0 || images.length > 0);
+  const [listingId, setListingId] = useState("");
+  const [openListings, setOpenListings] = useState<ListingCard[]>([]);
+  useEffect(() => {
+    if (!canShareListings) return;
+    marketApi!.mine().then((l) => setOpenListings(l.filter((x) => x.status === "available" || x.status === "reserved")), () => undefined);
+  }, [canShareListings]);
+  const canPost = !busy && !picking && !suspended && trimmed.length <= POST_MAX_LENGTH && (trimmed.length > 0 || images.length > 0 || !!listingId);
 
   useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
 
@@ -243,7 +284,8 @@ function BusinessComposer({ onPosted }: { onPosted: () => void }) {
         if (!canPost) return;
         setBusy(true);
         try {
-          await businessApi!.createPost(trimmed, images.map(({ url: _url, ...m }) => m));
+          await businessApi!.createPost(trimmed, images.map(({ url: _url, ...m }) => m), listingId || null);
+          setListingId("");
           setText("");
           setImages([]);
           toast("Posted as your business");
@@ -259,6 +301,19 @@ function BusinessComposer({ onPosted }: { onPosted: () => void }) {
         <span className="field__label">Post as your business</span>
         <textarea className="field__input" rows={3} maxLength={POST_MAX_LENGTH} value={text} onChange={(e) => setText(e.target.value)} placeholder="Share an update, offer or event" />
       </label>
+      {openListings.length > 0 && (
+        <label className="field">
+          <span className="field__label">Share a listing (optional)</span>
+          <select className="field__input" value={listingId} onChange={(e) => setListingId(e.target.value)}>
+            <option value="">None</option>
+            {openListings.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {images.length > 0 && (
         <div className="biz-compose__thumbs">
           {images.map((m, i) => (
@@ -306,4 +361,121 @@ function BusinessComposer({ onPosted }: { onPosted: () => void }) {
       </div>
     </form>
   );
+}
+
+// ---------------------------------------------------------------- tabs
+
+type TabId = "posts" | "products" | "services" | "about";
+const SERVICE_FIRST: BusinessCategory[] = ["services", "health", "education", "beauty_wellness", "creative_media", "events_entertainment", "travel_hospitality"];
+
+function businessTabs(category: BusinessCategory, market: boolean, about: boolean): { id: TabId; label: string }[] {
+  const products = { id: "products" as const, label: category === "food_drink" ? "Menu" : "Products" };
+  const services = { id: "services" as const, label: "Services" };
+  const shop = market ? (SERVICE_FIRST.includes(category) ? [services, products] : [products, services]) : [];
+  return [{ id: "posts", label: "Posts" }, ...shop, ...(about ? [{ id: "about" as const, label: "About" }] : [])];
+}
+
+function BusinessTabs({ tabs, tab, onTab }: { business: Business; tabs: { id: TabId; label: string }[]; tab: TabId; onTab: (t: TabId) => void }) {
+  if (tabs.length < 2) return null;
+  return (
+    <div className="tabs profile-tabs" role="tablist" aria-label="Business page">
+      {tabs.map((t) => (
+        <button key={t.id} role="tab" id={`btab-${t.id}`} aria-selected={tab === t.id} className="tab" onClick={() => onTab(t.id)}>
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Products or services the business lists (open ones; a restaurant's grouped by menu section). */
+function BusinessListings({ business, kind, menu }: { business: Business; kind: ListingKind; menu: boolean }) {
+  const navigate = useNavigate();
+  const [rows, setRows] = useState<ListingCard[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    setRows(null);
+    marketApi!.search({ businessId: business.id, kind, sort: "newest" }, 60).then((r) => live && setRows(r), () => live && setFailed(true));
+    return () => {
+      live = false;
+    };
+  }, [business.id, kind]);
+  const groups = menu && rows ? [...new Set(rows.map((r) => r.section ?? ""))].map((s) => ({ section: s, items: rows.filter((r) => (r.section ?? "") === s) })) : null;
+  return (
+    <section className="mk-page" role="tabpanel" aria-busy={!rows && !failed}>
+      {business.mine && (
+        <div className="mk-actions">
+          <Button size="sm" icon={<Plus size={16} aria-hidden="true" />} onClick={() => navigate("/market/sell")}>
+            Add a listing
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => navigate("/settings/business")}>
+            Manage listings
+          </Button>
+        </div>
+      )}
+      {failed ? (
+        <StateMessage tone="error" icon={<CircleAlert size={24} />} title="Couldn't load listings" body="This is usually temporary." />
+      ) : !rows ? (
+        <p className="settings-muted" aria-busy="true">Loading…</p>
+      ) : rows.length === 0 ? (
+        <StateMessage icon={<Package size={24} />} title={kind === "product" ? (menu ? "No menu yet" : "No products yet") : "No services yet"} body={business.mine ? "Add one and it shows here and in the Marketplace." : "Check back later."} />
+      ) : groups && groups.length > 1 ? (
+        groups.map((g) => (
+          <div key={g.section || "other"}>
+            <h3 className="sheet-form__title" style={{ fontSize: "var(--text-md)", marginBottom: 8 }}>{g.section || "More"}</h3>
+            <ul className="mk-grid">
+              {g.items.map((l) => (
+                <li key={l.id}>
+                  <ListingTile listing={l} showBusiness={false} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      ) : (
+        <ul className="mk-grid">
+          {rows.map((l) => (
+            <li key={l.id}>
+              <ListingTile listing={l} showBusiness={false} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+const DAY_LABEL: Record<(typeof WEEKDAYS)[number], string> = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
+
+function BusinessAbout({ business }: { business: Business }) {
+  return (
+    <section className="mk-page" role="tabpanel">
+      {business.description && <p className="mk-desc">{business.description}</p>}
+      {business.area && (
+        <p>
+          <MapPin size={15} aria-hidden="true" style={{ verticalAlign: -2 }} /> {business.area}
+        </p>
+      )}
+      {business.hours && (
+        <dl className="mk-facts" aria-label="Opening hours">
+          {WEEKDAYS.map((d) => (
+            <div key={d} style={{ display: "contents" }}>
+              <dt>{DAY_LABEL[d]}</dt>
+              <dd>{business.hours?.[d]?.length ? business.hours[d]!.map(([a, b]) => `${a}–${b}`).join(", ") : "Closed"}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+/** "Open now · until 21:00", "Closed now", using the viewer's clock (businesses are local). */
+function openNow(hours: NonNullable<Business["hours"]>) {
+  const now = new Date();
+  const day = WEEKDAYS[(now.getDay() + 6) % 7];
+  const hm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const range = hours[day]?.find(([a, b]) => hm >= a && hm < b);
+  return range ? `Open now · until ${range[1]}` : "Closed now";
 }

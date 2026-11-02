@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useParams } from "react-router";
-import { FileText, Flag, HandHeart, History, LayoutDashboard, MessageSquareText, Orbit, ShieldAlert, Sparkles, Store, UsersRound } from "lucide-react";
+import { FileText, Flag, HandHeart, History, LayoutDashboard, MessageSquareText, Orbit, ShieldAlert, ShoppingBag, Sparkles, Store, UsersRound } from "lucide-react";
 import { dataSource } from "../data";
 import { AdminLegal, AdminMonetization } from "../features/admin/AdminPlatform";
 import { AdminClientErrors, AdminContentReports, AdminStats, AdminSuspensions } from "../features/admin/AdminModeration";
@@ -14,6 +14,7 @@ import { AdminInsights } from "../features/admin/AdminInsights";
 import { AdminMessageReports } from "../features/admin/AdminMessageReports";
 import { AdminMomentReports } from "../features/admin/AdminMomentReports";
 import { AdminBusinesses } from "../features/admin/AdminBusinesses";
+import { AdminMarketplace } from "../features/admin/AdminMarketplace";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
@@ -28,6 +29,7 @@ const SECTIONS = [
   { id: "users", label: "Users", icon: UsersRound },
   { id: "reports", label: "Reports", icon: Flag },
   ...(dataSource.business ? [{ id: "businesses", label: "Businesses", icon: Store }] : []),
+  ...(dataSource.marketplace ? [{ id: "marketplace", label: "Marketplace", icon: ShoppingBag }] : []),
   ...(dataSource.admin?.monetization ? [{ id: "creators", label: "Creator Programme", icon: Sparkles }] : []),
   ...(dataSource.admin?.creatorProgramme ? [{ id: "creator-feedback", label: "Creator Feedback", icon: MessageSquareText }] : []),
   ...(dataSource.admin?.legal ? [{ id: "legal", label: "Legal", icon: FileText }] : []),
@@ -98,6 +100,7 @@ export default function AdminScreen() {
         )}
         {section === "creator-feedback" && dataSource.admin?.creatorProgramme && <AdminCreatorFeedback />}
         {section === "businesses" && <AdminBusinesses />}
+        {section === "marketplace" && <AdminMarketplace />}
         {section === "audit" && <AdminAuditLog />}
         {section === "legal" && dataSource.admin?.legal && <AdminLegal />}
         {section === "reports" && (

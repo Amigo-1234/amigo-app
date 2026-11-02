@@ -16,7 +16,8 @@ import { isNeon, supabase } from "./supabase/client";
 import { createSupabaseMessages } from "./supabase/messages";
 import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
-import { createBusinessApi } from "./supabase/business";
+import { businessIdOf, createBusinessApi } from "./supabase/business";
+import { createMarketplaceApi } from "./supabase/marketplace";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPushApi } from "./supabase/push";
 import * as worldsExtra from "./supabase/worldsExtra";
@@ -418,6 +419,9 @@ const moderation = isNeon ? createModeration(supabase, invalidate) : null;
 // Business profiles need migration 20261028130000 and the media service (logos, covers, photos).
 if (isNeon && media) q.enableBusinessPosts();
 const business = isNeon && media ? createBusinessApi(supabase, media, invalidate) : undefined;
+// Marketplace needs migration 20261102090000 (listings, posts.listing_id); off until an admin switches it on.
+if (isNeon && media) q.enableListingCards();
+const marketplace = isNeon && media ? createMarketplaceApi(supabase, media, () => businessIdOf(), invalidate) : undefined;
 
 export const supabaseSource: DataSource = {
   kind: isNeon ? "neon" : "supabase",
@@ -898,6 +902,7 @@ export const supabaseSource: DataSource = {
   messages: createSupabaseMessages(supabase, liveQuery, invalidate, { realtime: !isNeon, media, onSent: isNeon ? pushNewMessage : undefined }),
   push: isNeon ? push : undefined,
   business,
+  marketplace,
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {
