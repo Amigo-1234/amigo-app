@@ -1,6 +1,9 @@
 import type { LegalSlug } from "../data";
 
 /** The legal documents, in the order they're listed. Text ships with the app, one file per version. */
+/** Amigo is for adults only (owner decision, 2 Nov 2026). Confirmed by the person themselves; no ID is asked for. */
+export const MIN_AGE = 18;
+
 export const LEGAL_DOCS: { slug: LegalSlug; title: string; blurb: string }[] = [
   { slug: "terms", title: "Terms of Service", blurb: "The agreement for using Amigo" },
   { slug: "privacy", title: "Privacy Policy", blurb: "What we collect and why" },

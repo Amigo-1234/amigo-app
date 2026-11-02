@@ -1,64 +1,250 @@
-# Username reservations — launch checklist
+# Username reservations — launch readiness
 
-Prepared 2 Nov 2026 from a read-only review. Nothing here has been applied to Production.
+Last reviewed 2 Nov 2026 (read-only). Production has not been changed.
 
-## Review findings
+## 1. Release readiness
 
-| Area | Status | Evidence |
+### What ships
+Deploying `7061af6` to Production ships everything since the live version `d718521`:
+
+| Commit | What users see | Risk |
 |---|---|---|
-| Database migration | Ready | 666/666 local database checks; on verify-1029, 48/48 reservation checks (rolled back) and all 23 functions identical to local. Production has no reservation objects yet. Its `handle_new_user` / `generate_username` match the repo apart from indentation, so replacing them drops nothing. No Production username is on the protected list (13 profiles, all valid). |
-| Existing accounts | Protected | The check fires only when a username is created or changed. Existing usernames are never touched. |
-| Sign-up and renaming | Reject reserved and protected names | Database trigger plus `username_available`. Tested locally, on verify-1029 and end to end (41 checks). |
-| Admin controls | Ready | Open/close, hold length, names per email, revoke, extend, protect/unprotect and assign a name. Tested in the database and in the demo admin screen. |
-| Email | Ready | Live `/api/auth-email?check`: sender matches, provider key present. Resend's signing record (DKIM) is published for amigoworld.com.ng. Sign-up emails already use this setup. |
-| Reservation route | Ready, not yet run against real Neon | Tested locally through a stand-in for Neon's database connection. A test on a Preview deployment with verify-1029 credentials comes first (step B3). |
-| Page | Ready | Works at phone width (no sideways scrolling at 320px). Loads no app code. Links to the Privacy Policy and Terms. |
+| `c73180d` launch banner | Nothing. The images live in `marketing/` and aren't part of the site; they only make the repo bigger. | None |
+| `c8a7243` navigation redesign | Phones: Home · Explore · Create · Market (shows **Worlds** while the Marketplace is off, as it is now) · Messages. Bell and profile picture move to the Home header. Desktop: a shorter sidebar plus a "More" menu. Explore gets a browse row. | Low to medium: everyone sees a new layout. |
+| `7061af6` reservations | `/reserve` on the main domain (and reserve.amigoworld.com.ng once DNS exists); Admin → Reservations; username checks in Edit profile and onboarding use the new rule; a "claim" row in Edit profile. | Medium: changes the username rules for every account. |
+| Migrations `20261103090000`, `20261103100000` | Nothing visible until reservations are opened. | Low: additive. Existing usernames are never touched. |
 
-### Pre-launch fixes
-1. **Email retention: fixed** (`20261103100000_reservation_housekeeping.sql`). 30 days after a reservation closes, its row is deleted, email and all. The clean-up runs automatically now and then, and admins can run it on demand.
-2. **Privacy Policy: draft below, waiting for your approval.** The reservation page itself now says the email is used only for the reservation and deleted 30 days after it ends.
-3. **Bot check resend: fixed.** The check sits under both the email and code steps, every code request uses a fresh token, and it's reset after each use.
-4. **Hold length copy: fixed.** The page shows the hold length set in Admin.
-5. **Admin status: fixed.** A hold whose time has run out shows as expired straight away.
+### Evidence
+- 671/671 database checks pass locally. On verify-1029 the same 48 reservation checks plus the clean-up checks pass (rolled back), and all 25 functions are identical to the local versions.
+- 41/41 end-to-end route checks pass locally. The real route was tested on a Preview against verify-1029 with real email sending. 35/35 Marketplace browser checks pass. Typecheck and build pass.
+- Production's current username functions match the repo apart from indentation, and none of its 13 usernames is on the protected list.
+- **The live feed is working** after the 2 Nov data-service refresh. The app's own performance log shows `feed_posts` and `posts` errors during the outage and only successful loads afterwards.
 
-### Privacy Policy addition (draft, for approval)
-Suggested as a new paragraph in section 1, "Information you give us", plus a line in section 7, "Retention". Changing the policy means publishing a new version (0.2), per the app's legal-documents process.
+### Regressions and gaps found (none block the release on their own)
+1. **Phones: your profile is one tap further away.** The profile picture is only in the Home header now. From other screens you go Home first, or use Settings.
+2. **Claiming is manual.** A reservation holder who signs up gets a generated username first. They then claim the reserved one in Edit profile, after confirming their email. Sign-up and onboarding don't mention it yet.
+3. **No reminder emails.** Holders aren't emailed before a reservation expires, or when an admin revokes or reassigns it. Renewal relies on them coming back in the last 30 days.
+4. **Holders can't cancel or look up their reservation themselves.** An admin has to do it.
+5. **This branch's Previews use the live database for the app** (pre-existing setup). Unreleased code there acts on real accounts. Only the reservation route was pointed at verify-1029.
+6. **The functions run on Node, not Edge.** The route's `runtime: "edge"` setting is ignored on this project. It works the same, but cold starts are slightly slower.
 
-> **Username reservations.** If you reserve a username before Amigo World opens to the public, we collect the username and your email address. We use the email only to confirm the reservation is yours, to tell you about it, and to let you claim the username when you create an account with the same address. A reservation isn't an account and we don't use the email for marketing. To prevent abuse we keep short-lived, one-way fingerprints of the network address and email used, for up to two days.
+### Security concerns
+1. **Squatting.** Without the bot check, one person with many email addresses and IP addresses could reserve many names. The limits are 10 starts per IP per hour and 6 per email per day, and each name still needs a working inbox. **Recommendation: turn on Cloudflare Turnstile for launch** (free; needs keys from your Cloudflare account) and review the Admin list daily for the first week.
+2. **Registration is still open.** Any name that isn't reserved or protected can still be taken by signing up normally. This is expected; closing registration is a separate decision.
+3. **Legal documents.** The **live** Privacy Policy and Terms still contain owner placeholders, and the Terms say the minimum age is 13. Privacy 0.2 (section 3) fills in the contact and age; your full legal name is still needed. Terms 0.2 must ship with it. **This blocks opening reservations to the public**, though not the technical deploy.
+4. **Origin check.** Calls from other websites are refused. Scripts that send no browser origin are allowed, and are held back only by the limits and email verification.
 
-> **Retention (reservations):** We delete a reservation, including its email address, 30 days after it ends — when it's claimed, expires, is withdrawn by Amigo, or was never confirmed.
+## 2. Decisions you need to make
+1. Approve the release contents (navigation and reservations together).
+2. Provide your full legal name, then approve Privacy 0.2 (section 3) and the matching Terms 0.2 (minimum age 18). Contact email and minimum age are decided.
+2a. ~~Approve the 18+ enforcement plan~~ — approved 2 Nov; built locally (section 3a).
+3. Turnstile on or off for launch.
+4. Keep the defaults (180-day hold, renewable in the last 30 days, one name per email) or change them in Admin.
+5. Whether to add expiry reminder emails before or after launch (gap 3).
+6. Separately, later: whether registration stays open or becomes claim-only.
 
-## A. What you must do yourself
+## 3. Privacy Policy 0.2 — complete draft (for approval — not published)
 
-1. **Approve the release contents.** Deploying ships every change since the live version (d718521): the new navigation (c8a7243) plus all of Phase 2. They can't be shipped separately without extra work.
-2. **Create a database login for the route (Production, Neon SQL editor).** Use a strong random password. Do *not* create it in the Neon Console's Roles page: roles made there get broad admin rights.
+Decisions applied (2 Nov 2026):
+- **Operator:** an individual. The full legal name stays a placeholder until you provide and approve it.
+- **Privacy contact:** olamidesamson841@gmail.com.
+- **Minimum age:** 18.
+- **Reservations:** held 180 days, renewable in the final 30 days, deleted 30 days after closing.
+
+Changes from 0.1:
+- the operator, contact and age lines filled in;
+- §1 gains username reservations;
+- §2 adds push notifications and first-party diagnostics;
+- §5 gets an accurate provider list (Resend, Cloudflare R2, push services), plus businesses and the Marketplace;
+- §7 gains reservation retention;
+- §9 sets 18 and says what happens to younger accounts.
+
+Items marked **[LEGAL REVIEW]** are left for a lawyer.
+
+---
+
+### Privacy Policy
+
+This policy explains what information Amigo World collects, why, who processes it, and the choices you have. Amigo is operated by **[OWNER: full legal name]**, an individual ("**we**"). You can contact us about privacy at **olamidesamson841@gmail.com**.
+
+#### 1. Information you give us
+
+- **Account:** email address, password (stored only as a secure hash by our authentication provider), display name, username, and your confirmation that you are 18 or older.
+- **Profile:** bio, profile photo and anything else you add.
+- **Content and activity:** posts, replies, likes, follows, Moments, World participation and chat, Support Hub requests, support and feedback, reports you make.
+- **Business pages and listings** (if you create them): business name, description, logo, contact details you choose to show, opening hours, area, and products or services you list. These are public.
+- **Direct messages:** see section 4 — we store them only in encrypted form.
+- **Legal acceptance:** which versions of the Terms and Privacy Policy you accepted, and when.
+- **Monetization applications** (if you choose to apply when that's available): your application and engagement figures at the time.
+- **Username reservations.** Before Amigo World opens to everyone, you can reserve a username at reserve.amigoworld.com.ng without creating an account. We collect the username you choose and your email address. We send a one-time code to that address to confirm it's yours; we store only a scrambled (hashed) copy of the code, and it expires after 15 minutes. We use your email only to confirm and manage your reservation: to tell you it's confirmed, to let you renew it, and to let you claim the username when you create an Amigo account with the same email address and confirm it. A reservation is not an account, and we don't use the email for marketing or show it to other users. A reservation lasts 180 days. You can renew it with the same email address in its final 30 days. If it isn't renewed or claimed, it ends and the username becomes available again. We may withdraw a reservation that breaks our Terms or Community Guidelines — for example impersonation, or a name that belongs to someone else — or to settle a dispute. Some system and brand names can't be reserved.
+
+#### 2. Information created as you use Amigo
+
+- **Session:** a sign-in cookie set by our authentication provider so you stay signed in.
+- **Devices for encrypted messaging:** each browser you use gets a messaging device with public keys, a name (e.g. "Safari on iPhone") and a last-active time, so you can see and remove your devices.
+- **Push notifications** (if you turn them on): the push address your browser gives us, so we can send notifications through your browser's push service.
+- **Diagnostics:** when the app hits an error or loads slowly, it sends us a short report (what failed, the page, timings and app version), linked to your account so we can limit how many reports one person sends. We use these only to find and fix problems.
+- **Abuse prevention:** to limit repeated attempts (for example on the reservation page), we keep short-lived, one-way fingerprints of network addresses and email addresses, which can't be turned back into the original, and delete them within two days.
+- **Technical logs:** our hosting and database providers keep standard request and error logs (such as IP address, time and request path) for security and reliability.
+- **On your device:** we store your theme preference, unsent drafts and your encryption keys in your browser (see the [Cookie and Tracking Notice](/legal/cookies)).
+
+We do **not** use advertising trackers, sell personal information, or use third-party analytics services.
+
+#### 3. How we use information
+
+- to provide Amigo: accounts, profiles, feeds, notifications, Worlds, Support Hub, business pages, the Marketplace, messaging and username reservations;
+- to keep Amigo safe: preventing spam and abuse, reviewing reports, enforcing our rules (including the minimum age), keeping audit logs of admin actions;
+- to verify your email and help you recover your account;
+- to find and fix problems with the app;
+- to comply with legal obligations.
+
+**[LEGAL REVIEW: legal bases for processing under the Nigeria Data Protection Act 2023 (and GDPR/UK GDPR if relevant), e.g. contract, legitimate interests, consent.]**
+
+#### 4. Encrypted direct messages
+
+- Messages, photos and other message attachments are **end-to-end encrypted** on your device before they leave it, using the open-source Matrix encryption (Olm/Megolm). We store only ciphertext and cannot read it.
+- We can see **metadata**: who is in a conversation, when messages were sent, read and delivered markers, and your devices' public keys.
+- **Reports:** if you report a conversation, the messages you choose to include are decrypted on your device and sent to us as evidence. Our moderators see only what you shared.
+- **Backup:** if you turn on message backup, your keys are uploaded **encrypted** with a recovery key that only you have. If you lose every device and your recovery key, we cannot recover your message history.
+- New devices can only read messages after you approve them from another of your devices or restore with your recovery key.
+
+#### 5. Who can see your information
+
+- **Public by default:** your profile, followers and following lists, public posts, World participation, Support Hub requests, business pages and Marketplace listings.
+- **Followers only:** posts and Moments you share with followers.
+- **Admins:** a small team of administrators can review reports, moderate content and manage username reservations; their actions are logged. They cannot read encrypted messages.
+- **Service providers** that process data for us: **Vercel Inc.** (hosting and server functions), **Neon** (database and authentication, hosted in AWS London, UK), **Resend** (sending emails such as verification codes and reservation emails), **Cloudflare** (storing photos and videos you upload, in Cloudflare R2; and, if enabled, the Turnstile check on the reservation page), and your browser's push service (for example Apple, Google or Mozilla) if you turn on notifications. **[OWNER: confirm data-processing agreements with each provider.]**
+- We may disclose information if the law requires it or to protect people from serious harm.
+
+#### 6. International transfers
+
+Our providers may process data outside Nigeria (for example in the UK, EU or US). **[LEGAL REVIEW: transfer basis under the NDPA 2023.]**
+
+#### 7. Retention
+
+- We keep information while your account exists. When you delete your account, we delete or anonymise your personal information as described in the [Account Deletion and Data Retention Policy](/legal/deletion).
+- **Username reservations:** we delete a reservation, including its email address, 30 days after it ends — when it's claimed, expires, is withdrawn, or was never confirmed. You can ask us to delete it sooner (see section 8).
+- **Abuse-prevention fingerprints** are deleted within two days.
+
+#### 8. Your rights and choices
+
+- You can view and edit your profile, delete posts and Moments, remove messaging devices, and delete your account in the app.
+- You may have rights to access, correct, delete, restrict or object to processing of your information, and to data portability. To exercise them — or for questions about a username reservation, including a dispute over a reserved name — contact **olamidesamson841@gmail.com**. You may also complain to the Nigeria Data Protection Commission or your local data-protection authority.
+
+#### 9. Age
+
+Amigo is only for people who are **18 or older**. We ask you to confirm your age when you create an account; we don't ask for identity documents. If we learn that an account belongs to someone under 18, we'll suspend it and delete it, after telling the account holder where we can. If you believe we've made a mistake, contact us at the address above.
+
+#### 10. Changes
+
+We'll tell you about material changes in the app and, where required, ask you to accept the new version.
+
+---
+
+## 3a. How 18+ is enforced (plan approved 2 Nov 2026)
+
+**Today:**
+- **Email sign-up:** a self-declared checkbox reading "I'm at least **13**…", from the constant `MIN_AGE = 13` in `src/screens/AuthScreen.tsx`.
+- **Google sign-up:** no age statement at all; the consent screen after Google only asks for the Terms and Privacy Policy.
+- **Reservation page:** no age statement.
+- **Server side:** the database records which policy versions each account accepted, but checks no age, and the consent screen is enforced in the browser only.
+
+**Built locally (uncommitted), 2 Nov:**
+- **Email sign-up:** reads "I'm 18 or older and I agree to…", from the shared constant `MIN_AGE = 18` in `src/legal/index.ts`.
+- **Google sign-up:** the note says Amigo is for people 18 or older and that you'll confirm your age on the next screen.
+- **Consent screen:** whenever the Terms are among the documents to accept, a required "I'm 18 or older" box must be ticked before "I agree" works, with a note for under-18s pointing to sign out or delete.
+- **Reservation page:** a required "I'm 18 or older" box. The route refuses any start without it (`error: "age"`), so the box can't be skipped by calling the route directly.
+- **Tests:** typecheck and build pass; 42/42 end-to-end route checks, including the new age refusal; Marketplace browser tests pass.
+- **Not yet checked on screen:** the consent-screen box and the Google note. The demo has no outstanding documents and no Google sign-in.
+- **Still to do:** publish Terms and Privacy 0.2 as a material change (needs your legal name and Production approval), and add a 14-day deletion step to the admin suspension flow.
+
+**Approved approach (minimal, no ID documents, nothing invasive):**
+1. **Self-declaration at every way in.**
+   - Change the sign-up checkbox to "I'm 18 or older…".
+   - Add the same required confirmation to the consent screen, so Google sign-ups and existing accounts confirm too.
+   - Add "I'm 18 or older" to the reservation page before a code is sent. A reservation can only be claimed by an account, and the account has to confirm as well.
+2. **Record it on the server.** Publish Terms 0.2 (min age 18) and Privacy 0.2 as a **material change requiring acceptance**. Each acceptance is then stored with a timestamp, which is the age confirmation on record. No date of birth is stored.
+3. **Handle reports.** A report that a user is under 18 goes to admins, who can suspend the account under the existing suspension tools. ID is never requested by default; if a case can't be settled otherwise, any further check needs your approval first.
+4. **Later, optional (Phase 3).** Collect a private date of birth at sign-up, so someone who enters an under-18 birthday can't register. It's still self-declared, it stores more personal data, and it needs your approval.
+
+**Known limit:** the consent screen runs in the browser. Someone deliberately calling the API directly could skip it. That's acceptable for a self-declaration system, but it isn't proof of age.
+
+**Existing accounts** (13 on Production today; none has ever confirmed 18+, because the old wording said 13 and Google sign-ups confirmed nothing):
+- When Terms and Privacy 0.2 are published as a material change, every existing user meets the consent screen on their next visit. They must confirm they're 18 or older to keep using Amigo.
+- Anyone who can't confirm can sign out or delete their account from that screen; deletion already exists there.
+- An account that says it's under 18, or is reported and confirmed as under 18, is suspended straight away. It's then deleted after a short notice period (14 days is suggested), following the Account Deletion Policy. During that period the holder can contact you if it's a mistake.
+- Their username is released when the account is deleted. Their encrypted messages are removed with the account as usual.
+
+**Other legal and technical concerns:**
+1. **All six legal documents still have owner placeholders** (Terms, Privacy, Guidelines, Copyright, Deletion, Monetization). The Terms also still say "drafted as 13" and lack a support contact, governing law and dispute process. **Terms 0.2 must ship with Privacy 0.2**, or the two contradict each other on age.
+2. **Section 3 legal bases and section 6 transfers** need a lawyer, for the NDPA 2023.
+3. **Postal address:** the Terms ask for one "if required"; a lawyer should confirm whether it's needed.
+4. **Publishing** means adding `privacy-0.2.md` and `terms-0.2.md` to the app, and registering both versions in the Production database. That's a Production change, which needs your approval at the time.
+
+## 4. Real-email test (Preview and verify-1029 only)
+Waiting for your test email address. When you send it, I will:
+1. Recreate a throwaway login on verify-1029 (allowed to run only the 3 reservation functions).
+2. Put real values back into the two branch-only Preview entries.
+3. Redeploy the Preview.
+4. Open reservations on verify-1029 only.
+5. Give you a share link.
+
+**You then:**
+1. Open the link and pick a test username.
+2. Enter your email and receive the code.
+3. Type the real code.
+4. Check that the confirmation email arrives.
+
+**I then** confirm the reservation's status and expiry in verify-1029 and check the logs. After that I delete the test reservation and attempt log, close reservations, drop the login, and reset the two entries to placeholders. Results go in this section.
+
+## 5. Vercel clean-up (after the real-email test)
+Branch-only Preview entries created for testing (none exist in Production):
+- `RESERVE_DATABASE_URL`: placeholder `removed-after-test`
+- `RESERVE_PEPPER`: placeholder `removed-after-test`
+- `RESERVE_ORIGINS`: the branch Preview address (not secret)
+
+To delete them:
+1. Go to vercel.com → team **amigos-projects** → project **amigo-app** → **Settings** → **Environment Variables**.
+2. Search for `RESERVE_`.
+3. For each of the three entries whose **Environment** reads *Preview* with branch **claude/amigo-world-restart-7mrbrf**, open **⋯** and choose **Remove**.
+4. Don't touch any entry marked *Production*, or the other branch entries (`RESEND_API_KEY`, `EMAIL_FROM`, the `VITE_*` ones).
+5. Afterwards, searching `RESERVE_` should show nothing until you add the Production pair in step A3 below.
+
+## 6. Production setup — your manual tasks (never paste secrets into chat)
+1. **Approve** the release contents and the Privacy Policy (decisions 1–2).
+2. **Wait until I've applied the migration** (step B2). It creates the `username_reserver` role.
+3. **Create the login** in the Neon Console. Use project **rough-lab-16727045**, branch **production** (`br-shiny-night-za6izma0`), database **neondb**, in the **SQL Editor** — not the Roles page, which gives broad admin rights:
    ```sql
-   create role reserve_web login password '<random 32+ characters>';
+   create role reserve_web login password 'PASTE-A-NEW-PASSWORD-HERE';
    grant username_reserver to reserve_web;
    ```
-   (Only after the migration has created `username_reserver`.)
-3. **Set Vercel Production environment variables** (all "Sensitive"):
-   | Name | Value |
-   |---|---|
-   | `RESERVE_DATABASE_URL` | `postgresql://reserve_web:<password>@ep-dry-mode-zano9y8g.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require` (the direct host, not `-pooler`) |
-   | `RESERVE_PEPPER` | 64 random hex characters (`openssl rand -hex 32`). Never change it while reservations are open, or rate limits reset. |
-   | `RESEND_API_KEY`, `EMAIL_FROM` | Already set. Nothing to do. |
-   | `EMAIL_REPLY_TO` | Optional. |
-   | `TURNSTILE_SECRET`, `TURNSTILE_SITE_KEY` | Only if you choose the bot check (fix finding 3 first). |
-4. **DNS at your DNS host (host-ww.net).** Add `reserve` as a **CNAME** to `160f47bcd5fe080c.vercel-dns-017.com.` (Vercel's first choice; `cname.vercel-dns.com.` also works). This only works after step B5 has added the domain to the project.
-5. **Resend plan.** Each reservation sends 2 emails (code and confirmation), and resends add more. Check that your plan's daily and monthly limits cover launch traffic: the free plan is 100 a day.
-6. **Approve the Privacy Policy wording** (finding 2).
+   Make the password with `openssl rand -hex 32` on your computer.
+4. **Generate the pepper:** `openssl rand -hex 32`. It's a different value from the password. Never change it while reservations are open.
+5. **Add two Production variables in Vercel**, both type **Sensitive** and environment **Production** only:
+   - `RESERVE_DATABASE_URL` = `postgresql://reserve_web:<password>@ep-dry-mode-zano9y8g.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require` (direct host, not `-pooler`)
+   - `RESERVE_PEPPER` = the pepper value
 
-## B. What I can run after your approval, in order
+   Optional: `TURNSTILE_SECRET` and `TURNSTILE_SITE_KEY`, if you choose Turnstile.
+6. **DNS at host-ww.net:** add a CNAME record with host/name `reserve` and target `160f47bcd5fe080c.vercel-dns-017.com.`. Do this **after** step B4 attaches the domain.
+7. **Resend:** check your plan's daily and monthly limits. Each reservation sends 2 emails, plus any resends or notices; the free plan allows 100 a day and 3,000 a month.
+8. **Give the final approval** to open reservations (step B7).
 
-1. Fix findings 1, 3 and 4 locally, with tests. Commit.
-2. Push the branch.
-3. **Preview test on verify-1029:** set `RESERVE_DATABASE_URL` / `RESERVE_PEPPER` for Preview only (a login on verify-1029, made the same way as A2), deploy a Preview, and run the full journey through the real route at `/reserve`. Then remove the test rows.
-4. **Production database:** a restore branch, then the migration, then refresh the data service (same settings), then confirm the settings are unchanged and fingerprint the functions. Reservations stay **closed**.
-5. Add `reserve.amigoworld.com.ng` to the Vercel project (then A4 can be checked).
-6. Deploy the approved commit to Production. Check that the feed and profile still load, that `/reserve` and `/api/reserve` answer, and that the reserve address serves only the page.
-7. Smoke test with reservations still closed: the page says "not open". Then, with your OK, open them briefly, reserve a test name with your own email, revoke it, and leave them open or closed as you choose.
+## 7. Deployment sequence (each B step only after your explicit approval)
+| Step | Who | Action | Check |
+|---|---|---|---|
+| B1 | me | Production restore branch `pre-reservations-YYYYMMDD` | Branch exists |
+| B2 | me | Apply `20261103090000_username_reservations` then `20261103100000_reservation_housekeeping` (not the football migration) | Functions match the tested versions; 0 reservations; `open = false` |
+| B3 | me | Refresh the Production data service by re-saving its current settings unchanged | Settings read back identical |
+| A3–A5 | you | `reserve_web` login, then the two Vercel variables | — |
+| B4 | me | Attach `reserve.amigoworld.com.ng` to project amigo-app | Domain listed |
+| A6 | you | CNAME at host-ww.net | Vercel shows the domain as verified |
+| B5 | me | Production deploy of the approved commit | Ready, and aliased to amigoworld.com.ng |
+| B6 | me | Checks: feed and profile load; `/reserve` and `https://reserve.amigoworld.com.ng` show the page; other paths on the reserve address show the page too; `GET /api/reserve` returns `open:false`; Admin → Reservations loads | Logs clean |
+| B7 | me, after your go-ahead | Briefly open reservations in Admin. Reserve a test name with your email (you type the code). Revoke it. Close again until public launch. | Real email received |
+| — | you | Final approval: Admin → Reservations → **Open** | — |
 
-## Rollback
-- **Page and route:** redeploy d718521 (the current live version). The database update can stay, since the old app doesn't use it.
-- **Database:** close reservations in Admin (instant). To remove the update completely: drop the `profiles_username_guard` trigger and the new objects, and restore the two functions (steps at the top of the migration), or restore from the branch made in B4.
+## 8. Rollback
+- **Page or app problem:** redeploy `d718521` (the current live version) as Production. The database update can stay, because the old app doesn't use it. If you want the reserve address to stop answering, remove the CNAME.
+- **Reservations misbehaving:** Admin → Reservations → **Close** takes effect immediately and needs no deploy.
+- **Database:** restore from the B1 restore branch, or reverse just these changes. Reversing means dropping the trigger `profiles_username_guard` and the new tables and functions, then restoring `generate_username` and `handle_new_user` from `20261006120000_core_schema.sql`. Any reservations made before the rollback are lost either way.
+- **Credentials:** `drop role reserve_web;` and remove the two Vercel variables.

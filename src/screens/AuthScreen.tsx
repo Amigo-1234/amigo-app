@@ -5,13 +5,12 @@ import { AuthError, dataSource } from "../data";
 import { AuthField, AuthHeading, AuthLayout, CodeField, PasswordField, authMessage } from "../features/auth";
 import { Button } from "../ui/Button";
 import { LoadingScreen } from "../ui/Loader";
-import { BUNDLED_VERSION, LEGAL_DOCS } from "../legal";
+import { BUNDLED_VERSION, LEGAL_DOCS, MIN_AGE } from "../legal";
 import { legalCurrent } from "./LegalScreen";
 import { markNewAccount } from "../features/onboarding/state";
 import "./LegalScreen.css";
 
 /** [OWNER/LEGAL] Minimum age in the draft Terms — confirm before launch. */
-const MIN_AGE = 13;
 
 type Step = "signIn" | "signUp" | "reset" | "resetCode" | "resetSent" | "resetDone";
 
@@ -235,7 +234,7 @@ export default function AuthScreen() {
           </button>
           {step === "signUp" && (
             <p className="auth__social-note">
-              By continuing with Google you agree to the <Link to="/legal/terms">Terms</Link> and <Link to="/legal/privacy">Privacy Policy</Link> — you'll be asked to confirm them next.
+              Amigo is for people {MIN_AGE} or older. By continuing with Google you agree to the <Link to="/legal/terms">Terms</Link> and <Link to="/legal/privacy">Privacy Policy</Link> — on the next screen you'll confirm your age and accept them.
             </p>
           )}
           <p className="auth__or">
@@ -279,7 +278,7 @@ export default function AuthScreen() {
               <label className="auth-check">
                 <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} required />
                 <span>
-                  I'm at least {MIN_AGE} and I agree to the{" "}
+                  I'm {MIN_AGE} or older and I agree to the{" "}
                   <Link to="/legal/terms" target="_blank" rel="noopener">
                     Terms of Service
                   </Link>{" "}

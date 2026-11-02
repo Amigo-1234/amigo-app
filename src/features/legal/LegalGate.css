@@ -90,3 +90,7 @@
   display: grid;
   gap: var(--space-3);
 }
+
+.legal-gate__age {
+  margin: var(--space-4) 0;
+}

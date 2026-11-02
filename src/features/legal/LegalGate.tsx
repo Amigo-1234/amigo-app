@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { X } from "lucide-react";
 import { dataSource, type PendingLegal } from "../../data";
+import { MIN_AGE } from "../../legal";
 import { AuthHeading, AuthLayout } from "../auth";
 import { Button } from "../../ui/Button";
 import { LoadingScreen } from "../../ui/Loader";
@@ -81,6 +82,7 @@ function LeaveOptions() {
 export function LegalGate({ children }: { children: ReactNode }) {
   const api = dataSource.legal;
   const [pending, setPending] = useState<PendingLegal[] | null>(api ? null : []);
+  const [adult, setAdult] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -126,7 +128,10 @@ export function LegalGate({ children }: { children: ReactNode }) {
   if (pending === null) return <LoadingScreen />;
 
   if (required.length) {
+    // Accepting the Terms includes confirming you're old enough (Google sign-ups and existing accounts confirm here).
+    const needsAge = required.some((p) => p.slug === "terms");
     const accept = async () => {
+      if (needsAge && !adult) return;
       setBusy(true);
       setError(null);
       try {
@@ -152,14 +157,21 @@ export function LegalGate({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
+        {needsAge && (
+          <label className="auth-check legal-gate__age">
+            <input type="checkbox" checked={adult} onChange={(e) => setAdult(e.target.checked)} required />
+            <span>I'm {MIN_AGE} or older. Amigo is only for adults.</span>
+          </label>
+        )}
         {error && (
           <p className="auth__error" role="alert">
             {error}
           </p>
         )}
-        <Button size="lg" block loading={busy} disabled={busy} onClick={accept}>
+        <Button size="lg" block loading={busy} disabled={busy || (needsAge && !adult)} onClick={accept}>
           I agree
         </Button>
+        {needsAge && <p className="legal-gate__fine">Under {MIN_AGE}? You can't use Amigo yet. You can sign out or delete your account below.</p>}
         <LeaveOptions />
       </AuthLayout>
     );

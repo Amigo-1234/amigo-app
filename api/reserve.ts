@@ -3,7 +3,7 @@
  *
  *   GET  /api/reserve                     → { open, holdDays, turnstileSiteKey }
  *   POST /api/reserve { action: "check",  username }               → { username, status }
- *   POST /api/reserve { action: "start",  username, email, token? } → { id }   (a code is emailed)
+ *   POST /api/reserve { action: "start",  username, email, adult: true, token? } → { id }   (a code is emailed)
  *   POST /api/reserve { action: "verify", id, code }               → { username, expiresAt }
  *
  * - It talks to the database as the login-less role username_reserver (given a
@@ -144,6 +144,8 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     if (body.action === "start") {
+      // Amigo is for adults; the person confirms it on the page (no ID is asked for).
+      if (body.adult !== true) return json(400, { error: "age", message: "Amigo World is for people 18 or older." });
       if (!(await turnstileOk(body.token, ip))) return json(400, { error: "challenge", message: "Please complete the check and try again." });
       const code = newCode();
       const r = await call(conn, "select public.reserve_start($1, $2, $3, $4)::text as r", [str("username", 40), str("email", 254), await sha256(code), ipHash]);

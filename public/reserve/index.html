@@ -64,6 +64,8 @@
     border: 1px solid var(--line); border-radius: 14px; }
   .summary strong { font: 700 18px/1.2 "Bricolage", sans-serif; overflow-wrap: anywhere; }
   .hint { margin: 10px 2px 0; font-size: 14px; color: var(--faint); }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin: 18px 2px 0; font-size: 15px; font-weight: 500; cursor: pointer; }
+  .check input { width: 20px; height: 20px; margin: 1px 0 0; accent-color: var(--coral); flex: none; }
   .done { padding-top: 4px; }
   .done:focus { outline: none; } /* focused only so screen readers announce the result */
   .done .badge { display: inline-grid; place-items: center; width: 52px; height: 52px; margin-bottom: 18px; border-radius: 16px; background: var(--coral); color: var(--on-coral); }
@@ -120,6 +122,7 @@
     </div>
     <p id="email-status" class="status" role="status" aria-live="polite"></p>
     <p id="email-hint" class="hint">We'll send a 6-digit code to confirm it's yours. Use the email you'll sign up with — that's how you'll claim the name.</p>
+    <label class="check"><input type="checkbox" id="adult" required> <span>I'm 18 or older. Amigo World is only for adults.</span></label>
     <button class="primary" id="email-next" type="submit">Send my code</button>
   </form>
 
@@ -250,11 +253,12 @@
     e.preventDefault();
     const email = emailInput.value.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return say(emailStatus, "Enter a valid email address.", "bad");
+    if (!$("adult").checked) return say(emailStatus, "Please confirm you're 18 or older.", "warn");
     const token = botToken();
     if (token === "") return say(emailStatus, "Please complete the check below.", "warn");
     emailNext.disabled = true;
     say(emailStatus, "Sending your code…");
-    const { ok, data } = await post({ action: "start", username: state.name, email, token });
+    const { ok, data } = await post({ action: "start", username: state.name, email, adult: true, token });
     emailNext.disabled = false;
     resetBot(); // each token works once
     if (!ok) {
@@ -301,7 +305,7 @@
     const token = botToken();
     if (token === "") return say(codeStatus, "Please complete the check below, then ask again.", "warn");
     say(codeStatus, "Sending a new code…");
-    const { ok, data } = await post({ action: "start", username: state.name, email: state.email, token });
+    const { ok, data } = await post({ action: "start", username: state.name, email: state.email, adult: true, token });
     resetBot();
     if (!ok) return say(codeStatus, data.message || "Couldn't send a new code.", "bad");
     state.id = data.id;
