@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router";
-import { ChevronRight, CircleAlert, Clock, Compass, SearchX, ShoppingBag, Store, X } from "lucide-react";
+import { CircleAlert, Clock, Compass, HandHeart, Orbit, SearchX, ShoppingBag, Store, X, type LucideIcon } from "lucide-react";
+import { dataSource } from "../data";
 import type { Post, SearchTab } from "../data";
 import { describeError } from "../features/feed/errors";
 import { FeedFooter } from "../features/feed/FeedFooter";
@@ -127,20 +128,7 @@ function ExploreHome({ onPickRecent }: { onPickRecent: (q: string) => void }) {
 
   return (
     <>
-      {market && (
-        <Link to="/market" className="recent-item__main explore-business-link">
-          <ShoppingBag size={18} aria-hidden="true" />
-          <span>Marketplace</span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </Link>
-      )}
-      {businesses && (
-        <Link to="/business" className="recent-item__main explore-business-link">
-          <Store size={18} aria-hidden="true" />
-          <span>Find businesses</span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </Link>
-      )}
+      <Browse market={market} businesses={!!businesses} />
       {recent.length > 0 && (
         <Section
           title="Recent searches"
@@ -180,6 +168,28 @@ function ExploreHome({ onPickRecent }: { onPickRecent: (q: string) => void }) {
 
       {state.status === "ready" && <ExploreSections feed={state.feed} />}
     </>
+  );
+}
+
+/** Places to explore beyond search: one quiet row, no cards. Worlds and businesses live here, not in the bottom bar. */
+function Browse({ market, businesses }: { market: boolean; businesses: boolean }) {
+  const places: { to: string; label: string; icon: LucideIcon }[] = [
+    // While the Marketplace is off, Worlds has its own slot in the main navigation instead.
+    ...(dataSource.worlds && market ? [{ to: "/worlds", label: "Worlds", icon: Orbit }] : []),
+    ...(businesses ? [{ to: "/business", label: "Businesses", icon: Store }] : []),
+    ...(market ? [{ to: "/market", label: "Marketplace", icon: ShoppingBag }] : []),
+    ...(dataSource.support ? [{ to: "/support", label: "Support Hub", icon: HandHeart }] : []),
+  ];
+  if (!places.length) return null;
+  return (
+    <nav className="explore-browse" aria-label="Browse">
+      {places.map(({ to, label, icon: Icon }) => (
+        <Link key={to} to={to} className="explore-browse__item">
+          <Icon size={18} aria-hidden="true" />
+          {label}
+        </Link>
+      ))}
+    </nav>
   );
 }
 

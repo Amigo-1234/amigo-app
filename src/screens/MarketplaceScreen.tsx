@@ -93,10 +93,13 @@ export default function MarketplaceScreen({ saved = false }: { saved?: boolean }
   const header = (
     <ScreenHeader
       title={saved ? "Saved listings" : "Marketplace"}
+      // The Marketplace is a main destination now; only Saved listings has a way back.
       leading={
-        <IconButton label="Back" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate(saved ? "/market" : "/explore"))} className="back-btn">
-          <ArrowLeft size={22} />
-        </IconButton>
+        saved ? (
+          <IconButton label="Back" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate("/market"))} className="back-btn">
+            <ArrowLeft size={22} />
+          </IconButton>
+        ) : undefined
       }
       actions={
         !saved ? (

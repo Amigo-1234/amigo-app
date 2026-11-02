@@ -47,11 +47,21 @@
 }
 
 .bottom-link {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
   height: 100%;
   color: var(--text-3);
   transition: color var(--dur-fast) ease;
+}
+
+.bottom-link__label {
+  font-size: 10.5px;
+  font-weight: 550;
+  line-height: 1;
+  letter-spacing: 0.01em;
 }
 
 .bottom-link.active {
@@ -169,6 +179,48 @@
 
   .side-link__label {
     display: none;
+  }
+
+  .side-more {
+    position: relative;
+  }
+
+  .side-more__btn {
+    width: 100%;
+    font: inherit;
+    font-size: var(--text-lg);
+    background: none;
+    cursor: pointer;
+  }
+
+  .side-more__menu {
+    position: absolute;
+    z-index: 40;
+    left: 0;
+    top: calc(100% + 4px);
+    min-width: 232px;
+    margin: 0;
+    padding: var(--space-2);
+    list-style: none;
+    background: var(--bg-elevated, var(--bg));
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 12px 32px rgb(0 0 0 / 0.22);
+  }
+
+  .side-more__item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 10px var(--space-3);
+    border-radius: var(--radius-sm, 8px);
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .side-more__item:hover,
+  .side-more__item[aria-current="page"] {
+    background: var(--surface-hover);
   }
 
   .sidebar__post {

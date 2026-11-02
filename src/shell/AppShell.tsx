@@ -1,7 +1,10 @@
-import { Suspense, useEffect, useRef } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { Suspense, useEffect, useId, useRef, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { profilesEnabled } from "../features/profile/links";
-import { Plus, ShieldCheck } from "lucide-react";
+import { CircleEllipsis, Plus, ShieldCheck, ShoppingBag } from "lucide-react";
+import { dataSource } from "../data";
+import { useMyBusiness } from "../features/business/useMyBusiness";
+import { useMarketplace } from "../features/marketplace/shared";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { Composer, type ComposerHandle } from "../features/composer/Composer";
 import { PublishStatusBar } from "./PublishStatusBar";
@@ -15,7 +18,7 @@ import { Avatar } from "../ui/Avatar";
 import { Wordmark } from "../ui/Brand";
 import { Button } from "../ui/Button";
 import { Sheet } from "../ui/Sheet";
-import { NAV } from "./nav";
+import { bottomNav, moreNav, sectionOf, sidebarNav, type NavItem } from "./nav";
 import { useScrollMemory } from "./useScrollMemory";
 import { useAutoHideNav } from "./useAutoHideNav";
 import { RightRail } from "./RightRail";
@@ -56,12 +59,36 @@ export function AppShell() {
   }, [composer]);
 
   const meHref = profilesEnabled ? `/u/${viewer.handle}` : "/settings";
-  const nav = NAV.map((n) => (n.to === "/profile" ? { ...n, to: meHref } : n));
-  const mobileItems = nav.filter((n) => n.mobile);
+  // While the switch state is still loading, the slot shows Worlds (the safe default).
+  const market = useMarketplace().enabled === true;
+  const business = !!useMyBusiness().state?.enabled;
+  const withMe = (items: NavItem[]) => items.map((n) => (n.to === "/profile" ? { ...n, to: meHref } : n));
+  const nav = withMe(sidebarNav(market));
+  const mobileItems = withMe(bottomNav(market));
+  const more = moreNav({ market, business, creator: !!dataSource.creatorProgramme });
+  // Admins can open the Marketplace before it's switched on for everyone.
+  if (!market && isAdmin && dataSource.marketplace) more.unshift({ to: "/market", label: "Marketplace (admins)", icon: ShoppingBag });
+  const section = sectionOf(pathname, nav.some((n) => n.to === "/worlds"));
   // Own profile, its follow lists and settings all count as "Profile" in the nav.
   const onMe = pathname === "/settings" || pathname === meHref || pathname.startsWith(`${meHref}/`);
-  const navClass = (to: string) => ({ isActive }: { isActive: boolean }) =>
-    `${isActive || (to === meHref && onMe) ? "active" : ""}`;
+  const isActive = (to: string) => (to === meHref ? onMe : section === to);
+  const navClass = (to: string) => (isActive(to) ? "active" : "");
+
+  const bottomLink = ({ to, label, icon: Icon }: NavItem) => (
+    <Link key={to} to={to} className={`bottom-link ${navClass(to)}`} aria-label={labelFor(to) ?? label} aria-current={isActive(to) ? "page" : undefined}>
+      {to === meHref ? (
+        <span className={`bottom-avatar${onMe ? " is-active" : ""}`}>
+          <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="xs" />
+        </span>
+      ) : (
+        <span className="nav-icon">
+          <Icon size={23} strokeWidth={isActive(to) ? 2.3 : 1.8} aria-hidden="true" />
+          {badgeFor(to) && <span className="nav-badge" aria-hidden="true">{badgeFor(to)}</span>}
+        </span>
+      )}
+      <span className="bottom-link__label" aria-hidden="true">{label}</span>
+    </Link>
+  );
 
   return (
     <div className={`shell${inMessages ? " shell--messages" : ""}${inConversation ? " shell--conversation" : ""}`}>
@@ -78,28 +105,22 @@ export function AppShell() {
 
           <nav className="sidebar__nav">
             {nav.map(({ to, label, icon: Icon }) => (
-              <NavLink
+              <Link
                 key={to}
                 to={to}
-                end={to === "/"}
-                className={(a) => `side-link ${navClass(to)(a)}`}
+                className={`side-link ${navClass(to)}`}
                 title={label}
                 aria-label={labelFor(to)}
+                aria-current={isActive(to) ? "page" : undefined}
               >
-                {({ isActive: routeActive }) => {
-                  const isActive = routeActive || (to === meHref && onMe);
-                  return (
-                  <>
-                    <span className="nav-icon">
-                      <Icon size={24} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
-                      {badgeFor(to) && <span className="nav-badge" aria-hidden="true">{badgeFor(to)}</span>}
-                    </span>
-                    <span className="side-link__label">{label}</span>
-                  </>
-                  );
-                }}
-              </NavLink>
+                <span className="nav-icon">
+                  <Icon size={24} strokeWidth={isActive(to) ? 2.3 : 1.8} aria-hidden="true" />
+                  {badgeFor(to) && <span className="nav-badge" aria-hidden="true">{badgeFor(to)}</span>}
+                </span>
+                <span className="side-link__label">{label}</span>
+              </Link>
             ))}
+            <SidebarMore items={more} pathname={pathname} />
           </nav>
 
           {isAdmin && (
@@ -138,30 +159,11 @@ export function AppShell() {
       <RightRail />
 
       <nav className={`bottom-nav${navHidden ? " bottom-nav--hidden" : ""}`} aria-label="Primary" onFocus={showNav}>
-        {mobileItems.slice(0, 2).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} end={to === "/"} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={labelFor(to) ?? label}>
-            {({ isActive }) => <Icon size={25} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />}
-          </NavLink>
-        ))}
+        {mobileItems.slice(0, 2).map(bottomLink)}
         <button className="bottom-create" onClick={() => composer.setOpen(true)} aria-label="Create post">
           <Plus size={24} strokeWidth={2.4} aria-hidden="true" />
         </button>
-        {mobileItems.slice(2).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to} className={(a) => `bottom-link ${navClass(to)(a)}`} aria-label={labelFor(to) ?? label}>
-            {({ isActive }) =>
-              to === meHref ? (
-                <span className={`bottom-avatar${isActive || onMe ? " is-active" : ""}`}>
-                  <Avatar name={viewer.name} src={viewer.avatarUrl} seed={viewer.id} size="xs" />
-                </span>
-              ) : (
-                <span className="nav-icon">
-                  <Icon size={25} strokeWidth={isActive ? 2.3 : 1.8} aria-hidden="true" />
-                  {badgeFor(to) && <span className="nav-badge" aria-hidden="true">{badgeFor(to)}</span>}
-                </span>
-              )
-            }
-          </NavLink>
-        ))}
+        {mobileItems.slice(2).map(bottomLink)}
       </nav>
 
       {/* Esc, backdrop and Cancel all go through the composer, which asks before discarding. */}
@@ -170,6 +172,55 @@ export function AppShell() {
       </Sheet>
 
       {pathname !== "/" && <PublishStatusBar />}
+    </div>
+  );
+}
+
+/** The sidebar's "More" menu: a short list under the main destinations. Closes on Escape, outside click or navigation. */
+function SidebarMore({ items, pathname }: { items: NavItem[]; pathname: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const id = useId();
+  const current = items.some((n) => pathname === n.to || pathname.startsWith(`${n.to}/`));
+
+  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      ref.current?.querySelector<HTMLButtonElement>(".side-more__btn")?.focus();
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!items.length) return null;
+  return (
+    <div className="side-more" ref={ref}>
+      <button type="button" className={`side-link side-more__btn${current ? " active" : ""}`} aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} title="More">
+        <span className="nav-icon">
+          <CircleEllipsis size={24} strokeWidth={current ? 2.3 : 1.8} aria-hidden="true" />
+        </span>
+        <span className="side-link__label">More</span>
+      </button>
+      {open && (
+        <ul className="side-more__menu" id={id}>
+          {items.map(({ to, label, icon: Icon }) => (
+            <li key={to}>
+              <Link to={to} className="side-more__item" aria-current={pathname === to ? "page" : undefined}>
+                <Icon size={20} aria-hidden="true" />
+                {label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
