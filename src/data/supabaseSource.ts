@@ -556,11 +556,21 @@ export const supabaseSource: DataSource = {
   onViewerChanged(cb) {
     viewerListeners.add(cb);
     // Late subscribers get the current state once the initial session is known.
+    // A session check that never answers (a waking database, a stalled request) shows the
+    // sign-in screen after 10 s instead of the splash forever; a session that arrives later
+    // still signs the person in.
+    let answered = false;
+    const timer = setTimeout(() => !answered && cb(null), 10_000);
     void supabase.auth.getSession().then(({ data }) => {
+      answered = true;
+      clearTimeout(timer);
       currentUser = data.session?.user ?? null;
       return currentUser ? loadViewer(currentUser).then(cb) : cb(null);
     });
-    return () => viewerListeners.delete(cb);
+    return () => {
+      clearTimeout(timer);
+      viewerListeners.delete(cb);
+    };
   },
 
   onPasswordRecovery(cb) {
