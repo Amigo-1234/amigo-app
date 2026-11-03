@@ -130,12 +130,12 @@ export default function MarketplaceScreen({ saved = false }: { saved?: boolean }
           <>
             {my?.business ? (
               <p className="mk-note">
-                Selling? <Link to="/market/sell">Add a listing</Link> for {my.business.name}.
+                Selling? <Link to="/market/sell">Add a listing</Link> for {my.business.name}. · <Link to="/business">Browse businesses</Link>
               </p>
             ) : (
               my?.enabled && (
                 <p className="mk-note">
-                  Sell on Amigo with a <Link to="/settings/business">business page</Link>.
+                  Sell on Amigo with a <Link to="/settings/business">business page</Link>. · <Link to="/business">Browse businesses</Link>
                 </p>
               )
             )}

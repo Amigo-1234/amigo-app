@@ -61,17 +61,29 @@ function BusinessForm({ business, onSaved }: { business: MyBusiness | null; onSa
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Field messages appear after the first try, not while someone is still typing.
+  const [attempted, setAttempted] = useState(false);
+  // A new page's handle follows the name until the person edits it themselves.
+  const [handleTouched, setHandleTouched] = useState(!!business);
+  const formRef = useRef<HTMLFormElement>(null);
   const set = <K extends keyof BusinessInput>(k: K, v: BusinessInput[K]) => setForm((f) => ({ ...f, [k]: v }));
 
   const suspended = business?.status === "suspended";
   const handleLocked = !!business && business.canChangeHandleAt.getTime() > Date.now();
   const cleanHandle = handle.trim().toLowerCase();
-  const valid =
-    HANDLE_RE.test(cleanHandle) &&
-    form.name.trim().length > 0 &&
-    form.name.trim().length <= 50 &&
-    form.description.length <= 500 &&
-    (!form.website || /^https:\/\//i.test(form.website.trim()));
+  const problems: Partial<Record<"name" | "handle" | "description" | "website" | "email", string>> = {};
+  if (!form.name.trim()) problems.name = "Enter your business name.";
+  else if (form.name.trim().length > 50) problems.name = "Use 50 characters or fewer.";
+  if (!HANDLE_RE.test(cleanHandle)) problems.handle = "Use 3–24 lowercase letters, numbers or underscores.";
+  if (form.description.length > 500) problems.description = "Use 500 characters or fewer.";
+  if (form.website.trim() && !/^https:\/\/[^\s.]+\.[^\s]+$/i.test(form.website.trim())) problems.website = "Use a full address starting with https://";
+  if (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) problems.email = "Enter a valid email address.";
+  const shown = attempted ? problems : {};
+
+  const setName = (name: string) => {
+    set("name", name);
+    if (!handleTouched) setHandle(suggestHandle(name));
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -97,16 +109,29 @@ function BusinessForm({ business, onSaved }: { business: MyBusiness | null; onSa
   return (
     <form
       className="biz-form"
+      ref={formRef}
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
-        if (valid && !busy && !suspended) void submit();
+        if (busy || suspended) return;
+        if (Object.keys(problems).length > 0) {
+          setAttempted(true);
+          requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+          return;
+        }
+        void submit();
       }}
     >
       {suspended && <p className="form-error">This business is suspended by the Amigo team, so it can't be edited, post or be deleted. Contact Amigo support.</p>}
       {!business && (
-        <p className="settings-muted">
-          One business page per person. Your name and account aren't shown on the page. Business posts are public; your likes and replies stay your own.
-        </p>
+        <div className="biz-form__intro">
+          <p>A page for your shop, service or brand. People can follow it, and you can post and sell as the business.</p>
+          <ul>
+            <li>One business page per person.</li>
+            <li>Your own name and account aren't shown on it.</li>
+            <li>Only the name, handle and category are needed. You can add the rest later.</li>
+          </ul>
+        </div>
       )}
       {business && (
         <p className="settings-muted">
@@ -118,23 +143,40 @@ function BusinessForm({ business, onSaved }: { business: MyBusiness | null; onSa
 
       <label className="field">
         <span className="field__label">Business name</span>
-        <input className="field__input" value={form.name} maxLength={50} onChange={(e) => set("name", e.target.value)} required disabled={suspended} />
+        <input
+          className="field__input"
+          value={form.name}
+          maxLength={50}
+          onChange={(e) => setName(e.target.value)}
+          disabled={suspended}
+          aria-invalid={shown.name ? true : undefined}
+          aria-describedby={shown.name ? "biz-name-error" : undefined}
+        />
+        <FieldError id="biz-name" error={shown.name} />
       </label>
       <label className="field">
         <span className="field__label">Handle</span>
-        <input
-          className="field__input"
-          value={handle}
-          maxLength={24}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          onChange={(e) => setHandle(e.target.value.toLowerCase())}
-          disabled={suspended || handleLocked}
-          aria-describedby="biz-handle-hint"
-        />
+        <span className="biz-form__handle">
+          <span aria-hidden="true">/b/</span>
+          <input
+            className="field__input"
+            value={handle}
+            maxLength={24}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            onChange={(e) => {
+              setHandleTouched(true);
+              setHandle(e.target.value.toLowerCase());
+            }}
+            disabled={suspended || handleLocked}
+            aria-invalid={shown.handle ? true : undefined}
+            aria-describedby={shown.handle ? "biz-handle-error biz-handle-hint" : "biz-handle-hint"}
+          />
+        </span>
+        <FieldError id="biz-handle" error={shown.handle} />
         <span id="biz-handle-hint" className="biz-form__hint">
-          Your page is at /b/{cleanHandle || "handle"}. 3–24 lowercase letters, numbers or underscores.{" "}
+          Your page's address: amigoworld.com.ng/b/{cleanHandle || "handle"}.{" "}
           {handleLocked ? `You can change it again on ${dateFmt.format(business!.canChangeHandleAt)}.` : "You can change it once every 30 days."}
         </span>
       </label>
@@ -150,20 +192,56 @@ function BusinessForm({ business, onSaved }: { business: MyBusiness | null; onSa
       </label>
       <label className="field">
         <span className="field__label">About (optional)</span>
-        <textarea className="field__input" rows={4} maxLength={500} value={form.description} onChange={(e) => set("description", e.target.value)} disabled={suspended} />
+        <textarea
+          className="field__input"
+          rows={4}
+          maxLength={500}
+          value={form.description}
+          onChange={(e) => set("description", e.target.value)}
+          disabled={suspended}
+          placeholder="What you offer, and who it's for"
+          aria-invalid={shown.description ? true : undefined}
+          aria-describedby={shown.description ? "biz-about-error" : undefined}
+        />
+        <FieldError id="biz-about" error={shown.description} />
       </label>
-      <label className="field">
-        <span className="field__label">Website (optional)</span>
-        <input className="field__input" type="url" inputMode="url" placeholder="https://" value={form.website} maxLength={200} onChange={(e) => set("website", e.target.value)} disabled={suspended} />
-      </label>
-      <label className="field">
-        <span className="field__label">Contact email (optional, shown on your page)</span>
-        <input className="field__input" type="email" value={form.email} maxLength={254} onChange={(e) => set("email", e.target.value)} disabled={suspended} />
-      </label>
-      <label className="field">
-        <span className="field__label">Phone (optional, shown on your page)</span>
-        <input className="field__input" type="tel" value={form.phone} maxLength={32} onChange={(e) => set("phone", e.target.value)} disabled={suspended} />
-      </label>
+
+      <fieldset className="biz-form__group" disabled={suspended}>
+        <legend>Contact details (optional)</legend>
+        <p className="biz-form__hint">Shown on your page so customers can reach you.</p>
+        <label className="field">
+          <span className="field__label">Website (optional)</span>
+          <input
+            className="field__input"
+            type="url"
+            inputMode="url"
+            placeholder="https://"
+            value={form.website}
+            maxLength={200}
+            onChange={(e) => set("website", e.target.value)}
+            aria-invalid={shown.website ? true : undefined}
+            aria-describedby={shown.website ? "biz-website-error" : undefined}
+          />
+          <FieldError id="biz-website" error={shown.website} />
+        </label>
+        <label className="field">
+          <span className="field__label">Contact email (optional)</span>
+          <input
+            className="field__input"
+            type="email"
+            value={form.email}
+            maxLength={254}
+            onChange={(e) => set("email", e.target.value)}
+            aria-invalid={shown.email ? true : undefined}
+            aria-describedby={shown.email ? "biz-email-error" : undefined}
+          />
+          <FieldError id="biz-email" error={shown.email} />
+        </label>
+        <label className="field">
+          <span className="field__label">Phone (optional)</span>
+          <input className="field__input" type="tel" value={form.phone} maxLength={32} onChange={(e) => set("phone", e.target.value)} />
+        </label>
+      </fieldset>
 
       {error && (
         <p className="form-error" role="alert">
@@ -172,7 +250,7 @@ function BusinessForm({ business, onSaved }: { business: MyBusiness | null; onSa
         </p>
       )}
       <div className="biz-form__actions">
-        <Button type="submit" loading={busy} disabled={!valid || suspended}>
+        <Button type="submit" loading={busy} disabled={suspended}>
           {business ? "Save" : "Create business page"}
         </Button>
       </div>
@@ -180,6 +258,26 @@ function BusinessForm({ business, onSaved }: { business: MyBusiness | null; onSa
       {business && !suspended && <DeleteBusiness name={business.name} onDeleted={onSaved} />}
     </form>
   );
+}
+
+function FieldError({ id, error }: { id: string; error?: string }) {
+  return error ? (
+    <span id={`${id}-error`} className="biz-form__error" role="alert">
+      {error}
+    </span>
+  ) : null;
+}
+
+/** "Sunrise Bakery & Café" → "sunrise_bakery_cafe": a starting point the person can change. */
+function suggestHandle(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24)
+    .replace(/_+$/, "");
 }
 
 function ImagesEditor({ business, onSaved }: { business: MyBusiness; onSaved: () => void }) {

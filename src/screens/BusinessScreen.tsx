@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowLeft, CircleAlert, Store } from "lucide-react";
+import { ArrowLeft, CircleAlert, ShoppingBag, Store } from "lucide-react";
 import { BUSINESS_CATEGORIES, type BusinessCategory, type BusinessSummary } from "../data";
 import { businessApi, useMyBusiness } from "../features/business/useMyBusiness";
+import { useMarketplace } from "../features/marketplace/shared";
 import { BusinessLogo, categoryLabel } from "../features/business/shared";
 import { formatCount } from "../lib/format";
 import { ScreenHeader } from "../shell/ScreenHeader";
@@ -15,6 +16,7 @@ import "./SettingsScreen.css";
 export default function BusinessScreen() {
   const navigate = useNavigate();
   const { state: my } = useMyBusiness();
+  const market = useMarketplace().enabled === true;
   const [query, setQuery] = useState("");
   const [typed, setTyped] = useState("");
   const [category, setCategory] = useState<BusinessCategory | null>(null);
@@ -48,6 +50,14 @@ export default function BusinessScreen() {
           <IconButton label="Back" onClick={() => (window.history.state?.idx > 0 ? navigate(-1) : navigate("/explore"))} className="back-btn">
             <ArrowLeft size={22} />
           </IconButton>
+        }
+        // Businesses lists pages; the Marketplace lists what they sell. One tap between the two.
+        actions={
+          market ? (
+            <Link to="/market" className="icon-btn icon-btn--md" aria-label="Marketplace" title="Marketplace">
+              <ShoppingBag size={21} aria-hidden="true" />
+            </Link>
+          ) : undefined
         }
       />
       <div className="biz-dir">
@@ -106,6 +116,7 @@ function BusinessRow({ business }: { business: BusinessSummary }) {
           <span>
             {categoryLabel(business.category)} · {formatCount(business.followerCount)} {business.followerCount === 1 ? "follower" : "followers"}
           </span>
+          {business.description && <span className="biz-row__about">{business.description}</span>}
         </span>
       </Link>
       {my?.business?.id !== business.id && <BusinessFollowButton id={business.id} name={business.name} following={business.following} />}

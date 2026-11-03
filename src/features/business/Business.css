@@ -105,6 +105,10 @@
   white-space: nowrap;
 }
 
+.biz-row__text .biz-row__about {
+  color: var(--text-2);
+}
+
 /* ---------- Profile ---------- */
 
 .biz-cover {
@@ -247,6 +251,70 @@
 .biz-form__hint {
   color: var(--text-3);
   font-size: var(--text-xs);
+}
+
+.biz-form__intro {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.biz-form__intro p {
+  margin: 0 0 var(--space-2);
+  color: var(--text);
+}
+
+.biz-form__intro ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+/* "/b/" sits in front of the handle so the address reads as you type. */
+.biz-form__handle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-3);
+}
+
+.biz-form__handle .field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.biz-form__error {
+  color: var(--danger, #ff6b5a);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.biz-form .field__input[aria-invalid="true"] {
+  border-color: var(--danger, #ff6b5a);
+}
+
+/* Optional contact fields, grouped so the required ones stand out. */
+.biz-form__group {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
+  padding: var(--space-4) 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+
+.biz-form__group legend {
+  padding: 0;
+  float: left;
+  width: 100%;
+  font-weight: 600;
+}
+
+.biz-form__group legend + .biz-form__hint {
+  margin: 0;
 }
 
 .biz-form__images {

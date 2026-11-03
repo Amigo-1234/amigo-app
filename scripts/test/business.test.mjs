@@ -56,7 +56,7 @@ try {
     await go(page, "/settings");
     ok("off: no business row in Settings", (await page.getByText("Create a business page").count()) === 0 && (await page.getByText("Your business").count()) === 0);
     await go(page, "/explore");
-    ok("off: no Find businesses link on Explore", (await page.getByRole("link", { name: "Find businesses" }).count()) === 0);
+    ok("off: no Find businesses link on Explore", (await page.getByRole("link", { name: "Businesses", exact: true }).count()) === 0);
     await go(page, "/settings/business");
     ok("off: creating says not available", (await page.getByText("Business pages aren't available yet").count()) === 1);
     ok("off: no page errors", errors.length === 0, errors.join("; "));
@@ -69,9 +69,18 @@ try {
     await go(page, "/settings");
     ok("on: Settings offers to create a business page", (await page.getByRole("link", { name: /Create a business page/ }).count()) === 1);
     await go(page, "/explore");
-    ok("on: Explore links to businesses", (await page.getByRole("link", { name: "Find businesses" }).count()) === 1);
+    ok("on: Explore links to businesses", (await page.getByRole("link", { name: "Businesses", exact: true }).count()) === 1);
 
     await go(page, "/settings/business");
+    await page.getByRole("button", { name: "Create business page" }).click();
+    ok("form: an empty form explains what's missing", (await page.getByText("Enter your business name.").count()) === 1 && (await page.getByLabel("Business name").getAttribute("aria-invalid")) === "true");
+    ok("form: the first problem field gets focus", await page.getByLabel("Business name").evaluate((el) => el === document.activeElement));
+    await page.getByLabel("Business name").fill("Sunrise Bakery & Café");
+    ok("form: the handle follows the name", (await page.getByLabel("Handle").inputValue()) === "sunrise_bakery_cafe");
+    await page.getByLabel("Website (optional)").fill("sunrise.example.com");
+    await page.getByRole("button", { name: "Create business page" }).click();
+    ok("form: a website without https:// is explained", (await page.getByText("Use a full address starting with https://").count()) === 1);
+    await page.getByLabel("Website (optional)").fill("");
     const fill = async (name, handle) => {
       await page.getByLabel("Business name").fill(name);
       await page.getByLabel("Handle").fill(handle);
