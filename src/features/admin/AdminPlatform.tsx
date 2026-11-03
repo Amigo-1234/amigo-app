@@ -265,30 +265,34 @@ export function AdminMonetization() {
 
 /**
  * Admin → Creators: the switch for post view counts. Off: nothing is recorded and no counts are
- * shown. On: each signed-in account counts once per post, and everyone sees the totals.
+ * shown. On: each signed-in account counts once per post, and everyone sees the totals. On a
+ * database without view counts (migration 20261104090000 not applied) there's nothing to switch.
  */
 export function AdminPostViews() {
   const api = dataSource.postViews;
   const toast = useToast();
-  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<"on" | "off" | "unavailable" | "error" | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    api?.admin.enabled().then(setEnabled, () => setEnabled(null));
+  const load = useCallback(() => {
+    api?.admin.status().then(setStatus, () => setStatus("error"));
   }, [api]);
+  useEffect(load, [load]);
   if (!api) return null;
 
   async function flip() {
-    if (enabled === null) return;
-    if (!enabled && !window.confirm("Turn on post view counts? Views start being recorded, and everyone sees the totals under posts.")) return;
+    if (status !== "on" && status !== "off") return;
+    const on = status === "on";
+    if (!on && !window.confirm("Turn on post view counts? Views start being recorded, and everyone sees the totals under posts.")) return;
     setBusy(true);
     try {
-      await api!.admin.setEnabled(!enabled);
-      setEnabled(!enabled);
-      toast(enabled ? "View counts turned off" : "View counts turned on");
-    } catch {
-      toast("Couldn't change the switch. Try again.", "error");
+      await api!.admin.setEnabled(!on);
+      toast(on ? "View counts turned off" : "View counts turned on");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "";
+      toast(/admins only|not signed in/i.test(msg) ? "Only Amigo admins can change this." : "Couldn't change the switch. Try again.", "error");
     } finally {
       setBusy(false);
+      load();
     }
   }
 
@@ -296,16 +300,20 @@ export function AdminPostViews() {
     <section className="admin-card" aria-labelledby="pv-switch">
       <h2 id="pv-switch" className="admin-card__title">Post view counts</h2>
       <p className="admin-muted">
-        {enabled === null
+        {status === null
           ? "Loading…"
-          : enabled
-            ? "On: each signed-in account counts once per post (never the author), and everyone sees the totals. Who viewed a post is never shown, not even here."
-            : "Off: nothing is recorded and no counts are shown. Views only count from when this is turned on."}
+          : status === "unavailable"
+            ? "Not available on this database yet: the post view counts update hasn't been applied here. Nothing is recorded or shown."
+            : status === "error"
+              ? "Couldn't check the switch. Reload to try again."
+              : status === "on"
+                ? "On: each signed-in account counts once per post (never the author), and everyone sees the totals. Who viewed a post is never shown, not even here."
+                : "Off: nothing is recorded and no counts are shown. Views only count from when this is turned on."}
       </p>
-      {enabled !== null && (
+      {(status === "on" || status === "off") && (
         <div className="admin-row__actions">
-          <Button size="sm" variant={enabled ? "secondary" : "primary"} loading={busy} onClick={flip}>
-            {enabled ? "Turn off" : "Turn on"}
+          <Button size="sm" variant={status === "on" ? "secondary" : "primary"} loading={busy} onClick={flip}>
+            {status === "on" ? "Turn off" : "Turn on"}
           </Button>
         </div>
       )}

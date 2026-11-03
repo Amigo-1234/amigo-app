@@ -240,7 +240,7 @@ function demoPostViews(): NonNullable<DataSource["postViews"]> {
         return added;
       }, 120),
     admin: {
-      enabled: () => later(() => on, 50),
+      status: () => later(() => (scenario === "views-missing" ? "unavailable" : on ? "on" : "off"), 50),
       setEnabled: (v) => later(() => void (on = v), 50),
     },
   };

@@ -1789,7 +1789,8 @@ export interface PostViewsApi {
   /** Records posts you've seen (at most 50 at a time); answers the ones newly counted. */
   record(postIds: string[]): Promise<string[]>;
   admin: {
-    enabled(): Promise<boolean>;
+    /** "unavailable": this database doesn't have view counts yet (migration not applied). */
+    status(): Promise<"on" | "off" | "unavailable">;
     setEnabled(enabled: boolean): Promise<void>;
   };
 }

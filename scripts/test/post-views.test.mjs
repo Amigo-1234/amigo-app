@@ -4,7 +4,8 @@
  *   - off (plain ?demo): no eye under posts, nothing recorded;
  *   - on (?demo=views): other people's posts show an eye and a total; a post on screen for a
  *     second counts once (one added), never again, and your own posts never gain views;
- *   - Admin → Creators: the switch reads on and turns off;
+ *   - Admin → Creators: the switch reads on and turns off; on a database without the migration
+ *     (?demo=views-missing) it says so and offers no button;
  *   - phone width: the action row doesn't scroll sideways.
  *
  *   node scripts/test/post-views.test.mjs
@@ -88,6 +89,22 @@ try {
     await card.getByRole("button", { name: "Turn off" }).click();
     await page.waitForTimeout(600);
     ok("admin: it turns off", (await card.innerText()).includes("Off:"));
+    await context.close();
+  }
+
+  {
+    // A database without the migration: nothing to switch, and posts show no eye.
+    const { context, page, errors } = await open("demo=views-missing");
+    ok("missing: no eye under posts", (await page.locator(".action--views").count()) === 0);
+    await page.evaluate(() => {
+      history.pushState({ idx: 1 }, "", "/admin/creators" + location.search);
+      dispatchEvent(new PopStateEvent("popstate", { state: { idx: 1 } }));
+    });
+    await page.waitForTimeout(1200);
+    const card = page.locator("section", { has: page.getByRole("heading", { name: "Post view counts" }) });
+    ok("missing: the card says it isn't available on this database", (await card.innerText()).includes("Not available on this database"));
+    ok("missing: no Turn on button to fail", (await card.getByRole("button").count()) === 0);
+    ok("missing: no page errors", errors.length === 0, errors.join("; "));
     await context.close();
   }
 

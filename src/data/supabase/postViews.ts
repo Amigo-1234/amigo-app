@@ -19,7 +19,16 @@ export function createPostViewsApi(db: Db): PostViewsApi {
     },
     record: async (postIds) => (await call<string[] | null>(db, "record_post_views", { p_posts: postIds })) ?? [],
     admin: {
-      enabled: async () => (await call<string[]>(db, "enabled_features")).includes("post_views"),
+      // Asked of the views function itself, so a database without the migration reads as
+      // unavailable rather than "off" (its switch doesn't exist there to turn on).
+      async status() {
+        const { data, error } = await db.rpc("post_view_totals" as never, { p_posts: [] } as never);
+        if (error) {
+          if (error.code === "PGRST202" || error.code === "42883" || /could not find the function|does not exist/i.test(error.message)) return "unavailable";
+          throw dataError(error);
+        }
+        return (data as { on: boolean }).on ? "on" : "off";
+      },
       setEnabled: (enabled) => call(db, "admin_set_feature", { p_key: "post_views", p_enabled: enabled }),
     },
   };
