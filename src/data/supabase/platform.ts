@@ -2,8 +2,8 @@
  * Legal versioning + creator monetization (migration 20261017090000).
  * Monetization is architecture only: no earnings, balances or payouts exist.
  */
-import { SupportError, type AdminCreatorApplication, type AdminCreatorFeedback, type CreatorApplicationInput, type CreatorFeedback, type CreatorProgramme, type CreatorProgrammeAdminApi, type CreatorProgrammeApi, type CreatorStats, type CreatorApplication, type CreatorEngagement, type CreatorOverview, type FraudFlag, type LegalAdminApi, type LegalApi, type LegalSlug, type LegalVersion, type MonetizationAdminApi, type MonetizationApi, type PendingLegal } from "../types";
-import type { Db } from "./queries";
+import { SupportError, type AdminCreatorApplication, type AdminCreatorFeedback, type CreatorApplicationInput, type CreatorFeedback, type CreatorProgramme, type CreatorProgrammeAdminApi, type CreatorProgrammeApi, type CreatorStats, type CreatorApplication, type CreatorEligibility, type EligibilityKey, type CreatorEngagement, type CreatorOverview, type FraudFlag, type LegalAdminApi, type LegalApi, type LegalSlug, type LegalVersion, type MonetizationAdminApi, type MonetizationApi, type PendingLegal } from "../types";
+import { dataError, type Db } from "./queries";
 import { toAuthor } from "./queries";
 
 async function call<T>(db: Db, fn: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -188,6 +188,24 @@ export function createPlatform(db: Db): { legal: LegalApi; legalAdmin: LegalAdmi
     createdAt: new Date(r.created_at),
   });
 
+  /** The server's eligibility result (my_creator_eligibility, snapshot.eligibility, …); null when absent. */
+  const toEligibility = (raw: unknown): CreatorEligibility | null => {
+    const o = raw as { eligible?: boolean; window_days?: number; checked_at?: string; requirements?: Record<string, unknown>[] } | null | undefined;
+    if (!o || !Array.isArray(o.requirements)) return null;
+    return {
+      eligible: !!o.eligible,
+      windowDays: Number(o.window_days ?? 90),
+      checkedAt: new Date(String(o.checked_at ?? Date.now())),
+      requirements: o.requirements.map((r) => ({
+        key: r.key as EligibilityKey,
+        value: typeof r.value === "boolean" ? r.value : Number(r.value ?? 0),
+        required: typeof r.required === "boolean" ? r.required : Number(r.required ?? 0),
+        met: !!r.met,
+        reasons: Array.isArray(r.reasons) ? (r.reasons as string[]) : [],
+      })),
+    };
+  };
+
   const creatorProgramme: CreatorProgrammeApi = {
     async get() {
       const o = await call<Record<string, unknown>>(db, "my_creator_programme");
@@ -216,6 +234,7 @@ export function createPlatform(db: Db): { legal: LegalApi; legalAdmin: LegalAdmi
             }
           : null,
         stats: o.stats ? toStats(o.stats as StatsRow) : null,
+        eligibility: toEligibility(o.eligibility),
       };
       return out;
     },
@@ -252,6 +271,8 @@ export function createPlatform(db: Db): { legal: LegalApi; legalAdmin: LegalAdmi
           infoRequest: String(r.info_request ?? ""),
           creatorStatus: r.creator_status as AdminCreatorApplication["creatorStatus"],
           current: { ...toEngagement(r.current as EngagementRow), openFraudFlags: Number((r.current as EngagementRow)?.open_fraud_flags ?? 0) },
+          eligibility: toEligibility((r.current as { eligibility?: unknown } | null)?.eligibility),
+          eligibilityWhenApplied: toEligibility((r.snapshot as { eligibility?: unknown } | null)?.eligibility),
           submittedAt: new Date(String(r.submitted_at)),
           updatedAt: new Date(String(r.updated_at)),
           reviewedAt: r.reviewed_at ? new Date(String(r.reviewed_at)) : null,
@@ -265,6 +286,14 @@ export function createPlatform(db: Db): { legal: LegalApi; legalAdmin: LegalAdmi
     },
     async stats(userId) {
       return toStats(await call<StatsRow>(db, "admin_creator_stats", { p_user: userId }));
+    },
+    async eligibility(username) {
+      const handle = username.trim().toLowerCase().replace(/^@/, "");
+      const { data, error } = await db.from("profiles").select("id, username, display_name, avatar_url").eq("username", handle).maybeSingle();
+      if (error) throw dataError(error);
+      if (!data) return null;
+      const e = toEligibility(await call<unknown>(db, "admin_creator_eligibility", { p_user: data.id }));
+      return e ? { person: toAuthor(data as never), eligibility: e } : null;
     },
     async feedback(status) {
       const rows = await call<(FeedbackRow & { user_id: string; username: string; display_name: string; avatar_url: string | null; responded_by_username: string | null })[]>(db, "admin_creator_feedback", { p_status: status });

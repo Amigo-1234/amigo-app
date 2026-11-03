@@ -6,6 +6,8 @@ import {
   type AdminCreatorApplication,
   type AdminCreatorFeedback,
   type AdminHistoryEntry,
+  type Author,
+  type CreatorEligibility,
   type CreatorApplicationStatus,
   type CreatorFeedback,
   type CreatorStats,
@@ -15,6 +17,7 @@ import { useToast } from "../../state/toast";
 import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { supportErrorText } from "../support/useSupport";
+import { EligibilityList, eligibilitySummary, unmetLabels } from "../creator/Eligibility";
 
 const STATUS_TABS: { id: CreatorApplicationStatus | "all"; label: string }[] = [
   { id: "pending", label: "Pending" },
@@ -32,7 +35,7 @@ const STATUS_LABEL: Record<CreatorApplicationStatus, string> = {
 };
 const CREATOR_LABEL = { not_eligible: "Not in programme", eligible: "Approved creator", suspended: "Suspended", revoked: "Revoked" } as const;
 const categoryLabel = (id: string) => CREATOR_CATEGORIES.find((c) => c.id === id)?.label ?? (id || "—");
-const errText = (e: unknown) => (e instanceof Error && (e as { code?: string }).code?.startsWith("SP") ? e.message : supportErrorText(e));
+const errText = (e: unknown) => (e instanceof Error && /^(SP|MN)/.test((e as { code?: string }).code ?? "") ? e.message : supportErrorText(e));
 
 /** Admin → Creator Programme: the review queue. Decisions are checked and audit-logged by the database. */
 export function AdminCreatorApplications() {
@@ -98,6 +101,9 @@ export function AdminCreatorApplications() {
                     <span className={`admin-badge${a.status === "rejected" ? " admin-badge--danger" : a.status === "approved" ? "" : " admin-badge--muted"}`}>{STATUS_LABEL[a.status]}</span>
                     {a.creatorStatus !== "not_eligible" && a.creatorStatus !== "eligible" && <span className="admin-badge admin-badge--danger">{CREATOR_LABEL[a.creatorStatus]}</span>}
                     {a.current.openFraudFlags > 0 && <span className="admin-badge admin-badge--danger">{a.current.openFraudFlags} open flag(s)</span>}
+                    {a.eligibility && (
+                      <span className={`admin-badge${a.eligibility.eligible ? "" : " admin-badge--muted"}`}>{a.eligibility.eligible ? "Meets requirements" : "Doesn't meet requirements"}</span>
+                    )}
                   </span>
                 </span>
               </button>
@@ -141,6 +147,8 @@ function ApplicationDetail({ a, onChanged }: { a: AdminCreatorApplication; onCha
   };
   const openApp = a.status === "pending" || a.status === "info_requested";
   const e = a.current;
+  // The database refuses to approve (or restore) anyone who doesn't meet every requirement; say why up front.
+  const notEligible = a.eligibility && !a.eligibility.eligible ? `Doesn't meet: ${unmetLabels(a.eligibility).join(", ")}.` : null;
 
   return (
     <div className="admin-account__detail">
@@ -212,12 +220,26 @@ function ApplicationDetail({ a, onChanged }: { a: AdminCreatorApplication; onCha
         </p>
       )}
 
+      {a.eligibility && (
+        <div className="admin-eligibility">
+          <h3 className="admin-subtitle">Requirements now</h3>
+          <p className="admin-muted">{eligibilitySummary(a.eligibility)}</p>
+          <EligibilityList e={a.eligibility} compact />
+          {a.eligibilityWhenApplied && (
+            <p className="admin-muted">
+              When they applied ({timeAgo(a.eligibilityWhenApplied.checkedAt)}): {a.eligibilityWhenApplied.eligible ? "met every requirement" : eligibilitySummary(a.eligibilityWhenApplied)}
+            </p>
+          )}
+        </div>
+      )}
+
       {openApp && (
         <div className="admin-user__form">
           <label className="visually-hidden" htmlFor={`cp-note-${a.id}`}>Note to the applicant</label>
           <textarea id={`cp-note-${a.id}`} className="field__input admin-textarea" rows={2} maxLength={500} value={note} onChange={(ev) => setNote(ev.target.value)} placeholder="Note to the applicant (required to reject or ask for more)" />
+          {notEligible && <p className="admin-muted">Approval isn't available: {notEligible}</p>}
           <div className="admin-inline">
-            <Button size="sm" disabled={busy} onClick={() => void act(() => api.decide(a.id, "approved", note), `Approved @${a.person.handle}`, `Approve @${a.person.handle} for the Creator Programme? (No payments are enabled.)`)}>
+            <Button size="sm" disabled={busy || !!notEligible} title={notEligible ?? undefined} onClick={() => void act(() => api.decide(a.id, "approved", note), `Approved @${a.person.handle}`, `Approve @${a.person.handle} for the Creator Programme? (No payments are enabled.)`)}>
               Approve
             </Button>
             <Button size="sm" variant="secondary" disabled={busy || note.trim().length < 3} onClick={() => void act(() => api.decide(a.id, "info_requested", note), "Asked for more information")}>
@@ -245,7 +267,7 @@ function ApplicationDetail({ a, onChanged }: { a: AdminCreatorApplication; onCha
                 </Button>
               </>
             ) : (
-              <Button size="sm" variant="secondary" disabled={busy || note.trim().length < 3} onClick={() => void act(() => mon.setStatus(a.person.id, "eligible", note), "Creator access restored", `Restore @${a.person.handle}'s creator access?`)}>
+              <Button size="sm" variant="secondary" disabled={busy || note.trim().length < 3 || !!notEligible} title={notEligible ?? undefined} onClick={() => void act(() => mon.setStatus(a.person.id, "eligible", note), "Creator access restored", `Restore @${a.person.handle}'s creator access?`)}>
                 Restore access
               </Button>
             )}
@@ -266,6 +288,52 @@ function ApplicationDetail({ a, onChanged }: { a: AdminCreatorApplication; onCha
         </div>
       )}
     </div>
+  );
+}
+
+// ------------------------------------------------------------------ eligibility lookup
+
+/** Admin → Creator Programme: check anyone's progress on the seven requirements by username. */
+export function AdminCreatorLookup() {
+  const api = dataSource.admin!.creatorProgramme!;
+  const toast = useToast();
+  const [handle, setHandle] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ person: Author; eligibility: CreatorEligibility } | "none" | null>(null);
+
+  async function check(ev: FormEvent) {
+    ev.preventDefault();
+    if (!handle.trim()) return;
+    setBusy(true);
+    try {
+      setResult((await api.eligibility(handle)) ?? "none");
+    } catch (e) {
+      toast(errText(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="admin-card" aria-labelledby="cp-check">
+      <h2 id="cp-check" className="admin-card__title">Check a creator</h2>
+      <p className="admin-muted">Progress on the seven requirements, worked out now from their posts, views, Support Hub and account. Nothing changes.</p>
+      <form className="admin-inline" role="search" onSubmit={check}>
+        <label className="visually-hidden" htmlFor="cp-check-q">Username</label>
+        <input id="cp-check-q" className="field__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@username" autoCapitalize="none" spellCheck={false} />
+        <Button type="submit" size="sm" variant="secondary" loading={busy}>Check</Button>
+      </form>
+      {result === "none" && <p className="admin-muted">No one with that username.</p>}
+      {result && result !== "none" && (
+        <div className="admin-eligibility">
+          <p className="admin-row__title">
+            {result.person.name} <span className="admin-muted">@{result.person.handle}</span>
+          </p>
+          <p className="admin-muted">{eligibilitySummary(result.eligibility)}</p>
+          <EligibilityList e={result.eligibility} />
+        </div>
+      )}
+    </section>
   );
 }
 

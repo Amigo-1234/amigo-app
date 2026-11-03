@@ -570,3 +570,10 @@
   border-radius: var(--radius-md);
   background: var(--surface-2);
 }
+
+/* Creator Programme: requirements checklist in a review, and the lookup. */
+.admin-eligibility {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}

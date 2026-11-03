@@ -906,6 +906,26 @@ export interface CreatorProgramme {
     | null;
   /** Only for approved creators. */
   stats: CreatorStats | null;
+  /** Progress on the seven requirements, worked out by the server (null on databases without it). */
+  eligibility: CreatorEligibility | null;
+}
+
+/** The Creator Programme requirements (migration 20261105090000). */
+export type EligibilityKey = "views_90d" | "supporters" | "posts" | "replies" | "email_verified" | "account_age_days" | "good_standing";
+export interface EligibilityRequirement {
+  key: EligibilityKey;
+  /** A count, or yes/no for email and standing. */
+  value: number | boolean;
+  required: number | boolean;
+  met: boolean;
+  /** Why standing isn't good: account_suspended, under_review, creator_suspended, creator_revoked. */
+  reasons: string[];
+}
+export interface CreatorEligibility {
+  eligible: boolean;
+  windowDays: number;
+  checkedAt: Date;
+  requirements: EligibilityRequirement[];
 }
 
 export type CreatorFeedbackCategory = "programme" | "features" | "bug" | "support" | "other";
@@ -937,6 +957,9 @@ export interface AdminCreatorApplication extends CreatorApplicationInput {
   infoRequest: string;
   creatorStatus: CreatorStatus;
   current: CreatorEngagement & { openFraudFlags: number };
+  /** Eligibility now, and as recorded when they applied (null on databases without it). */
+  eligibility: CreatorEligibility | null;
+  eligibilityWhenApplied: CreatorEligibility | null;
   submittedAt: Date;
   updatedAt: Date;
   reviewedAt: Date | null;
@@ -953,6 +976,8 @@ export interface CreatorProgrammeAdminApi {
   applications(status: CreatorApplicationStatus | "all", query: string): Promise<AdminCreatorApplication[]>;
   decide(applicationId: string, decision: "approved" | "rejected" | "info_requested", note: string): Promise<void>;
   stats(userId: string): Promise<CreatorStats>;
+  /** Anyone's eligibility by username (null if there's no such person). */
+  eligibility(username: string): Promise<{ person: Author; eligibility: CreatorEligibility } | null>;
   feedback(status: CreatorFeedback["status"] | "all"): Promise<AdminCreatorFeedback[]>;
   updateFeedback(feedbackId: string, status: CreatorFeedback["status"], response: string): Promise<void>;
 }

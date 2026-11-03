@@ -1,0 +1,71 @@
+/* The seven Creator Programme requirements: label, figure, bar, met or not. */
+.eligibility {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eligibility__row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  row-gap: 6px;
+}
+
+.eligibility__mark {
+  display: inline-flex;
+  color: var(--text-3);
+}
+
+.eligibility__row.is-met .eligibility__mark {
+  color: var(--success);
+}
+
+.eligibility__label {
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 550;
+}
+
+.eligibility__figure {
+  color: var(--text-2);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.eligibility__row.is-met .eligibility__figure {
+  color: var(--text);
+}
+
+.eligibility__bar {
+  grid-column: 2 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+
+.eligibility__bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.eligibility__row.is-met .eligibility__bar > span {
+  background: var(--success);
+}
+
+.eligibility--compact {
+  gap: var(--space-1);
+}
+
+.eligibility--compact .eligibility__label,
+.eligibility--compact .eligibility__figure {
+  font-size: var(--text-xs);
+}

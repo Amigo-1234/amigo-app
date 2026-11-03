@@ -6,7 +6,7 @@ import { AdminLegal, AdminMonetization, AdminPostViews } from "../features/admin
 import { AdminClientErrors, AdminContentReports, AdminStats, AdminSuspensions } from "../features/admin/AdminModeration";
 import { useIsAdmin } from "../features/admin/useAdmin";
 import { AdminAuditLog, AdminOverview, AdminPlaceholder, AdminWorlds } from "../features/admin/AdminSections";
-import { AdminCreatorApplications, AdminCreatorFeedback } from "../features/admin/AdminCreators";
+import { AdminCreatorApplications, AdminCreatorLookup, AdminCreatorFeedback } from "../features/admin/AdminCreators";
 import { SupportAdmin } from "../features/admin/SupportAdmin";
 import { AdminUsers } from "../features/admin/AdminUsers";
 import { AdminAccounts } from "../features/admin/AdminAccounts";
@@ -97,6 +97,7 @@ export default function AdminScreen() {
         {section === "creators" && (
           <>
             {dataSource.admin?.monetization && dataSource.admin.creatorProgramme && <AdminCreatorApplications />}
+            {dataSource.admin?.creatorProgramme && <AdminCreatorLookup />}
             {dataSource.admin?.monetization && <AdminMonetization />}
             <AdminPostViews />
           </>

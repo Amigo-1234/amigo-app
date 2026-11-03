@@ -5,11 +5,13 @@ import {
   CREATOR_CATEGORIES,
   dataSource,
   type CreatorApplicationInput,
+  type CreatorEligibility,
   type CreatorFeedback,
   type CreatorFeedbackCategory,
   type CreatorProgramme,
   type CreatorStats,
 } from "../data";
+import { EligibilityList, eligibilitySummary } from "../features/creator/Eligibility";
 import { timeAgo } from "../lib/time";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { useToast } from "../state/toast";
@@ -100,7 +102,9 @@ export default function CreatorProgrammeScreen() {
   const app = p.application;
   const approved = p.creatorStatus === "eligible";
   const blocked = p.creatorStatus === "suspended" || p.creatorStatus === "revoked" || p.accountSuspended;
-  const canApply = !approved && !blocked && p.applicationsOpen && (!app || app.status === "rejected" || app.status === "withdrawn") && p.applicationsThisMonth < 3;
+  const free = !approved && !blocked && p.applicationsOpen && (!app || app.status === "rejected" || app.status === "withdrawn") && p.applicationsThisMonth < 3;
+  // The server refuses applications from anyone who doesn't meet every requirement; the form only appears once they do.
+  const canApply = free && (p.eligibility ? p.eligibility.eligible : true);
   const canSendFeedback = approved || (!!app && app.status !== "withdrawn");
 
   return (
@@ -125,6 +129,8 @@ export default function CreatorProgrammeScreen() {
         </p>
 
         <StatusCard p={p} />
+
+        {!approved && p.eligibility && <EligibilityCard e={p.eligibility} waitingToApply={free && !p.eligibility.eligible} onRefresh={reload} />}
 
         {approved && p.stats && <Dashboard stats={p.stats} />}
 
@@ -235,6 +241,32 @@ function StatusCard({ p }: { p: CreatorProgramme }) {
         <div>
           <p className="creator-status__title">{title}</p>
           <p className="creator-status__body">{body}</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ------------------------------------------------------------------ eligibility
+
+/** The seven requirements with the creator's real figures, as the server worked them out. */
+function EligibilityCard({ e, waitingToApply, onRefresh }: { e: CreatorEligibility; waitingToApply: boolean; onRefresh: () => void }) {
+  return (
+    <section className="settings-section" aria-labelledby="creator-progress">
+      <h3 id="creator-progress" className="settings-section__title">Your progress</h3>
+      <div className="settings-card creator-pad creator-progress">
+        <p className={`creator-progress__summary${e.eligible ? " is-eligible" : ""}`}>
+          {e.eligible ? "You meet every requirement for the Creator Programme." : eligibilitySummary(e)}
+        </p>
+        <EligibilityList e={e} />
+        {waitingToApply && <p className="creator-muted">You can apply once you meet every requirement.</p>}
+        <div className="creator-progress__foot">
+          <span className="creator-muted">
+            Views count over the last {e.windowDays} days. Checked {timeAgo(e.checkedAt)}.
+          </span>
+          <Button size="sm" variant="secondary" onClick={onRefresh}>
+            Check again
+          </Button>
         </div>
       </div>
     </section>

@@ -2158,7 +2158,7 @@ select pg_temp.must_fail('views: viewers can''t be added directly', :B,
   format($$insert into public.post_views (post_id, viewer_id) values (%L, %L)$$, pg_temp.pv('fol'), :B), '42501');
 select pg_temp.check('views: no function lists viewers',
   not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-               where n.nspname = 'public' and p.prosrc ilike '%public.post_views %' and p.proname <> 'record_post_views'));
+               where n.nspname = 'public' and p.prosrc ilike '%public.post_views %' and p.proname not in ('record_post_views', 'creator_eligibility')));
 -- The daily limit: D has already added 2,000 views today.
 with made as (insert into public.posts (author_id, body) select :C, 'views: filler ' || g from generate_series(1, 2000) g returning id)
 insert into public.post_views (post_id, viewer_id) select id, :D from made;
@@ -2166,6 +2166,178 @@ select pg_temp.check('views: after 2,000 new views in a day, more aren''t counte
 update public.post_views set viewed_at = now() - interval '25 hours' where viewer_id = :D;
 select pg_temp.check('views: ...and counting resumes the next day', pg_temp.see(:D, 'pub') = 1 and pg_temp.views('pub') = 3);
 update public.app_features set enabled = false where key = 'post_views';
+
+-- ------------------------------------------------------------ creator eligibility (20261105090000)
+-- CR: a creator who meets all seven requirements; each test breaks exactly one, then restores it.
+
+\set CR '''00000000-0000-0000-0000-0000000000c7'''
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data) values (:CR, 'creator@example.com', now(), '{"display_name":"Cree Ator"}');
+insert into auth.users (id, email, email_confirmed_at, raw_user_meta_data)
+select ('00000000-0000-0000-0001-' || lpad(g::text, 12, '0'))::uuid, 'fan' || g || '@example.com', now(), jsonb_build_object('display_name', 'Fan ' || g)
+  from generate_series(1, 1000) g;
+create function pg_temp.fan(n int) returns uuid language sql as $$ select ('00000000-0000-0000-0001-' || lpad(n::text, 12, '0'))::uuid $$;
+update public.profiles set created_at = now() - interval '120 days' where id = :CR;
+create temp table ce (k text primary key, v uuid);
+grant all on ce to public;
+create function pg_temp.cev(p_key text) returns uuid language sql as $$ select v from ce where k = p_key $$;
+insert into public.posts (author_id, body) select :CR, 'creator post ' || g from generate_series(1, 50) g;
+with x as (insert into public.posts (author_id, body) values (:A, 'something to reply to') returning id) insert into ce select 'apost', id from x;
+insert into public.posts (author_id, body, parent_id) select :CR, 'reply ' || g, pg_temp.cev('apost') from generate_series(1, 20) g;
+insert into public.post_views (post_id, viewer_id, viewed_at)
+select p.id, pg_temp.fan(f), now() - interval '1 day'
+  from public.posts p cross join generate_series(1, 1000) f
+ where p.author_id = :CR and p.parent_id is null;
+insert into public.post_view_counts (post_id, views) select p.id, 1000 from public.posts p where p.author_id = :CR and p.parent_id is null;
+with x as (insert into public.support_requests (creator_id, title, description, url, category, ask, target, status)
+           values (:CR, 'My new song', 'Have a listen and tell me what you think.', 'https://example.com/song', 'music', 'listen', 100, 'active') returning id)
+insert into ce select 'req1', id from x;
+insert into public.support_visits (request_id, user_id, opened_at, confirmed_at)
+select pg_temp.cev('req1'), pg_temp.fan(f), now() - interval '2 hours', now() - interval '1 hour' from generate_series(1, 20) f;
+
+create function pg_temp.elig(p_user uuid) returns jsonb language sql as $$ select public.creator_eligibility(p_user) $$;
+create function pg_temp.req(p_user uuid, p_key text) returns jsonb language sql as $$
+  select x from jsonb_array_elements(public.creator_eligibility(p_user) -> 'requirements') x where x->>'key' = p_key $$;
+create function pg_temp.unmet(p_user uuid) returns text language sql as $$
+  select coalesce(string_agg(x->>'key', ',' order by x->>'key'), '')
+    from jsonb_array_elements(public.creator_eligibility(p_user) -> 'requirements') x where not (x->>'met')::boolean $$;
+
+-- Support Credits must not move because of anything below.
+create temp table ce_ledger as select count(*) n, coalesce(sum(credits), 0) credits, coalesce(sum(reputation), 0) rep, md5(coalesce(string_agg(id::text || credits || reputation, ',' order by id), '')) fp from public.support_ledger;
+
+select pg_temp.check('eligibility: a creator meeting all seven is eligible', (pg_temp.elig(:CR) ->> 'eligible')::boolean and pg_temp.unmet(:CR) = '');
+select pg_temp.check('eligibility: the figures are the real counts',
+  (pg_temp.req(:CR, 'views_90d') ->> 'value') = '50000' and (pg_temp.req(:CR, 'supporters') ->> 'value') = '20'
+  and (pg_temp.req(:CR, 'posts') ->> 'value') = '50' and (pg_temp.req(:CR, 'replies') ->> 'value') = '20'
+  and (pg_temp.req(:CR, 'account_age_days') ->> 'value')::int >= 119);
+select pg_temp.check('eligibility: thresholds are 50,000 / 20 / 50 / 20 / 90 days',
+  (pg_temp.req(:CR, 'views_90d') ->> 'required') = '50000' and (pg_temp.req(:CR, 'supporters') ->> 'required') = '20'
+  and (pg_temp.req(:CR, 'posts') ->> 'required') = '50' and (pg_temp.req(:CR, 'replies') ->> 'required') = '20'
+  and (pg_temp.req(:CR, 'account_age_days') ->> 'required') = '90');
+select pg_temp.check('eligibility: someone with nothing yet is not eligible, and every count requirement says so',
+  not (pg_temp.elig(:B) ->> 'eligible')::boolean and pg_temp.unmet(:B) like '%posts%' and pg_temp.unmet(:B) like '%views_90d%');
+
+-- Views: a rolling 90 days.
+update public.post_views set viewed_at = now() - interval '91 days'
+ where (post_id, viewer_id) = (select post_id, viewer_id from public.post_views v join public.posts p on p.id = v.post_id where p.author_id = :CR limit 1);
+select pg_temp.check('views: a view older than 90 days drops out (49,999 — only views unmet)',
+  (pg_temp.req(:CR, 'views_90d') ->> 'value') = '49999' and pg_temp.unmet(:CR) = 'views_90d');
+update public.post_views set viewed_at = now() - interval '89 days' where viewed_at < now() - interval '90 days';
+select pg_temp.check('views: a view 89 days ago still counts', (pg_temp.req(:CR, 'views_90d') ->> 'value') = '50000' and pg_temp.unmet(:CR) = '');
+update public.posts set deleted_at = now() where id = (select id from public.posts where author_id = :CR and parent_id is null order by created_at limit 1);
+select pg_temp.check('views: views of a deleted post don''t count (and the post itself drops out)',
+  (pg_temp.req(:CR, 'views_90d') ->> 'value') = '49000' and pg_temp.unmet(:CR) = 'posts,views_90d');
+update public.posts set deleted_at = null where author_id = :CR and deleted_at is not null;
+
+-- Supporters: unique confirmed people on the creator's own requests.
+with x as (insert into public.support_requests (creator_id, title, description, url, category, ask, target, status)
+           values (:CR, 'My second song', 'Another one, same people welcome.', 'https://example.com/song2', 'music', 'listen', 100, 'active') returning id)
+insert into ce select 'req2', id from x;
+insert into public.support_visits (request_id, user_id, opened_at, confirmed_at)
+select pg_temp.cev('req2'), pg_temp.fan(f), now() - interval '2 hours', now() - interval '1 hour' from generate_series(1, 20) f;
+select pg_temp.check('supporters: the same 20 people on two requests are still 20', (pg_temp.req(:CR, 'supporters') ->> 'value') = '20');
+insert into public.support_visits (request_id, user_id, opened_at) values (pg_temp.cev('req1'), pg_temp.fan(21), now());
+select pg_temp.check('supporters: an opened-but-unconfirmed visit doesn''t count', (pg_temp.req(:CR, 'supporters') ->> 'value') = '20');
+update auth.users set email_confirmed_at = null where id = pg_temp.fan(22);
+insert into public.support_visits (request_id, user_id, opened_at, confirmed_at) values (pg_temp.cev('req1'), pg_temp.fan(22), now() - interval '1 hour', now());
+select pg_temp.check('supporters: someone without a confirmed email doesn''t count', (pg_temp.req(:CR, 'supporters') ->> 'value') = '20');
+with x as (insert into public.support_requests (creator_id, title, description, url, category, ask, target, status)
+           values (:CR, 'A removed request', 'This one was taken down by moderators.', 'https://example.com/gone', 'music', 'listen', 100, 'removed') returning id)
+insert into public.support_visits (request_id, user_id, opened_at, confirmed_at) select id, pg_temp.fan(23), now() - interval '1 hour', now() from x;
+select pg_temp.check('supporters: support on a removed request doesn''t count', (pg_temp.req(:CR, 'supporters') ->> 'value') = '20');
+with x as (insert into public.support_requests (creator_id, title, description, url, category, ask, target, status)
+           values (:A, 'Someone else''s request', 'Support for another creator entirely.', 'https://example.com/other', 'music', 'listen', 100, 'active') returning id)
+insert into public.support_visits (request_id, user_id, opened_at, confirmed_at) select id, pg_temp.fan(24), now() - interval '1 hour', now() from x;
+select pg_temp.check('supporters: support for another creator doesn''t count', (pg_temp.req(:CR, 'supporters') ->> 'value') = '20');
+delete from public.support_visits where user_id = pg_temp.fan(1) and request_id in (pg_temp.cev('req1'), pg_temp.cev('req2'));
+select pg_temp.check('supporters: 19 unique people → only supporters unmet', (pg_temp.req(:CR, 'supporters') ->> 'value') = '19' and pg_temp.unmet(:CR) = 'supporters');
+insert into public.support_visits (request_id, user_id, opened_at, confirmed_at) values (pg_temp.cev('req1'), pg_temp.fan(1), now() - interval '1 hour', now());
+
+-- Posts: published top-level posts only.
+insert into public.posts (author_id, body, visibility) values (:CR, 'followers only', 'followers');
+select pg_temp.check('posts: a followers-only post counts (51)', (pg_temp.req(:CR, 'posts') ->> 'value') = '51');
+insert into public.posts (author_id, body, repost_of_id) values (:CR, '', pg_temp.cev('apost'));
+select pg_temp.check('posts: a plain repost doesn''t count', (pg_temp.req(:CR, 'posts') ->> 'value') = '51');
+update public.posts set deleted_at = now() where author_id = :CR and body in ('followers only', 'creator post 1');
+select pg_temp.check('posts: deleted (or taken-down) posts don''t count → 49, only posts unmet',
+  (pg_temp.req(:CR, 'posts') ->> 'value') = '49' and pg_temp.unmet(:CR) = 'posts,views_90d');
+update public.posts set deleted_at = null where author_id = :CR and body = 'creator post 1';
+select pg_temp.check('posts: restored → 50 and eligible again', (pg_temp.req(:CR, 'posts') ->> 'value') = '50' and pg_temp.unmet(:CR) = '');
+
+-- Replies: to someone else's post, not deleted.
+insert into public.posts (author_id, body, parent_id)
+select :CR, 'replying to myself', (select id from public.posts where author_id = :CR and parent_id is null and deleted_at is null limit 1);
+select pg_temp.check('replies: a reply to your own post doesn''t count', (pg_temp.req(:CR, 'replies') ->> 'value') = '20');
+update public.posts set deleted_at = now() where author_id = :CR and body = 'reply 1';
+select pg_temp.check('replies: a deleted reply drops out → 19, only replies unmet', (pg_temp.req(:CR, 'replies') ->> 'value') = '19' and pg_temp.unmet(:CR) = 'replies');
+update public.posts set deleted_at = null where author_id = :CR and body = 'reply 1';
+
+-- Email.
+update auth.users set email_confirmed_at = null where id = :CR;
+select pg_temp.check('email: unverified → only email unmet', pg_temp.unmet(:CR) = 'email_verified');
+update auth.users set email_confirmed_at = now() where id = :CR;
+
+-- Account age.
+update public.profiles set created_at = now() - interval '89 days' where id = :CR;
+select pg_temp.check('age: 89 days → only age unmet', pg_temp.unmet(:CR) = 'account_age_days');
+update public.profiles set created_at = now() - interval '90 days 1 minute' where id = :CR;
+select pg_temp.check('age: 90 days → met', pg_temp.unmet(:CR) = '');
+update public.profiles set created_at = now() - interval '120 days' where id = :CR;
+
+-- Standing.
+insert into public.account_suspensions (user_id, reason) values (:CR, 'test');
+select pg_temp.check('standing: suspended → only standing unmet, reason given',
+  pg_temp.unmet(:CR) = 'good_standing' and (pg_temp.req(:CR, 'good_standing') -> 'reasons') = '["account_suspended"]'::jsonb);
+delete from public.account_suspensions where user_id = :CR;
+insert into public.monetization_fraud_flags (user_id, kind, detail) values (:CR, 'other', 'test');
+select pg_temp.check('standing: an open fraud flag → under review', (pg_temp.req(:CR, 'good_standing') -> 'reasons') = '["under_review"]'::jsonb);
+update public.monetization_fraud_flags set resolved_at = now() where user_id = :CR;
+select pg_temp.check('standing: a resolved flag no longer counts', pg_temp.unmet(:CR) = '');
+
+-- Who can see what.
+select pg_temp.must_fail('security: the internal calculation isn''t callable from the app', :CR, format($$select public.creator_eligibility(%L)$$, :CR), '42501');
+select pg_temp.must_fail('security: the rules function isn''t callable from the app', :CR, $$select public.creator_eligibility_rules()$$, '42501');
+select pg_temp.check('security: you can see your own progress', (pg_temp.q(:CR, $$select public.my_creator_eligibility()::text$$)::jsonb ->> 'eligible')::boolean);
+select pg_temp.must_fail('security: only admins can look at someone else''s', :A, format($$select public.admin_creator_eligibility(%L)$$, :CR), '42501');
+select pg_temp.check('security: admins can', (pg_temp.q(:D, format($$select public.admin_creator_eligibility(%L)::text$$, :CR))::jsonb ->> 'eligible')::boolean);
+select pg_temp.must_fail('security: nobody can write their own creator status', :CR,
+  format($$insert into public.creator_monetization_status (user_id, status) values (%L, 'eligible')$$, :CR), '42501');
+select pg_temp.must_fail('security: nobody can write an application (or its figures) directly', :CR,
+  format($$insert into public.creator_applications (user_id, snapshot) values (%L, '{"eligibility":{"eligible":true}}')$$, :CR), '42501');
+select pg_temp.must_fail('security: nobody can add their own views', :CR,
+  format($$insert into public.post_views (post_id, viewer_id) values (%L, %L)$$, pg_temp.cev('apost'), :CR), '42501');
+
+-- Applying and approving.
+update public.monetization_settings set applications_open = true;
+select pg_temp.must_fail('apply: someone not eligible is refused', :A,
+  $$select public.creator_apply('music', 'I make songs every week and share them here', 'I want to grow with my listeners here', '[]'::jsonb, '')$$, 'MN007');
+select pg_temp.must_fail('apply: the original one-tap path is refused too', :A, $$select public.apply_for_monetization()$$, 'MN007');
+insert into ce select 'app', pg_temp.q(:CR, $$select public.creator_apply('music', 'I make songs every week and share them here', 'I want to grow with my listeners here', '[]'::jsonb, '')::text$$)::uuid;
+select pg_temp.check('apply: an eligible creator can apply; the application records the server''s figures',
+  (select (snapshot -> 'eligibility' ->> 'eligible')::boolean and snapshot -> 'eligibility' -> 'requirements' is not null
+     from public.creator_applications where id = pg_temp.cev('app')));
+select pg_temp.check('admin: the list shows current eligibility',
+  pg_temp.q(:D, $$select (current -> 'eligibility' ->> 'eligible') from public.admin_creator_applications_v2('pending', 'cree')$$) = 'true');
+update auth.users set email_confirmed_at = null where id = :CR;
+select pg_temp.must_fail('approve: refused if the creator no longer meets every requirement', :D,
+  format($$select public.admin_creator_application_decide(%L, 'approved', '')$$, pg_temp.cev('app')), 'MN008');
+select pg_temp.must_fail('approve: the original review path is refused too', :D,
+  format($$select public.admin_creator_application_review(%L, 'approved', '')$$, pg_temp.cev('app')), 'MN008');
+select pg_temp.must_fail('approve: setting someone "eligible" by hand is refused too', :D,
+  format($$select public.admin_monetization_status_set(%L, 'eligible', 'by hand')$$, :CR), 'MN008');
+select pg_temp.check('approve: nothing changed', not exists (select 1 from public.creator_monetization_status where user_id = :CR)
+  and (select status from public.creator_applications where id = pg_temp.cev('app')) = 'pending');
+update auth.users set email_confirmed_at = now() where id = :CR;
+select pg_temp.q(:D, format($$select public.admin_creator_application_decide(%L, 'approved', '')::text$$, pg_temp.cev('app')));
+select pg_temp.check('approve: an eligible creator is approved only by the admin''s decision',
+  (select status from public.creator_monetization_status where user_id = :CR) = 'eligible'
+  and (select status from public.creator_applications where id = pg_temp.cev('app')) = 'approved');
+select pg_temp.check('my_creator_programme: carries eligibility', (pg_temp.q(:CR, $$select public.my_creator_programme()::text$$)::jsonb -> 'eligibility' ->> 'eligible')::boolean);
+
+select pg_temp.check('support credits: not a single ledger row or credit changed',
+  (select count(*) from public.support_ledger) = (select n from ce_ledger)
+  and (select coalesce(sum(credits), 0) from public.support_ledger) = (select credits from ce_ledger)
+  and (select coalesce(sum(reputation), 0) from public.support_ledger) = (select rep from ce_ledger)
+  and (select md5(coalesce(string_agg(id::text || credits || reputation, ',' order by id), '')) from public.support_ledger) = (select fp from ce_ledger));
 
 rollback;
 \echo 'ALL DATABASE TESTS PASSED'
