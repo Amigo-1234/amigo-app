@@ -61,7 +61,7 @@ try {
   for (const p of ["/api/auth-email", "/api/media-cleanup", "/_maintenance/fonts/geist-latin-wght-normal.woff2", "/favicon.svg", "/favicon.ico"]) {
     ok(`on: ${p} stays open`, (await gate(req(p, { method: p.startsWith("/api/auth") ? "POST" : "GET" }))) === undefined);
   }
-  for (const p of ["/_maintenance/../index.html", "/_maintenance/%2e%2e/admin", "/api/auth-email/../neon/auth/sign-up/email", "/api/auth-email/x", "/API/AUTH-EMAIL", "/api/auth-email%2f..%2fneon"]) {
+  for (const p of ["/_maintenance/", "/_maintenance/x", "/_maintenance/index.html", "/_maintenance/fonts/", "/_maintenance/fonts/missing.woff2", "/_maintenance/..%2fadmin", "/_maintenance/../index.html", "/_maintenance/%2e%2e/admin", "/api/auth-email/../neon/auth/sign-up/email", "/api/auth-email/x", "/API/AUTH-EMAIL", "/api/auth-email%2f..%2fneon"]) {
     const r = await gate(req(p));
     ok(`on: path trick ${p} doesn't get through`, r !== undefined && r.status === 503, String(r?.status));
   }

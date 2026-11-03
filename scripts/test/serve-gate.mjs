@@ -26,6 +26,11 @@ async function file(path) {
 createHttp(async (req, res) => {
   const chunks = [];
   for await (const c of req) chunks.push(c);
+  // Node's Request refuses a few methods (TRACE, CONNECT); Vercel rejects them before middleware.
+  if (["TRACE", "TRACK", "CONNECT"].includes(req.method ?? "")) {
+    res.statusCode = 405;
+    return res.end();
+  }
   const request = new Request(`http://${req.headers.host}${req.url}`, {
     method: req.method,
     headers: Object.entries(req.headers).filter(([, v]) => typeof v === "string"),

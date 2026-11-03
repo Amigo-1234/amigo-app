@@ -24,8 +24,16 @@ const MIN_KEY_LENGTH = 24;
 
 /** Server-to-server routes, exact paths. */
 const SERVER_ROUTES = new Set(["/api/auth-email", "/api/media-cleanup"]);
-/** What the gate pages themselves load. */
-const PAGE_FILES = (path: string) => path.startsWith("/_maintenance/") || path === "/favicon.svg" || path === "/favicon.ico";
+/**
+ * What the gate pages themselves load, exact paths only: anything else under /_maintenance/ would
+ * fall through to the app's catch-all rewrite and serve index.html.
+ */
+const PAGE_FILES = new Set([
+  "/_maintenance/fonts/bricolage-grotesque-latin-standard-normal.woff2",
+  "/_maintenance/fonts/geist-latin-wght-normal.woff2",
+  "/favicon.svg",
+  "/favicon.ico",
+]);
 
 const enc = new TextEncoder();
 
@@ -101,7 +109,7 @@ export default async function middleware(request: Request): Promise<Response | u
   if (process.env.MAINTENANCE_MODE !== "on") return;
 
   const path = new URL(request.url).pathname;
-  if (SERVER_ROUTES.has(path) || PAGE_FILES(path)) return;
+  if (SERVER_ROUTES.has(path) || PAGE_FILES.has(path)) return;
   if (path === "/_team" || path === "/_team/leave") return team(request, path);
   if (await hasAccess(request)) return;
 
