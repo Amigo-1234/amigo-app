@@ -72,7 +72,7 @@ export function actionText(g: Pick<NotificationGroup, "kind" | "inReplyToReply" 
     case "mention":
       return "mentioned you";
     case "support":
-      return "supported your request";
+      return "helped with your request";
   }
 }
 

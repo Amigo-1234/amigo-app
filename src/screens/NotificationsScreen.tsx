@@ -112,7 +112,7 @@ export default function NotificationsScreen() {
         <StateMessage
           icon={<Bell size={24} />}
           title="No notifications yet"
-          body="When people follow you, like or reply to your posts, mention you, or support your requests, you'll see it here."
+          body="When people follow you, like or reply to your posts, mention you, or help with your requests, you'll see it here."
         />
       )}
 

@@ -17,7 +17,7 @@ import { useToast } from "../../state/toast";
 import { Avatar } from "../../ui/Avatar";
 import { Button } from "../../ui/Button";
 import { supportErrorText } from "../support/useSupport";
-import { EligibilityList, eligibilitySummary, unmetLabels } from "../creator/Eligibility";
+import { EligibilityList, eligibilitySummary, unmetForRestore, unmetLabels } from "../creator/Eligibility";
 
 const STATUS_TABS: { id: CreatorApplicationStatus | "all"; label: string }[] = [
   { id: "pending", label: "Pending" },
@@ -149,6 +149,8 @@ function ApplicationDetail({ a, onChanged }: { a: AdminCreatorApplication; onCha
   const e = a.current;
   // The database refuses to approve (or restore) anyone who doesn't meet every requirement; say why up front.
   const notEligible = a.eligibility && !a.eligibility.eligible ? `Doesn't meet: ${unmetLabels(a.eligibility).join(", ")}.` : null;
+  const restoreMissing = a.eligibility ? unmetForRestore(a.eligibility) : [];
+  const cannotRestore = restoreMissing.length > 0 ? `Doesn't meet: ${restoreMissing.join(", ")}.` : null;
 
   return (
     <div className="admin-account__detail">
@@ -203,7 +205,7 @@ function ApplicationDetail({ a, onChanged }: { a: AdminCreatorApplication; onCha
             ["Followers", e.followers],
             ["Verified followers", e.verifiedFollowers],
             ["Posts, 30 days", e.posts30d],
-            ["Support received", e.supportReceived],
+            ["Help received", e.supportReceived],
             ["Account age (days)", e.accountAgeDays],
             ["Open fraud flags", e.openFraudFlags],
           ] as [string, number][]
@@ -267,7 +269,7 @@ function ApplicationDetail({ a, onChanged }: { a: AdminCreatorApplication; onCha
                 </Button>
               </>
             ) : (
-              <Button size="sm" variant="secondary" disabled={busy || note.trim().length < 3 || !!notEligible} title={notEligible ?? undefined} onClick={() => void act(() => mon.setStatus(a.person.id, "eligible", note), "Creator access restored", `Restore @${a.person.handle}'s creator access?`)}>
+              <Button size="sm" variant="secondary" disabled={busy || note.trim().length < 3 || !!cannotRestore} title={cannotRestore ?? undefined} onClick={() => void act(() => mon.setStatus(a.person.id, "eligible", note), "Creator access restored", `Restore @${a.person.handle}'s creator access?`)}>
                 Restore access
               </Button>
             )}
@@ -317,7 +319,7 @@ export function AdminCreatorLookup() {
   return (
     <section className="admin-card" aria-labelledby="cp-check">
       <h2 id="cp-check" className="admin-card__title">Check a creator</h2>
-      <p className="admin-muted">Progress on the seven requirements, worked out now from their posts, views, Support Hub and account. Nothing changes.</p>
+      <p className="admin-muted">Progress on the seven requirements, worked out now from their posts, views, Help Hub and account. Nothing changes.</p>
       <form className="admin-inline" role="search" onSubmit={check}>
         <label className="visually-hidden" htmlFor="cp-check-q">Username</label>
         <input id="cp-check-q" className="field__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@username" autoCapitalize="none" spellCheck={false} />

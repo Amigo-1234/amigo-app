@@ -62,13 +62,13 @@ export function AdminInsights({ fallback }: { fallback: React.ReactNode }) {
       ],
     },
     {
-      title: "Worlds & Support Hub",
+      title: "Worlds & Help Hub",
       items: [
         ["Worlds", data.worlds],
         ["Worlds live", data.worldsLive],
         ["Worlds upcoming", data.worldsUpcoming],
-        ["Support requests", data.supportRequests],
-        ["Support requests open", data.supportOpen],
+        ["Help requests", data.supportRequests],
+        ["Help requests open", data.supportOpen],
       ],
     },
     {
@@ -106,7 +106,7 @@ export function AdminInsights({ fallback }: { fallback: React.ReactNode }) {
         ))}
         <p className="admin-muted">
           "Active" counts signed-in people who did something that leaves a record — posted or replied, liked, followed, sent a message, posted,
-          viewed or reacted to a Moment, joined a World or opened a Support request. Reading alone leaves no record, so these are lower bounds.
+          viewed or reacted to a Moment, joined a World or opened a Help request. Reading alone leaves no record, so these are lower bounds.
           Message counts never include content. Updated {timeAgo(data.generatedAt)}.
         </p>
       </section>

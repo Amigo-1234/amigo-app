@@ -2331,6 +2331,31 @@ select pg_temp.q(:D, format($$select public.admin_creator_application_decide(%L,
 select pg_temp.check('approve: an eligible creator is approved only by the admin''s decision',
   (select status from public.creator_monetization_status where user_id = :CR) = 'eligible'
   and (select status from public.creator_applications where id = pg_temp.cev('app')) = 'approved');
+-- Restoring (20261106090000): a suspended creator who meets the other six can be restored; one who doesn't can't.
+select pg_temp.q(:D, format($$select public.admin_monetization_status_set(%L, 'suspended', 'Checking something')::text$$, :CR));
+select pg_temp.check('restore: a suspended creator is not in good standing while suspended',
+  (pg_temp.req(:CR, 'good_standing') -> 'reasons') = '["creator_suspended"]'::jsonb);
+update auth.users set email_confirmed_at = null where id = :CR;
+select pg_temp.must_fail('restore: refused when another requirement fails (email)', :D,
+  format($$select public.admin_monetization_status_set(%L, 'eligible', 'Restore anyway')$$, :CR), 'MN008');
+update auth.users set email_confirmed_at = now() where id = :CR;
+insert into public.account_suspensions (user_id, reason) values (:CR, 'test');
+select pg_temp.must_fail('restore: refused while the account itself is suspended', :D,
+  format($$select public.admin_monetization_status_set(%L, 'eligible', 'Restore anyway')$$, :CR), 'MN008');
+delete from public.account_suspensions where user_id = :CR;
+insert into public.monetization_fraud_flags (user_id, kind, detail) values (:CR, 'other', 'restore test');
+select pg_temp.must_fail('restore: refused while a fraud flag is open', :D,
+  format($$select public.admin_monetization_status_set(%L, 'eligible', 'Restore anyway')$$, :CR), 'MN008');
+update public.monetization_fraud_flags set resolved_at = now() where user_id = :CR and resolved_at is null;
+select pg_temp.q(:D, format($$select public.admin_monetization_status_set(%L, 'eligible', 'Checked, all fine')::text$$, :CR));
+select pg_temp.check('restore: a suspended creator who meets the other six requirements is restored',
+  (select status from public.creator_monetization_status where user_id = :CR) = 'eligible');
+select pg_temp.q(:D, format($$select public.admin_monetization_status_set(%L, 'revoked', 'Withdrawn for testing')::text$$, :CR));
+select pg_temp.q(:D, format($$select public.admin_monetization_status_set(%L, 'eligible', 'Reinstated after review')::text$$, :CR));
+select pg_temp.check('restore: a revoked creator can be reinstated the same way',
+  (select status from public.creator_monetization_status where user_id = :CR) = 'eligible');
+select pg_temp.must_fail('restore: still admins only', :CR,
+  format($$select public.admin_monetization_status_set(%L, 'eligible', 'Restoring myself')$$, :CR), '42501');
 select pg_temp.check('my_creator_programme: carries eligibility', (pg_temp.q(:CR, $$select public.my_creator_programme()::text$$)::jsonb -> 'eligibility' ->> 'eligible')::boolean);
 
 select pg_temp.check('support credits: not a single ledger row or credit changed',

@@ -47,7 +47,7 @@ export function moreNav(opts: { market: boolean; business: boolean; creator: boo
     // Worlds is a main destination only while the Marketplace isn't.
     opts.market && worlds ? WORLDS : null,
     opts.business ? { to: "/business", label: "Businesses", icon: Store } : null,
-    dataSource.support ? { to: "/support", label: "Support Hub", icon: HandHeart } : null,
+    dataSource.support ? { to: "/support", label: "Help Hub", icon: HandHeart } : null,
     dataSource.postTools ? { to: "/bookmarks", label: "Bookmarks", icon: Bookmark } : null,
     opts.creator ? { to: "/settings/monetization", label: "Creator Programme", icon: Sparkles } : null,
     { to: "/settings", label: "Settings", icon: Settings },

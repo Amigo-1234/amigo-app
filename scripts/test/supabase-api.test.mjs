@@ -129,7 +129,7 @@ try {
   ok("following feed = people you follow", following.posts.length >= 2 && following.posts.every((p) => p.author.id === ids.ama || p.author.id === ids.zoe));
   const leoFollowing = await q.fetchFeed(leo, "following", 50, ids.leo);
   ok("following feed empty when following nobody", leoFollowing.posts.every((p) => p.author.id === ids.leo));
-  const sugg = await q.fetchSuggestions(zoe, 50);
+  const sugg = await q.fetchSuggestions(zoe, ids.zoe, 50);
   ok("suggestions skip self and followed", !sugg.some((s) => s.id === ids.zoe || s.id === ids.ama));
   await rejects("cannot follow on someone else's behalf", () => q.follow(zoe, ids.leo, ids.ama), "permission-denied");
   await q.unfollow(zoe, ids.zoe, ids.ama);

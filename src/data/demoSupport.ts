@@ -428,7 +428,7 @@ export function createDemoSupport(ctx: SupportDemoContext) {
             const times = confirmed.filter((v) => v.userId === id).map((v) => v.confirmedAt!.getTime()).sort((a, b) => a - b);
             for (let i = 0; i + BURST_COUNT <= times.length; i++) {
               if (times[i + BURST_COUNT - 1] - times[i] <= BURST_WINDOW_MIN * MIN) {
-                out.push({ kind: "burst", person: ctx.author(id), detail: `${BURST_COUNT}+ supports within ${BURST_WINDOW_MIN} minutes`, requestId: null, at: new Date(times[i + BURST_COUNT - 1]) });
+                out.push({ kind: "burst", person: ctx.author(id), detail: `${BURST_COUNT}+ confirmations within ${BURST_WINDOW_MIN} minutes`, requestId: null, at: new Date(times[i + BURST_COUNT - 1]) });
                 break;
               }
             }
@@ -465,7 +465,7 @@ export function createDemoSupport(ctx: SupportDemoContext) {
           if (note.trim().length < 3) throw new SupportError("invalid", "Add a reason");
           if (balance(userId).credits + delta < 0) throw new SupportError("invalid", "Balance can't go below zero");
           credit(userId, delta, 0, "admin", null);
-          audit(adminId, "support.credits", `${delta > 0 ? "+" : ""}${delta} credits for @${ctx.handleOf(userId)} — ${note.trim()}`);
+          audit(adminId, "support.credits", `${delta > 0 ? "+" : ""}${delta} kudos for @${ctx.handleOf(userId)} — ${note.trim()}`);
           ctx.emit();
         }, 300),
 

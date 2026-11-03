@@ -23,11 +23,11 @@ export function Progress({ r }: { r: SupportRequest }) {
   const pct = Math.min(100, Math.round((r.supporterCount / r.target) * 100));
   return (
     <span className="support-progress">
-      <span className="support-progress__bar" role="progressbar" aria-valuemin={0} aria-valuemax={r.target} aria-valuenow={Math.min(r.supporterCount, r.target)} aria-label="Support progress">
+      <span className="support-progress__bar" role="progressbar" aria-valuemin={0} aria-valuemax={r.target} aria-valuenow={Math.min(r.supporterCount, r.target)} aria-label="Help progress">
         <span style={{ width: `${pct}%` }} />
       </span>
       <span className="support-progress__text">
-        <strong>{r.supporterCount}</strong> of {r.target} supporters
+        <strong>{r.supporterCount}</strong> of {r.target} helpers
       </span>
     </span>
   );
@@ -67,7 +67,7 @@ export function SupportCard({ r }: { r: SupportRequest }) {
           <Progress r={r} />
           {r.viewerState === "supported" && (
             <span className="support-card__done">
-              <BadgeCheck size={15} aria-hidden="true" /> You supported
+              <BadgeCheck size={15} aria-hidden="true" /> You helped
             </span>
           )}
           {r.isViewer && <span className="support-card__done">Your request</span>}

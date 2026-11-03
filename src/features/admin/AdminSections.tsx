@@ -29,9 +29,9 @@ export function AdminOverview() {
       ...(admin.moderation ? [{ label: "Open reports on posts", to: "/admin/reports", load: () => settled(admin.moderation!.listReports("open")) }] : []),
       ...(admin.messageReports ? [{ label: "Open message reports", to: "/admin/reports", load: () => settled(admin.messageReports!.list(viewer.id), (r) => r.status === "open") }] : []),
       ...(admin.moments ? [{ label: "Reported Moments", to: "/admin/reports", load: () => settled(admin.moments!.listReports(viewer.id), (r) => r.status === "open") }] : []),
-      { label: "Support requests waiting for review", to: "/admin/support?status=pending", load: () => settled(a.listRequests(viewer.id, "pending")) },
-      { label: "Open reports on Support requests", to: "/admin/support?tab=reports", load: () => settled(a.listReports(viewer.id, "open")) },
-      { label: "Support activity flagged for a look", to: "/admin/support?tab=activity", load: () => settled(a.suspicious(viewer.id)) },
+      { label: "Help requests waiting for review", to: "/admin/support?status=pending", load: () => settled(a.listRequests(viewer.id, "pending")) },
+      { label: "Open reports on Help requests", to: "/admin/support?tab=reports", load: () => settled(a.listReports(viewer.id, "open")) },
+      { label: "Help Hub activity flagged for a look", to: "/admin/support?tab=activity", load: () => settled(a.suspicious(viewer.id)) },
     ];
     let live = true;
     void Promise.all(sources.map((x) => x.load())).then((ns) => live && setCounts(sources.map((x, i) => ({ label: x.label, to: x.to, n: ns[i] }))));
@@ -80,7 +80,7 @@ export function AdminOverview() {
 
 export function AuditList({ entries }: { entries: AdminAuditEntry[] | null }) {
   if (!entries) return <p className="admin-muted">Loading…</p>;
-  if (!entries.length) return <p className="admin-muted">No admin actions yet. Every moderation and credit change will be listed here.</p>;
+  if (!entries.length) return <p className="admin-muted">No admin actions yet. Every moderation and kudos change will be listed here.</p>;
   return (
     <ul className="admin-audit">
       {entries.map((e) => (

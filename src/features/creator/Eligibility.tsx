@@ -4,7 +4,7 @@ import "./Eligibility.css";
 
 const LABEL: Record<EligibilityKey, string> = {
   views_90d: "Views (last 90 days)",
-  supporters: "Supporters",
+  supporters: "Helpers",
   posts: "Posts",
   replies: "Replies",
   email_verified: "Email",
@@ -36,7 +36,7 @@ function stillNeeded(r: EligibilityRequirement): string {
     case "views_90d":
       return `${gap.toLocaleString()} more ${gap === 1 ? "view" : "views"}`;
     case "supporters":
-      return `${gap.toLocaleString()} more ${gap === 1 ? "supporter" : "supporters"}`;
+      return `${gap.toLocaleString()} more ${gap === 1 ? "helper" : "helpers"}`;
     case "posts":
       return `${gap.toLocaleString()} more ${gap === 1 ? "post" : "posts"}`;
     case "replies":
@@ -50,7 +50,7 @@ function stillNeeded(r: EligibilityRequirement): string {
   }
 }
 
-/** "Still needed: 18,000 more views, 8 more supporters and a verified email." */
+/** "Still needed: 18,000 more views, 8 more helpers and a verified email." */
 export function eligibilitySummary(e: CreatorEligibility): string {
   const missing = e.requirements.filter((r) => !r.met).map(stillNeeded);
   if (missing.length === 0) return "Meets every requirement.";
@@ -58,9 +58,18 @@ export function eligibilitySummary(e: CreatorEligibility): string {
   return `Still needed: ${list}.`;
 }
 
-/** Which requirements aren't met, for a short admin reason ("views, supporters"). */
+/** Which requirements aren't met, for a short admin reason ("views, helpers"). */
 export const unmetLabels = (e: CreatorEligibility) =>
   e.requirements.filter((r) => !r.met).map((r) => LABEL[r.key].replace(" (last 90 days)", "").toLowerCase());
+
+/**
+ * The same, when restoring a suspended or revoked creator: their own creator status (the thing being
+ * changed) isn't held against them; everything else is (migration 20261106090000).
+ */
+export const unmetForRestore = (e: CreatorEligibility) =>
+  e.requirements
+    .filter((r) => !r.met && !(r.key === "good_standing" && r.reasons.every((x) => x === "creator_suspended" || x === "creator_revoked")))
+    .map((r) => LABEL[r.key].replace(" (last 90 days)", "").toLowerCase());
 
 /** One row per requirement: label, figure against the threshold, a bar for counts, met or not. */
 export function EligibilityList({ e, compact = false }: { e: CreatorEligibility; compact?: boolean }) {

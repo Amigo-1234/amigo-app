@@ -86,7 +86,7 @@ export function WelcomeCard({ followingCount, hasOwnPosts }: { followingCount: n
         )}
         {dataSource.support && (
           <Link to="/support" className="welcome__action">
-            <HandHeart size={18} aria-hidden="true" /> Support Hub: back creators' projects
+            <HandHeart size={18} aria-hidden="true" /> Help Hub: help with creators' projects
           </Link>
         )}
       </div>

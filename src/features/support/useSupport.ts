@@ -71,9 +71,9 @@ export function supportErrorText(e: unknown): string {
   if (e instanceof SupportError) {
     switch (e.code) {
       case "insufficient-credits":
-        return "You don't have enough Support Credits yet. Support someone else's request to earn more.";
+        return "You don't have enough Kudos yet. Help with someone else's request to earn more.";
       case "own-request":
-        return "You can't support your own request.";
+        return "You can't help with your own request.";
       case "already-supported":
         return "You've already done this.";
       case "not-opened":
@@ -81,7 +81,7 @@ export function supportErrorText(e: unknown): string {
       case "too-fast":
         return "Take a moment with it first, then confirm.";
       case "not-active":
-        return "This request isn't open for support right now.";
+        return "This request isn't open for help right now.";
       case "already-reported":
         return "You've already reported this request.";
       case "not-admin":

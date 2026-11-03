@@ -25,7 +25,7 @@ import "../features/admin/Admin.css";
 /** Future modules (campaigns, paid placement, creator plans…) get an entry here. */
 const SECTIONS = [
   { id: "", label: "Overview", icon: LayoutDashboard },
-  { id: "support", label: "Support Hub", icon: HandHeart },
+  { id: "support", label: "Help Hub", icon: HandHeart },
   { id: "worlds", label: "Worlds", icon: Orbit },
   { id: "users", label: "Users", icon: UsersRound },
   { id: "reports", label: "Reports", icon: Flag },
@@ -117,16 +117,16 @@ export default function AdminScreen() {
                 <AdminContentReports onSuspended={() => setSuspendKey((k) => k + 1)} />
                 <AdminSuspensions refreshKey={suspendKey} />
                 <AdminPlaceholder
-                  title="Support Hub reports"
-                  body="Reports on Support Hub requests are reviewed in Support Hub → Reports."
-                  link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
+                  title="Help Hub reports"
+                  body="Reports on Help Hub requests are reviewed in Help Hub → Reports."
+                  link={{ to: "/admin/support?tab=reports", label: "Open Help Hub reports" }}
                 />
               </>
             ) : (
               <AdminPlaceholder
                 title="Other reports"
-                body="Reporting posts and people isn't built yet. Reports on Support Hub requests are reviewed in Support Hub → Reports."
-                link={{ to: "/admin/support?tab=reports", label: "Open Support Hub reports" }}
+                body="Reporting posts and people isn't built yet. Reports on Help Hub requests are reviewed in Help Hub → Reports."
+                link={{ to: "/admin/support?tab=reports", label: "Open Help Hub reports" }}
               />
             )}
           </>

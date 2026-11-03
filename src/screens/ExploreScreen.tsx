@@ -178,7 +178,7 @@ function Browse({ market, businesses }: { market: boolean; businesses: boolean }
     ...(dataSource.worlds && market ? [{ to: "/worlds", label: "Worlds", icon: Orbit }] : []),
     ...(businesses ? [{ to: "/business", label: "Businesses", icon: Store }] : []),
     ...(market ? [{ to: "/market", label: "Marketplace", icon: ShoppingBag }] : []),
-    ...(dataSource.support ? [{ to: "/support", label: "Support Hub", icon: HandHeart }] : []),
+    ...(dataSource.support ? [{ to: "/support", label: "Help Hub", icon: HandHeart }] : []),
   ];
   if (!places.length) return null;
   return (

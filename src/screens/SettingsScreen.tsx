@@ -120,7 +120,7 @@ export default function SettingsScreen() {
         <BusinessCreatorSection />
         {isAdmin && (
           <Section id="set-admin" title="Admin">
-            <LinkRow to="/admin" icon={<ShieldCheck size={20} />} title="Amigo admin" detail="Moderation, verification, reservations and support tools" />
+            <LinkRow to="/admin" icon={<ShieldCheck size={20} />} title="Amigo admin" detail="Moderation, verification, reservations and Help Hub tools" />
           </Section>
         )}
         <AboutSection />
@@ -626,7 +626,7 @@ function DeleteAccountRow() {
       {open && (
         <form className="settings-panel" onSubmit={remove}>
           <p className="settings-panel__text">
-            This permanently deletes your profile, posts (and the replies under them), likes, follows, Moments, World and Support Hub activity, messaging
+            This permanently deletes your profile, posts (and the replies under them), likes, follows, Moments, World and Help Hub activity, messaging
             devices, keys, backups and the conversations you're in. It can't be undone. See the <Link to="/legal/deletion">Account Deletion Policy</Link>.
           </p>
           {error && <p className="auth__error" role="alert">{error}</p>}

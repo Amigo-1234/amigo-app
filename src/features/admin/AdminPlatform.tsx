@@ -113,7 +113,7 @@ export function AdminLegal() {
 }
 
 const FLAG_KINDS: { id: FraudFlag["kind"]; label: string }[] = [
-  { id: "support_farming", label: "Support farming" },
+  { id: "support_farming", label: "Kudos farming" },
   { id: "fake_followers", label: "Fake followers" },
   { id: "engagement_manipulation", label: "Engagement manipulation" },
   { id: "duplicate_accounts", label: "Duplicate accounts" },

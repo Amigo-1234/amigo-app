@@ -165,7 +165,7 @@ export function AdminStats() {
     ["Replies today", s.replies24h],
     ["Messages today", s.messages24h],
     ["World joins (7 days)", s.worldJoins7d],
-    ["Support submissions (7 days)", s.supportSubmissions7d],
+    ["Help Hub submissions (7 days)", s.supportSubmissions7d],
     ["Open reports", s.openReports],
     ["Suspended", s.suspended],
   ];
@@ -257,7 +257,7 @@ export function AdminSuspensions({ refreshKey = 0 }: { refreshKey?: number }) {
       <h2 id="suspensions" className="admin-card__title">Suspended accounts</h2>
       <p className="admin-muted">
         A suspended account can still sign in, read, report, block and delete itself, but the database refuses its new posts, replies, likes, follows,
-        messages, Moments, Worlds and Support Hub activity. Every change is audit-logged.
+        messages, Moments, Worlds and Help Hub activity. Every change is audit-logged.
       </p>
       <form className="admin-user__form" onSubmit={suspend}>
         <input className="field__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@handle" aria-label="Handle" />

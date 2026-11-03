@@ -129,7 +129,7 @@ const ACTIONS = {
   reply: () => "replied to your post",
   mention: () => "mentioned you",
   follow: () => "started following you",
-  support: () => "supported your request",
+  support: () => "helped with your request",
 };
 
 /** "Ada liked your post" / "Ada and 3 others liked your post", where to open, and a tag (one notification per target). */

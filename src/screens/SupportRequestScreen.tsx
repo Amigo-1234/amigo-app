@@ -26,7 +26,7 @@ export default function SupportRequestScreen() {
   return (
     <>
       <ScreenHeader
-        title="Support request"
+        title="Help request"
         leading={
           <IconButton label="Back" onClick={back} className="back-btn">
             <ArrowLeft size={22} />
@@ -47,7 +47,7 @@ export default function SupportRequestScreen() {
       )}
       {state.status === "ready" && !state.data && (
         <StateMessage icon={<SearchX size={24} />} title="This request isn't available" body="It may have been removed, or the link is wrong."
-          action={<Button variant="secondary" onClick={() => navigate("/support")}>Back to Support Hub</Button>} />
+          action={<Button variant="secondary" onClick={() => navigate("/support")}>Back to Help Hub</Button>} />
       )}
       {state.status === "ready" && state.data && <RequestView r={state.data} />}
     </>
@@ -123,9 +123,9 @@ function SupportPanel({ r }: { r: SupportRequest }) {
           {r.status === "pending"
             ? "It's waiting for a quick review before it's shown to others."
             : r.status === "active"
-              ? `${r.target - r.supporterCount} more ${r.target - r.supporterCount === 1 ? "supporter" : "supporters"} to reach your goal. Feedback people leave shows up below — only you can see it.`
+              ? `${r.target - r.supporterCount} more ${r.target - r.supporterCount === 1 ? "helper" : "helpers"} to reach your goal. Feedback people leave shows up below — only you can see it.`
               : r.status === "completed"
-                ? "You reached your supporter goal. Feedback people left is below."
+                ? "You reached your helper goal. Feedback people left is below."
                 : statusLabel(r) + "."}
         </p>
       </section>
@@ -134,7 +134,7 @@ function SupportPanel({ r }: { r: SupportRequest }) {
   if (r.viewerState === "none" && r.status !== "active") {
     return (
       <section className="support-panel">
-        <p className="support-panel__text">{r.status === "completed" ? "This request reached its goal." : "This request isn't open for support right now."}</p>
+        <p className="support-panel__text">{r.status === "completed" ? "This request reached its goal." : "This request isn't open for help right now."}</p>
       </section>
     );
   }
@@ -154,7 +154,7 @@ function SupportPanel({ r }: { r: SupportRequest }) {
     return (
       <section className="support-panel">
         <Button size="lg" block onClick={open} icon={<HandHeart size={20} aria-hidden="true" />}>
-          Support — {ask.verb.toLowerCase()} on {host}
+          Help out — {ask.verb.toLowerCase()} on {host}
         </Button>
         <p className="support-panel__hint">
           <ExternalLink size={14} aria-hidden="true" /> Opens {host} in a new tab. Take your time, then come back here to confirm and leave feedback.
@@ -170,7 +170,7 @@ function SupportPanel({ r }: { r: SupportRequest }) {
       setBusy(true);
       try {
         const earned = await dataSource.support!.confirmSupport(r.id, viewer.id);
-        toast(`Thanks for supporting! +${earned.credits} credit · +${earned.reputation} reputation`);
+        toast(`Thanks for helping! +${earned.credits} kudos · +${earned.reputation} reputation`);
       } catch (e) {
         toast(supportErrorText(e), "error");
       } finally {
@@ -180,10 +180,10 @@ function SupportPanel({ r }: { r: SupportRequest }) {
     return (
       <section className="support-panel support-panel--back" aria-live="polite">
         <p className="support-panel__title">Welcome back. Did you check it out?</p>
-        <p className="support-panel__text">Confirm only if you actually checked it out — it's what makes Support Hub worth using.</p>
+        <p className="support-panel__text">Confirm only if you actually checked it out — it's what makes Help Hub worth using.</p>
         <div className="support-panel__actions">
           <Button onClick={confirm} disabled={busy || wait > 0} loading={busy} icon={<BadgeCheck size={18} aria-hidden="true" />}>
-            {wait > 0 ? `Yes, I supported this (${wait}s)` : "Yes, I supported this"}
+            {wait > 0 ? `Yes, I helped with this (${wait}s)` : "Yes, I helped with this"}
           </Button>
           <Button variant="ghost" onClick={open}>
             Open link again
@@ -196,7 +196,7 @@ function SupportPanel({ r }: { r: SupportRequest }) {
   return r.viewerFeedback ? (
     <section className="support-panel support-panel--done">
       <p className="support-panel__title">
-        <BadgeCheck size={18} aria-hidden="true" /> You supported this and left feedback. Thank you.
+        <BadgeCheck size={18} aria-hidden="true" /> You helped with this and left feedback. Thank you.
       </p>
     </section>
   ) : (
@@ -216,7 +216,7 @@ function FeedbackForm({ r }: { r: SupportRequest }) {
     return (
       <section className="support-panel support-panel--done">
         <p className="support-panel__title">
-          <BadgeCheck size={18} aria-hidden="true" /> You supported this. Thank you.
+          <BadgeCheck size={18} aria-hidden="true" /> You helped with this. Thank you.
         </p>
       </section>
     );
@@ -226,7 +226,7 @@ function FeedbackForm({ r }: { r: SupportRequest }) {
     setBusy(true);
     try {
       const earned = await dataSource.support!.leaveFeedback(r.id, viewer.id, { reaction, text });
-      toast(earned.credits ? `Feedback sent. +${earned.credits} credit · +${earned.reputation} reputation` : "Feedback sent");
+      toast(earned.credits ? `Feedback sent. +${earned.credits} kudos · +${earned.reputation} reputation` : "Feedback sent");
     } catch (err) {
       toast(supportErrorText(err), "error");
     } finally {
@@ -236,10 +236,10 @@ function FeedbackForm({ r }: { r: SupportRequest }) {
   return (
     <form className="support-panel" onSubmit={send} aria-label="Leave feedback">
       <p className="support-panel__title">
-        <BadgeCheck size={18} aria-hidden="true" /> You supported this. Want to leave feedback?
+        <BadgeCheck size={18} aria-hidden="true" /> You helped with this. Want to leave feedback?
       </p>
       <p className="support-panel__text">
-        Optional. Only {r.creator.name} sees it.{config ? ` Written feedback earns +${config.feedbackCredits} credit.` : ""}
+        Optional. Only {r.creator.name} sees it.{config ? ` Written feedback earns +${config.feedbackCredits} kudos.` : ""}
       </p>
       <div className="support-reactions" role="group" aria-label="Quick reaction">
         {SUPPORT_REACTIONS.map((x) => (
@@ -286,7 +286,7 @@ function FeedbackList({ r }: { r: SupportRequest }) {
       <h3 id="feedback-title">
         <MessageSquareText size={17} aria-hidden="true" /> Feedback{items ? ` (${items.length})` : ""}
       </h3>
-      {items && items.length === 0 && <p className="support-panel__text">No feedback yet. It'll appear here when supporters leave some.</p>}
+      {items && items.length === 0 && <p className="support-panel__text">No feedback yet. It'll appear here when helpers leave some.</p>}
       <ul>
         {items?.map((f) => (
           <li key={f.id}>

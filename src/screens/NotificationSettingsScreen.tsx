@@ -198,7 +198,7 @@ function PushSettings() {
             )}
             <p className="settings-panel__text notif-note">
               Applies to all your devices. Message notifications never include the message itself — only that you have a new one. Likes, replies and
-              follows also cover mentions and support on your Support Hub requests, grouped when lots happen at once. Worlds: when one you joined goes
+              follows also cover mentions and help on your Help Hub requests, grouped when lots happen at once. Worlds: when one you joined goes
               live, or is cancelled.
             </p>
           </>

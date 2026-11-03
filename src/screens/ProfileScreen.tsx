@@ -300,7 +300,7 @@ function ProfileHeader({
   );
 }
 
-/** Restrained Support Hub line; hidden when there's nothing to show. */
+/** Restrained Help Hub line; hidden when there's nothing to show. */
 function SupportStat({ profile }: { profile: Profile }) {
   const [stats, setStats] = useState<SupportProfileStats | null>(null);
   useEffect(() => {
@@ -315,9 +315,9 @@ function SupportStat({ profile }: { profile: Profile }) {
   const parts = [`helped ${stats.helpedCount}`, `${stats.reputation} reputation`];
   if (stats.activeRequests) parts.push(`${stats.activeRequests} active ${stats.activeRequests === 1 ? "request" : "requests"}`);
   return (
-    <Link to={profile.isViewer ? "/support?section=mine" : "/support"} className="profile__support" aria-label={`Support Hub: helped ${stats.helpedCount}, reputation ${stats.reputation}, ${stats.activeRequests} active requests`}>
+    <Link to={profile.isViewer ? "/support?section=mine" : "/support"} className="profile__support" aria-label={`Help Hub: helped ${stats.helpedCount}, reputation ${stats.reputation}, ${stats.activeRequests} active requests`}>
       <HandHeart size={15} aria-hidden="true" />
-      Support Hub: {parts.join(", ")}
+      Help Hub: {parts.join(", ")}
     </Link>
   );
 }

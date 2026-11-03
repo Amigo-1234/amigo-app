@@ -15,18 +15,18 @@ import "../features/support/Support.css";
 
 const SECTIONS: { id: SupportSection; label: string }[] = [
   { id: "for_you", label: "For you" },
-  { id: "needs", label: "Needs support" },
+  { id: "needs", label: "Needs help" },
   { id: "new", label: "New" },
   { id: "completed", label: "Completed" },
   { id: "mine", label: "Yours" },
 ];
 
 const EMPTY: Record<SupportSection, { title: string; body: string }> = {
-  for_you: { title: "You're all caught up", body: "You've supported everything open right now. Check New or come back later." },
-  needs: { title: "Nothing needs support right now", body: "Every open request is covered. Nice." },
-  new: { title: "No new requests", body: "Be the first to ask for support." },
-  completed: { title: "Nothing completed yet", body: "Requests show up here once they reach their supporter goal." },
-  mine: { title: "You haven't asked for support yet", body: "Share a song, video, app or project and get real feedback." },
+  for_you: { title: "You're all caught up", body: "You've helped with everything open right now. Check New or come back later." },
+  needs: { title: "Nothing needs help right now", body: "Every open request is covered. Nice." },
+  new: { title: "No new requests", body: "Be the first to ask for help." },
+  completed: { title: "Nothing completed yet", body: "Requests show up here once they reach their helper goal." },
+  mine: { title: "You haven't asked for help yet", body: "Share a song, video, app or project and get real feedback." },
 };
 
 export default function SupportScreen() {
@@ -59,14 +59,14 @@ export default function SupportScreen() {
   return (
     <>
       <ScreenHeader
-        title="Support Hub"
+        title="Help Hub"
         actions={
           <Link to="/support/new" className="btn btn--primary btn--sm">
-            <Plus size={16} aria-hidden="true" /> Ask for support
+            <Plus size={16} aria-hidden="true" /> Ask for help
           </Link>
         }
       >
-        <div className="tabs support-tabs" role="tablist" aria-label="Support Hub sections">
+        <div className="tabs support-tabs" role="tablist" aria-label="Help Hub sections">
           {SECTIONS.map((s) => (
             <button key={s.id} role="tab" aria-selected={section === s.id} className="tab" onClick={() => update({ section: s.id === "for_you" ? null : s.id })}>
               {s.label}
@@ -75,13 +75,13 @@ export default function SupportScreen() {
         </div>
       </ScreenHeader>
 
-      <section className="support-intro" aria-label="Your Support">
+      <section className="support-intro" aria-label="Your Help Hub">
         <p className="support-intro__text">
           Help people with their songs, videos, apps and projects — and get real feedback on yours. No follow-for-follow, no fake streams.
         </p>
         <dl className="support-wallet">
           <div>
-            <dt>Credits</dt>
+            <dt>Kudos</dt>
             <dd>{wallet ? wallet.credits : <Skeleton width={20} height={16} />}</dd>
           </div>
           <div>
@@ -95,7 +95,7 @@ export default function SupportScreen() {
         </dl>
         {config && (
           <p className="support-intro__rules">
-            Supporting someone earns {config.supportCredits} credit and {config.supportReputation} reputation (+{config.feedbackCredits} credit for written feedback). Asking for support costs {config.requestCost} credits.
+            Helping someone earns {config.supportCredits} kudos and {config.supportReputation} reputation (+{config.feedbackCredits} kudos for written feedback). Asking for help costs {config.requestCost} kudos. Kudos are recognition points only: they have no cash value and can't be withdrawn, exchanged or paid out.
           </p>
         )}
       </section>
@@ -145,7 +145,7 @@ export default function SupportScreen() {
         <StateMessage
           icon={<HandHeart size={24} />}
           {...(q || category ? { title: "No matching requests", body: "Try another category or search." } : EMPTY[section])}
-          action={section === "mine" && !q && !category ? <Link to="/support/new" className="btn btn--secondary btn--md">Ask for support</Link> : undefined}
+          action={section === "mine" && !q && !category ? <Link to="/support/new" className="btn btn--secondary btn--md">Ask for help</Link> : undefined}
         />
       )}
       {list.state.status === "ready" && list.state.data.requests.length > 0 && (

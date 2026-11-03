@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Coins } from "lucide-react";
+import { ArrowLeft, Award } from "lucide-react";
 import { dataSource, SUPPORT_LIMITS, type SupportAsk, type SupportCategory } from "../data";
 import { checkSupportUrl, SUPPORT_ASKS, SUPPORT_CATEGORIES } from "../data/supportRules";
 import { supportErrorText, useSupportConfig, useWallet } from "../features/support/useSupport";
@@ -73,7 +73,7 @@ export default function SupportNewScreen() {
   return (
     <>
       <ScreenHeader
-        title="Ask for support"
+        title="Ask for help"
         leading={
           <IconButton label="Back" onClick={() => (reviewing ? setReviewing(false) : navigate(-1))} className="back-btn">
             <ArrowLeft size={22} />
@@ -109,7 +109,7 @@ export default function SupportNewScreen() {
             {errors.category && <p className="form-error" id="err-category">{errors.category}</p>}
           </fieldset>
 
-          <Field label="What kind of support do you want?">
+          <Field label="What kind of help do you want?">
             <select name="ask" className="field__input" value={ask} onChange={(e) => setAsk(e.target.value as SupportAsk)}>
               {SUPPORT_ASKS.map((a) => (
                 <option key={a.id} value={a.id}>{a.label}</option>
@@ -117,13 +117,13 @@ export default function SupportNewScreen() {
             </select>
           </Field>
 
-          <Field label="How many supporters are you hoping for?" error={errors.target} hint={config ? `${config.minTarget}–${config.maxTarget}. The request completes when it reaches this.` : undefined}>
+          <Field label="How many helpers are you hoping for?" error={errors.target} hint={config ? `${config.minTarget}–${config.maxTarget}. The request completes when it reaches this.` : undefined}>
             <input name="target" className="field__input support-form__num" type="number" min={config?.minTarget} max={config?.maxTarget} value={goal} onChange={(e) => setTarget(Number(e.target.value))} />
           </Field>
 
           <div className="support-form__foot">
             <p className="support-cost">
-              <Coins size={16} aria-hidden="true" /> Costs <strong>{cost} Support Credits</strong>
+              <Award size={16} aria-hidden="true" /> Costs <strong>{cost} Kudos</strong>
               {wallet && <> · you have {wallet.credits}</>}
             </p>
             <Button type="submit">Review request</Button>
@@ -138,18 +138,18 @@ export default function SupportNewScreen() {
             <div><dt>Link</dt><dd className="support-detail__url">{checked.ok ? checked.url : url}</dd></div>
             <div><dt>Category</dt><dd>{SUPPORT_CATEGORIES.find((c) => c.id === category)?.label}</dd></div>
             <div><dt>Asking for</dt><dd>{SUPPORT_ASKS.find((a) => a.id === ask)?.label}</dd></div>
-            <div><dt>Goal</dt><dd>{goal} supporters</dd></div>
+            <div><dt>Goal</dt><dd>{goal} helpers</dd></div>
           </dl>
           <div className={`support-confirm${canAfford ? "" : " is-short"}`} role="status">
-            <Coins size={18} aria-hidden="true" />
+            <Award size={18} aria-hidden="true" />
             {canAfford ? (
               <p>
-                Submitting costs <strong>{cost} Support Credits</strong>. You have {wallet?.credits ?? "…"}, so you'll have {(wallet?.credits ?? cost) - cost} left.
+                Submitting costs <strong>{cost} Kudos</strong>. You have {wallet?.credits ?? "…"}, so you'll have {(wallet?.credits ?? cost) - cost} left.
                 {config?.moderation && " A quick review happens before it's shown to others."} No real money is involved.
               </p>
             ) : (
               <p>
-                You need <strong>{cost} Support Credits</strong> and have {wallet?.credits}. Support {cost - (wallet?.credits ?? 0)} more{" "}
+                You need <strong>{cost} Kudos</strong> and have {wallet?.credits}. Help {cost - (wallet?.credits ?? 0)} more{" "}
                 {cost - (wallet?.credits ?? 0) === 1 ? "person" : "people"} to earn the rest.
               </p>
             )}
@@ -157,9 +157,9 @@ export default function SupportNewScreen() {
           <div className="support-form__foot">
             <Button variant="ghost" onClick={() => setReviewing(false)}>Edit</Button>
             {canAfford ? (
-              <Button onClick={submit} loading={busy} disabled={busy}>Submit for {cost} credits</Button>
+              <Button onClick={submit} loading={busy} disabled={busy}>Submit for {cost} kudos</Button>
             ) : (
-              <Button variant="secondary" onClick={() => navigate("/support?section=needs")}>Find someone to support</Button>
+              <Button variant="secondary" onClick={() => navigate("/support?section=needs")}>Find someone to help</Button>
             )}
           </div>
         </section>

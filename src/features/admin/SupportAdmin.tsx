@@ -24,13 +24,13 @@ const TABS = [
   { id: "requests", label: "Requests" },
   { id: "reports", label: "Reports" },
   { id: "activity", label: "Activity" },
-  { id: "credits", label: "Credits" },
+  { id: "credits", label: "Kudos" },
   { id: "audit", label: "Audit log" },
 ] as const;
 
 const DONE: Record<SupportAdminAction, string> = {
   approve: "Approved",
-  reject: "Rejected — credits refunded",
+  reject: "Rejected — kudos refunded",
   remove: "Removed",
   close: "Closed",
   reopen: "Reopened",
@@ -45,7 +45,7 @@ export function SupportAdmin() {
   const tab = TABS.find((t) => t.id === params.get("tab"))?.id ?? "requests";
   return (
     <>
-      <div className="admin-subnav" role="tablist" aria-label="Support Hub admin">
+      <div className="admin-subnav" role="tablist" aria-label="Help Hub admin">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className="chip" onClick={() => setParams(t.id === "requests" ? {} : { tab: t.id }, { replace: true })}>
             {t.label}
@@ -90,12 +90,12 @@ function Requests() {
   }, [load]);
 
   const run = async (r: SupportRequest, action: SupportAdminAction) => {
-    if (action === "remove" && !window.confirm(`Remove “${r.title}”? It disappears for everyone; the creator's credits aren't refunded.`)) return;
+    if (action === "remove" && !window.confirm(`Remove “${r.title}”? It disappears for everyone; the creator's kudos aren't refunded.`)) return;
     if (await act((a, id) => a.moderate(id, r.id, action), DONE[action])) load();
   };
 
   return (
-    <section className="admin-card" aria-label="Support requests">
+    <section className="admin-card" aria-label="Help requests">
       <label className="admin-filter">
         Status
         <select value={status} onChange={(e) => setParams({ status: e.target.value }, { replace: true })}>
@@ -115,7 +115,7 @@ function Requests() {
               <div className="admin-row__main">
                 <Link to={`/support/${r.id}`} className="admin-row__title">{r.title}</Link>
                 <span className="admin-muted">
-                  @{r.creator.handle} · {categoryLabel(r.category)} · {r.supporterCount}/{r.target} supporters · {timeAgo(r.createdAt)}
+                  @{r.creator.handle} · {categoryLabel(r.category)} · {r.supporterCount}/{r.target} helpers · {timeAgo(r.createdAt)}
                 </span>
                 <span className="admin-row__tags">
                   <span className={`support-tag support-tag--${r.status}`}>{statusLabel(r)}</span>
@@ -136,7 +136,7 @@ function Requests() {
                 )}
                 {r.status !== "removed" && r.status !== "rejected" && <Button size="sm" variant="danger" onClick={() => run(r, "remove")}>Remove</Button>}
                 <Button size="sm" variant="ghost" aria-expanded={inspect === r.id} onClick={() => setInspect(inspect === r.id ? null : r.id)}>
-                  Supporters
+                  Helpers
                 </Button>
               </div>
               {inspect === r.id && <Supporters requestId={r.id} />}
@@ -235,7 +235,7 @@ function Activity() {
   return (
     <section className="admin-card" aria-label="Suspicious activity">
       <p className="admin-muted">
-        Patterns worth a look, from real timestamps: confirmations within 20 seconds of opening a link, and many supports in a few minutes. Nothing here is automatic — use Credits to correct a balance if needed.
+        Patterns worth a look, from real timestamps: confirmations within 20 seconds of opening a link, and many confirmations in a few minutes. Nothing here is automatic — use Kudos to correct a balance if needed.
       </p>
       {!rows ? (
         <p className="admin-muted">Loading…</p>
@@ -278,15 +278,15 @@ function Credits() {
     e.preventDefault();
     const n = Number(delta);
     if (!person || !Number.isInteger(n) || n === 0) return toast("Enter a whole number, e.g. 5 or -3", "error");
-    if (await act((a, id) => a.adjustCredits(id, person.id, n, note), `Credits adjusted for @${person.handle}`)) {
+    if (await act((a, id) => a.adjustCredits(id, person.id, n, note), `Kudos adjusted for @${person.handle}`)) {
       setPerson(await dataSource.admin!.support.findUser(viewer.id, person.handle));
       setDelta("");
       setNote("");
     }
   };
   return (
-    <section className="admin-card" aria-label="Adjust Support Credits">
-      <p className="admin-muted">Manual corrections only (e.g. reversing farmed credits). Reputation can't be edited. Every change needs a reason and is written to the audit log.</p>
+    <section className="admin-card" aria-label="Adjust Kudos">
+      <p className="admin-muted">Manual corrections only (e.g. reversing farmed kudos). Reputation can't be edited. Every change needs a reason and is written to the audit log.</p>
       <form className="admin-inline" onSubmit={find}>
         <label className="visually-hidden" htmlFor="admin-handle">Username</label>
         <input id="admin-handle" className="field__input" value={handle} onChange={(e) => setHandle(e.target.value)} placeholder="@username" />
@@ -296,7 +296,7 @@ function Credits() {
       {person && (
         <form className="admin-credits" onSubmit={apply}>
           <p>
-            <strong>{person.name}</strong> @{person.handle} — <strong>{person.wallet.credits}</strong> credits · {person.wallet.reputation} reputation · helped {person.wallet.helpedCount}
+            <strong>{person.name}</strong> @{person.handle} — <strong>{person.wallet.credits}</strong> kudos · {person.wallet.reputation} reputation · helped {person.wallet.helpedCount}
           </p>
           <div className="admin-inline">
             <label className="visually-hidden" htmlFor="admin-delta">Change</label>
