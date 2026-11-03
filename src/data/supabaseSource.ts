@@ -18,6 +18,7 @@ import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { businessIdOf, createBusinessApi } from "./supabase/business";
 import { createMarketplaceApi } from "./supabase/marketplace";
+import { createReservationsAdminApi, createUsernamesApi, usernameAvailable } from "./supabase/reservations";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPushApi } from "./supabase/push";
 import * as worldsExtra from "./supabase/worldsExtra";
@@ -291,6 +292,18 @@ function scheduleViewerRetry(userId: string) {
 }
 
 let emitGeneration = 0;
+/** Claiming changes the signed-in person's username: refresh the session's copy. */
+function withViewerRefresh(api: import("./types").UsernamesApi): import("./types").UsernamesApi {
+  return {
+    ...api,
+    async claim(id) {
+      const handle = await api.claim(id);
+      await emitViewer();
+      return handle;
+    },
+  };
+}
+
 async function emitViewer() {
   // Only the latest call may publish: a slow profile load must not overwrite a newer sign-in/out.
   const generation = ++emitGeneration;
@@ -860,6 +873,7 @@ export const supabaseSource: DataSource = {
     monetization: platform.monetizationAdmin,
     creatorProgramme: platform.creatorProgrammeAdmin,
     moments: moments?.admin,
+    reservations: isNeon ? createReservationsAdminApi(supabase) : undefined,
     // Evidence is only what the reporter chose to attach from their own decrypted copy.
     messageReports: {
       list: () => q.adminMessageReports(supabase),
@@ -903,6 +917,7 @@ export const supabaseSource: DataSource = {
   push: isNeon ? push : undefined,
   business,
   marketplace,
+  usernames: isNeon ? withViewerRefresh(createUsernamesApi(supabase)) : undefined,
 
   notifications: {
     subscribeNotifications(viewerId, limit, sub) {
@@ -949,7 +964,12 @@ export const supabaseSource: DataSource = {
     },
 
     listFollows: (profileId, kind, viewerId) => q.fetchFollowList(supabase, profileId, kind, viewerId),
-    isHandleAvailable: (handle, viewerId) => q.isHandleAvailable(supabase, handle, viewerId),
+    // Neon: one database rule (profiles, protected names, reservations). Before that migration, the old lookup.
+    isHandleAvailable: (handle, viewerId) =>
+      isNeon
+        ? usernameAvailable(supabase, handle).catch((e: { pgCode?: string }) =>
+            e?.pgCode === "PGRST202" || e?.pgCode === "42883" ? q.isHandleAvailable(supabase, handle, viewerId) : Promise.reject(e))
+        : q.isHandleAvailable(supabase, handle, viewerId),
 
     async updateProfile(viewerId, update) {
       const patch: Parameters<typeof q.updateProfileRow>[2] = {};

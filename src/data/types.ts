@@ -1013,6 +1013,54 @@ export interface AdminApi {
   /** Reported posts, profiles and Worlds; post takedown; account suspension. */
   moderation?: ModerationAdminApi;
   users: AdminUsersApi;
+  /** Username reservations and protected names (newer databases). */
+  reservations?: ReservationsAdminApi;
+}
+
+export type ReservationStatus = "pending" | "active" | "claimed" | "expired" | "revoked" | "abandoned";
+
+export interface UsernameReservation {
+  id: string;
+  username: string;
+  /** Admins only: needed to settle disputes. Never shown anywhere else. */
+  email: string;
+  status: ReservationStatus;
+  createdAt: string;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  /** The account's current username, once claimed. */
+  claimedHandle: string | null;
+  closedReason: string | null;
+}
+
+export interface ReservationSettings {
+  open: boolean;
+  holdDays: number;
+  maxPerEmail: number;
+  active: number;
+  claimed: number;
+}
+
+export interface ReservationsAdminApi {
+  settings(): Promise<ReservationSettings>;
+  setSettings(open: boolean, holdDays: number, maxPerEmail: number): Promise<void>;
+  /** "live" = pending or active. */
+  list(status: "live" | "all" | ReservationStatus, query: string): Promise<UsernameReservation[]>;
+  revoke(id: string, reason: string): Promise<void>;
+  extend(id: string, days: number): Promise<string>;
+  protectedNames(): Promise<{ username: string; note: string | null }[]>;
+  protect(name: string, note: string): Promise<void>;
+  unprotect(name: string): Promise<void>;
+  /** Give an account a username, even a protected or reserved one (any live reservation on it is revoked). */
+  assign(userId: string, name: string, reason: string): Promise<void>;
+}
+
+/** The signed-in person's side of username reservations. */
+export interface UsernamesApi {
+  /** Reservations held by this account's confirmed email. */
+  mine(): Promise<{ id: string; username: string; expiresAt: string }[]>;
+  /** Moves a reserved name onto this account; returns it. */
+  claim(reservationId: string): Promise<string>;
 }
 
 export interface ContentReport {
@@ -1532,6 +1580,8 @@ export interface DataSource {
   business?: BusinessApi;
   /** Marketplace: business listings, search and saves (needs migration 20261102090000; off until an admin switches it on). */
   marketplace?: MarketplaceApi;
+  /** Claiming reserved usernames (newer databases). */
+  usernames?: UsernamesApi;
   /** Creator monetization overview (coming soon; nothing financial). */
   monetization?: MonetizationApi;
   /** Creator Programme: applications, status, dashboard, feedback. */

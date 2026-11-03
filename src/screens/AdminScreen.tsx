@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, useParams } from "react-router";
-import { FileText, Flag, HandHeart, History, LayoutDashboard, MessageSquareText, Orbit, ShieldAlert, ShoppingBag, Sparkles, Store, UsersRound } from "lucide-react";
+import { AtSign, FileText, Flag, HandHeart, History, LayoutDashboard, MessageSquareText, Orbit, ShieldAlert, ShoppingBag, Sparkles, Store, UsersRound } from "lucide-react";
 import { dataSource } from "../data";
 import { AdminLegal, AdminMonetization } from "../features/admin/AdminPlatform";
 import { AdminClientErrors, AdminContentReports, AdminStats, AdminSuspensions } from "../features/admin/AdminModeration";
@@ -15,6 +15,7 @@ import { AdminMessageReports } from "../features/admin/AdminMessageReports";
 import { AdminMomentReports } from "../features/admin/AdminMomentReports";
 import { AdminBusinesses } from "../features/admin/AdminBusinesses";
 import { AdminMarketplace } from "../features/admin/AdminMarketplace";
+import { AdminReservations } from "../features/admin/AdminReservations";
 import { ScreenHeader } from "../shell/ScreenHeader";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
@@ -30,6 +31,7 @@ const SECTIONS = [
   { id: "reports", label: "Reports", icon: Flag },
   ...(dataSource.business ? [{ id: "businesses", label: "Businesses", icon: Store }] : []),
   ...(dataSource.marketplace ? [{ id: "marketplace", label: "Marketplace", icon: ShoppingBag }] : []),
+  ...(dataSource.admin?.reservations ? [{ id: "reservations", label: "Reservations", icon: AtSign }] : []),
   ...(dataSource.admin?.monetization ? [{ id: "creators", label: "Creator Programme", icon: Sparkles }] : []),
   ...(dataSource.admin?.creatorProgramme ? [{ id: "creator-feedback", label: "Creator Feedback", icon: MessageSquareText }] : []),
   ...(dataSource.admin?.legal ? [{ id: "legal", label: "Legal", icon: FileText }] : []),
@@ -101,6 +103,7 @@ export default function AdminScreen() {
         {section === "creator-feedback" && dataSource.admin?.creatorProgramme && <AdminCreatorFeedback />}
         {section === "businesses" && <AdminBusinesses />}
         {section === "marketplace" && <AdminMarketplace />}
+        {section === "reservations" && <AdminReservations />}
         {section === "audit" && <AdminAuditLog />}
         {section === "legal" && dataSource.admin?.legal && <AdminLegal />}
         {section === "reports" && (

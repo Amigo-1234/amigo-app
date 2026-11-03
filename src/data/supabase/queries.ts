@@ -411,7 +411,8 @@ export async function updateProfileRow(
   if (Object.keys(patch).length === 0) return;
   const { error } = await db.from("profiles").update(patch).eq("id", userId);
   if (!error) return;
-  if (error.code === "23505") throw new ProfileError("handle-taken");
+  // Taken, protected (UR001) or reserved for someone else (UR002): the same answer, "not available".
+  if (error.code === "23505" || error.code === "UR001" || error.code === "UR002") throw new ProfileError("handle-taken");
   // Only the username format constraint means "invalid username"; other checks (bio/name length) are generic.
   if (error.code === "23514" && /profiles_username_format/.test(error.message)) throw new ProfileError("handle-invalid", error.message);
   throw new ProfileError("unknown", error.message);
