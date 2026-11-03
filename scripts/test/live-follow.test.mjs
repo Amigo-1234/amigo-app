@@ -134,16 +134,18 @@ try {
   const agree = page.getByRole("button", { name: "I agree" });
   await agree.waitFor({ timeout: 8000 }).catch(() => undefined);
   if (await agree.isVisible().catch(() => false)) {
+    // Since the 18+ change, "I agree" needs the age box ticked first.
+    await page.locator(".legal-gate__age input").check().catch(() => undefined);
     await agree.click();
     await agree.waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
   }
   await page.locator(".bottom-create").waitFor().catch(() => undefined);
 
-  const profileButton = () => page.locator(".profile__action .follow-btn");
+  const profileButton = () => page.locator(".profile__actions .follow-btn");
   const openProfile = async (h) => {
     await page.goto(`${BASE}/u/${h}`, { waitUntil: "networkidle" });
     try {
-      await page.locator(".profile__action").waitFor();
+      await page.locator(".profile__actions").waitFor();
     } catch (e) {
       const text = ((await page.locator("main").innerText().catch(() => "")) || "").replace(/\s+/g, " ").slice(0, 200);
       info("profile didn't show", `${page.url().replace(BASE, "")} · ${text} · ${problems.slice(-3).join(" | ")}`);
@@ -198,7 +200,7 @@ try {
 
   // 4. Reload.
   await page.reload({ waitUntil: "networkidle" });
-  await page.locator(".profile__action").waitFor();
+  await page.locator(".profile__actions").waitFor();
   ok("after a reload B still sees “Following”", (await label(profileButton())) === "Following", await label(profileButton()));
 
   // 5. B unfollows A.
@@ -207,7 +209,7 @@ try {
   await sleep(1500);
   ok("…the unfollow is saved", (await edges(B, B, A)) === 0);
   await page.reload({ waitUntil: "networkidle" });
-  await page.locator(".profile__action").waitFor();
+  await page.locator(".profile__actions").waitFor();
   ok("…and still “Follow Back” after a reload", (await label(profileButton())) === "Follow Back", await label(profileButton()));
 
   // Duplicate taps: a quick double tap must not create two follows.
@@ -217,7 +219,7 @@ try {
   await sleep(2500);
   ok("a quick double tap leaves exactly one follow", (await edges(B, B, A)) === 1, `${followWrites} request(s)`);
   await page.reload({ waitUntil: "networkidle" });
-  await page.locator(".profile__action").waitFor();
+  await page.locator(".profile__actions").waitFor();
   ok("…and shows “Following”", (await label(profileButton())) === "Following", await label(profileButton()));
   const c2 = await counts(B, A);
   ok("…A's follower count is consistent (1)", c2.follower_count === 1, String(c2.follower_count));

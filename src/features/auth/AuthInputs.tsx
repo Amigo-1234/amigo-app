@@ -2,22 +2,37 @@ import { useId, useState, type InputHTMLAttributes } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import "./AuthInputs.css";
 
-type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> & { label: string; hint?: string };
+type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> & { label: string; hint?: string; error?: string };
 
-/** Labelled text field with an optional hint, wired for screen readers. */
-export function AuthField({ label, hint, ...input }: FieldProps) {
+/** Screen-reader links for a field's hint and error. */
+function describedBy(id: string, hint?: string, error?: string) {
+  return [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(" ") || undefined;
+}
+
+/** The field's own error, under it (announced when it appears). */
+function FieldError({ id, error }: { id: string; error?: string }) {
+  return error ? (
+    <p id={`${id}-error`} className="auth-field__error" role="alert">
+      {error}
+    </p>
+  ) : null;
+}
+
+/** Labelled text field with an optional hint and error, wired for screen readers. */
+export function AuthField({ label, hint, error, ...input }: FieldProps) {
   const id = useId();
   return (
     <div className="auth-field">
       <label className="auth-field__label" htmlFor={id}>{label}</label>
-      <input id={id} className="auth-field__input" aria-describedby={hint ? `${id}-hint` : undefined} {...input} />
-      {hint && <p id={`${id}-hint`} className="auth-field__hint">{hint}</p>}
+      <input id={id} className="auth-field__input" aria-invalid={error ? true : undefined} aria-describedby={describedBy(id, hint, error)} {...input} />
+      <FieldError id={id} error={error} />
+      {hint && !error && <p id={`${id}-hint`} className="auth-field__hint">{hint}</p>}
     </div>
   );
 }
 
 /** Password field with a show/hide toggle. */
-export function PasswordField({ label, hint, ...input }: FieldProps) {
+export function PasswordField({ label, hint, error, ...input }: FieldProps) {
   const id = useId();
   const [shown, setShown] = useState(false);
   return (
@@ -28,20 +43,22 @@ export function PasswordField({ label, hint, ...input }: FieldProps) {
           id={id}
           className="auth-field__input auth-field__input--pw"
           type={shown ? "text" : "password"}
-          aria-describedby={hint ? `${id}-hint` : undefined}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy(id, hint, error)}
           {...input}
         />
         <button type="button" className="auth-field__eye" onClick={() => setShown((s) => !s)} aria-label={shown ? "Hide password" : "Show password"} aria-pressed={shown}>
           {shown ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
-      {hint && <p id={`${id}-hint`} className="auth-field__hint">{hint}</p>}
+      <FieldError id={id} error={error} />
+      {hint && !error && <p id={`${id}-hint`} className="auth-field__hint">{hint}</p>}
     </div>
   );
 }
 
 /** One-time code from email: digits only, large and spaced, autofill-friendly. */
-export function CodeField({ label = "Code", value, onChange, autoFocus }: { label?: string; value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+export function CodeField({ label = "Code", value, onChange, autoFocus, error }: { label?: string; value: string; onChange: (v: string) => void; autoFocus?: boolean; error?: string }) {
   const id = useId();
   return (
     <div className="auth-field">
@@ -49,6 +66,8 @@ export function CodeField({ label = "Code", value, onChange, autoFocus }: { labe
       <input
         id={id}
         className="auth-field__input auth-field__input--code"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
         inputMode="numeric"
         autoComplete="one-time-code"
         pattern="[0-9]*"
@@ -57,6 +76,7 @@ export function CodeField({ label = "Code", value, onChange, autoFocus }: { labe
         autoFocus={autoFocus}
         onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
       />
+      <FieldError id={id} error={error} />
     </div>
   );
 }

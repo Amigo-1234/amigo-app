@@ -5,8 +5,6 @@ import {
   Download,
   Bookmark,
   ArrowLeft,
-  Bell,
-  BellOff,
   BellRing,
   ChevronRight,
   Eye,
@@ -26,7 +24,6 @@ import {
   Sun,
   Trash2,
   UserRound,
-  Users,
 } from "lucide-react";
 import { CREATOR } from "../lib/creator";
 
@@ -36,7 +33,7 @@ import { CodeField, PasswordField, authMessage } from "../features/auth";
 import { profilesEnabled } from "../features/profile/links";
 import { AuthError, dataSource } from "../data";
 import { ScreenHeader } from "../shell/ScreenHeader";
-import { notificationsEnabled, useUnread } from "../state/notifications";
+import { notificationsEnabled } from "../state/notifications";
 import { securityApi, useSecurity } from "../state/security";
 import { useViewer } from "../state/session";
 import { useTheme, type ThemePreference } from "../state/theme";
@@ -64,9 +61,12 @@ const BACKEND_LABEL: Record<string, string> = {
 };
 
 /**
- * Account settings, grouped: Account, Privacy, Security, Notifications,
- * Appearance, About. Every row is backed by a real capability of the current
- * backend; sections hide what the backend can't do.
+ * Settings, grouped so each thing has one home: your account, privacy and
+ * safety, security, notifications, content and display, business and
+ * creators, admin (admins only), help and about, then signing out or leaving.
+ * Every row is backed by a real capability of the current backend; sections
+ * hide what the backend can't do. Shortcuts that live elsewhere (activity,
+ * mark all read) aren't repeated here.
  */
 export default function SettingsScreen() {
   const viewer = useViewer();
@@ -112,12 +112,22 @@ export default function SettingsScreen() {
           )}
         </div>
 
-        <AccountSection isAdmin={!!isAdmin} />
+        <AccountSection />
         <PrivacySection />
-        <SecuritySection onSignOut={signOut} />
+        <SecuritySection />
         {notificationsEnabled && <NotificationsSection />}
-        <AppearanceSection />
+        <ContentSection />
+        <BusinessCreatorSection />
+        {isAdmin && (
+          <Section id="set-admin" title="Admin">
+            <LinkRow to="/admin" icon={<ShieldCheck size={20} />} title="Amigo admin" detail="Moderation, verification, reservations and support tools" />
+          </Section>
+        )}
         <AboutSection />
+        <Section id="set-leave" title="Sign out or leave">
+          <ButtonRow icon={<LogOut size={20} />} title="Sign out" detail="Sign out on this device" onClick={signOut} />
+          {dataSource.deleteAccount && <DeleteAccountRow />}
+        </Section>
       </div>
     </>
   );
@@ -181,13 +191,13 @@ function BusinessRow() {
   return <LinkRow to="/settings/business" icon={<Store size={20} />} title="Create a business page" detail="One page per person, at /b/handle. Your own account isn't shown on it" />;
 }
 
-function AccountSection({ isAdmin }: { isAdmin: boolean }) {
+function AccountSection() {
   const viewer = useViewer();
   const [verifying, setVerifying] = useState(false);
   const canVerify = !!dataSource.emailVerification && viewer.emailVerified === false;
 
   return (
-    <Section id="set-account" title="Account">
+    <Section id="set-account" title="Your account">
       {viewer.email && (
         <>
           {canVerify ? (
@@ -209,18 +219,50 @@ function AccountSection({ isAdmin }: { isAdmin: boolean }) {
         </>
       )}
       {profilesEnabled ? (
-        <LinkRow to={`/u/${viewer.handle}`} icon={<UserRound size={20} />} title="Profile" detail="Name, username, bio and photo — edit from your profile" />
+        <LinkRow to={`/u/${viewer.handle}`} icon={<UserRound size={20} />} title="Profile and username" detail="Name, @username, bio and photo — edit from your profile" />
       ) : (
         <DisplayNameRow />
       )}
-      {dataSource.interests && <LinkRow to="/settings/interests" icon={<Shapes size={20} />} title="Interests" detail="Personalize your Amigo experience" />}
+    </Section>
+  );
+}
+
+// ------------------------------------------------- Content and display
+
+function ContentSection() {
+  const { preference, setPreference } = useTheme();
+  return (
+    <Section id="set-content" title="Content and display">
+      {dataSource.interests && <LinkRow to="/settings/interests" icon={<Shapes size={20} />} title="Interests" detail="What you'd like to see more of" />}
       {dataSource.postTools && <LinkRow to="/bookmarks" icon={<Bookmark size={20} />} title="Bookmarks" detail="Posts you saved. Only you can see them" />}
+      <div className="settings-panel">
+        <p className="settings-panel__label" id="set-theme">Theme</p>
+        <div className="segmented" role="radiogroup" aria-labelledby="set-theme">
+          {THEMES.map(({ id, label, icon: Icon }) => (
+            <button key={id} type="button" role="radio" aria-checked={preference === id} className="segmented__opt" onClick={() => setPreference(id)}>
+              <Icon size={16} aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </Section>
+  );
+}
+
+// ---------------------------------------------- Business and creators
+
+/** Hidden when there's nothing to show (business pages off and no Creator Programme). */
+function BusinessCreatorSection() {
+  const { state } = useMyBusiness();
+  const business = !!state?.business || !!state?.enabled;
+  if (!business && !dataSource.creatorProgramme) return null;
+  return (
+    <Section id="set-business" title="Business and creators">
       <BusinessRow />
       {dataSource.creatorProgramme && (
-        <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator Monetization" detail="Creator Programme (early access) — apply, status and your dashboard" />
+        <LinkRow to="/settings/monetization" icon={<Sparkles size={20} />} title="Creator Programme" detail="Early access: apply, check your status and see your dashboard" />
       )}
-      {isAdmin && <LinkRow to="/admin" icon={<ShieldCheck size={20} />} title="Amigo admin" detail="Moderation, verification and support tools" />}
-      {dataSource.deleteAccount && <DeleteAccountRow />}
     </Section>
   );
 }
@@ -339,9 +381,8 @@ function VerifyEmailPanel({ email }: { email: string }) {
 /** How visibility works today — explanations, not toggles (there are no account-wide privacy switches yet). */
 function PrivacySection() {
   return (
-    <Section id="set-privacy" title="Privacy">
-      <InfoRow icon={<Eye size={20} />} title="Profile" detail="Your profile, followers and public posts are visible to people on Amigo." />
-      <InfoRow icon={<Users size={20} />} title="Who sees what you share" detail="Posts are public. For a Moment, you choose Everyone or Followers each time." />
+    <Section id="set-privacy" title="Privacy and safety">
+      <InfoRow icon={<Eye size={20} />} title="Who can see you" detail="Your profile, followers and posts are visible to people on Amigo. For a Moment, you choose Everyone or Followers each time." />
       {dataSource.messages && <InfoRow icon={<KeyRound size={20} />} title="Messages" detail="End-to-end encrypted. Only your devices can read them." />}
       {dataSource.blocking && <LinkRow to="/settings/blocked" icon={<Ban size={20} />} title="Blocked accounts" detail="People you blocked can't message you, follow you, or see or reply to your posts. They aren't told" />}
     </Section>
@@ -350,7 +391,7 @@ function PrivacySection() {
 
 // ---------------------------------------------------------------- Security
 
-function SecuritySection({ onSignOut }: { onSignOut: () => void }) {
+function SecuritySection() {
   const { devices, newDevices } = useSecurity();
   const [changing, setChanging] = useState(false);
 
@@ -375,7 +416,6 @@ function SecuritySection({ onSignOut }: { onSignOut: () => void }) {
           <LinkRow to="/settings/backup" icon={<KeyRound size={20} />} title="Message backup" detail="Restore your message history with a recovery key" />
         </>
       )}
-      <ButtonRow icon={<LogOut size={20} />} title="Sign out" detail="Sign out on this device" onClick={onSignOut} danger />
     </Section>
   );
 }
@@ -476,56 +516,14 @@ function ChangePasswordPanel({ onDone }: { onDone: () => void }) {
 // ----------------------------------------------------------- Notifications
 
 function NotificationsSection() {
-  const { unread, markAllRead } = useUnread();
-  const toast = useToast();
-  const [marking, setMarking] = useState(false);
-
   return (
     <Section id="set-notifications" title="Notifications">
-      <LinkRow
-        to="/notifications"
-        icon={<Bell size={20} />}
-        title="Activity"
-        detail={unread ? `${unread} unread` : "Follows, likes, replies and mentions"}
-      />
-      <ButtonRow
-        icon={<BellOff size={20} />}
-        title="Mark all as read"
-        detail={unread ? "Clear your unread badge" : "You're all caught up"}
-        onClick={async () => {
-          if (!unread || marking) return;
-          setMarking(true);
-          await markAllRead().catch(() => toast("Couldn't update notifications", "error"));
-          setMarking(false);
-        }}
-        trailing={marking ? <span className="btn__spinner settings-row__spin" aria-hidden="true" /> : null}
-      />
       <LinkRow
         to="/settings/notifications"
         icon={<BellRing size={20} />}
         title="Notification settings"
-        detail={dataSource.push ? "Banners, sounds and push notifications" : "Banners and sounds"}
+        detail={dataSource.push ? "What you're told about, banners, sounds and push" : "What you're told about, banners and sounds"}
       />
-    </Section>
-  );
-}
-
-// -------------------------------------------------------------- Appearance
-
-function AppearanceSection() {
-  const { preference, setPreference } = useTheme();
-  return (
-    <Section id="set-appearance" title="Appearance">
-      <div className="settings-panel">
-        <div className="segmented" role="radiogroup" aria-labelledby="set-appearance">
-          {THEMES.map(({ id, label, icon: Icon }) => (
-            <button key={id} type="button" role="radio" aria-checked={preference === id} className="segmented__opt" onClick={() => setPreference(id)}>
-              <Icon size={16} aria-hidden="true" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
     </Section>
   );
 }
@@ -535,17 +533,13 @@ function AppearanceSection() {
 function AboutSection() {
   const [resetting, setResetting] = useState(false);
   return (
-    <Section id="set-about" title="About">
+    <Section id="set-about" title="Help and about">
       <InfoRow icon={<Info size={20} />} title="Amigo World" detail={`Version ${__APP_VERSION__} · ${BACKEND_LABEL[dataSource.kind] ?? dataSource.kind}`} />
       <a href={CREATOR.url} target="_blank" rel="noopener noreferrer" className="settings-row settings-row--action">
         <Row
           icon={<img src={CREATOR.logo} alt="" width={24} height={24} className="settings-row__logo" />}
           title={`Built by ${CREATOR.name} · ${CREATOR.studio}`}
-          detail={
-            <>
-              {CREATOR.about} More at <span style={{ whiteSpace: "nowrap" }}>{CREATOR.url.replace("https://", "")}</span>
-            </>
-          }
+          detail={CREATOR.url.replace("https://", "")}
           trailing={<ChevronRight size={18} className="settings-row__chev" aria-hidden="true" />}
         />
       </a>

@@ -86,7 +86,11 @@ async function enter(p) {
   await p.page.goto(BASE, { waitUntil: "load" });
   const agree = p.page.getByRole("button", { name: "I agree" });
   await agree.waitFor({ timeout: 20000 }).catch(() => undefined);
-  if (await agree.isVisible().catch(() => false)) await agree.click();
+  if (await agree.isVisible().catch(() => false)) {
+    // Since the 18+ change, "I agree" needs the age box ticked first.
+    await p.page.locator(".legal-gate__age input").check().catch(() => undefined);
+    await agree.click();
+  }
   await p.page.locator(".bottom-create").waitFor();
 }
 function kind(url) {

@@ -64,3 +64,15 @@
   color: var(--text-3);
   font-size: var(--text-sm);
 }
+
+/* A field's own error message, and the matching outline. */
+.auth-field__error {
+  margin: 6px 2px 0;
+  color: var(--danger, #ff6b5a);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.auth-field__input[aria-invalid="true"] {
+  border-color: var(--danger, #ff6b5a);
+}

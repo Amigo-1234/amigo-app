@@ -109,6 +109,8 @@ try {
     const agree = page.getByRole("button", { name: "I agree" });
     await agree.waitFor({ timeout: 8000 }).catch(() => undefined);
     if (await agree.isVisible().catch(() => false)) {
+      // Since the 18+ change, "I agree" needs the age box ticked first.
+      await page.locator(".legal-gate__age input").check().catch(() => undefined);
       await agree.click();
       await agree.waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
     }

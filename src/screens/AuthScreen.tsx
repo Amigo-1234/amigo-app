@@ -71,8 +71,11 @@ export default function AuthScreen() {
   const [entering, setEntering] = useState(false);
   const [error, setError] = useState<string | null>(takeSocialError);
   const [notice, setNotice] = useState<string | null>(null);
-  const [agreeTerms, setAgreeTerms] = useState(false);
-  const [agreePrivacy, setAgreePrivacy] = useState(false);
+  // One tick covers age, Terms, Guidelines and Privacy Policy; both documents are still recorded as accepted.
+  const [agree, setAgree] = useState(false);
+  // Field messages show once someone tries to continue, not while they're still typing.
+  const [attempted, setAttempted] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const [versions, setVersions] = useState({ terms: BUNDLED_VERSION.terms, privacy: BUNDLED_VERSION.privacy });
   useEffect(() => {
     void legalCurrent().then((list) => {
@@ -85,6 +88,7 @@ export default function AuthScreen() {
 
   const go = (next: Step) => {
     setStep(next);
+    setAttempted(false);
     setError(null);
     setNotice(null);
     if (next !== "resetCode") setCode("");
@@ -112,6 +116,12 @@ export default function AuthScreen() {
 
   function submit(e: FormEvent) {
     e.preventDefault();
+    if (Object.keys(problems).length) {
+      setAttempted(true);
+      // Move to the first thing that needs fixing (after the messages render).
+      requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus());
+      return;
+    }
     switch (step) {
       case "signIn":
         return run(() => dataSource.signIn(trimmedEmail, password), { entering: true });
@@ -163,7 +173,21 @@ export default function AuthScreen() {
   if (entering) return <LoadingScreen label="Signing you in" message={step === "signUp" ? "Creating your account…" : "Signing you in…"} />;
 
   const tabs = step === "signIn" || step === "signUp";
-  const passwordOk = password.length >= MIN_PASSWORD;
+  const newPassword = step === "signUp" || step === "resetCode";
+  const missing = MIN_PASSWORD - password.length;
+  // What's still needed, per field. Shown only after a first attempt to continue.
+  const problems: Partial<Record<"name" | "email" | "password" | "code" | "agree", string>> = {};
+  if (step === "signUp" && !name.trim()) problems.name = "Enter your name. It's shown on your profile.";
+  if (step !== "resetCode") {
+    if (!trimmedEmail) problems.email = "Enter your email address.";
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) problems.email = "That doesn't look like a valid email address.";
+  }
+  if (step === "signIn" && !password) problems.password = "Enter your password.";
+  if (newPassword && missing > 0) problems.password = `Use at least ${MIN_PASSWORD} characters${password ? ` (${missing} more)` : ""}.`;
+  if (step === "resetCode" && code.length < 4) problems.code = "Enter the code from your email.";
+  if (step === "signUp" && !agree) problems.agree = `Please confirm you're ${MIN_AGE} or older and agree to continue.`;
+  const shown = attempted ? problems : {};
+  const passwordHint = !newPassword ? undefined : !password ? `At least ${MIN_PASSWORD} characters.` : missing > 0 ? `${missing} more character${missing === 1 ? "" : "s"} needed.` : "Good length.";
 
   return (
     <AuthLayout stepKey={step}>
@@ -244,9 +268,9 @@ export default function AuthScreen() {
       )}
 
       {step !== "resetSent" && step !== "resetDone" && (
-        <form className="auth__form" onSubmit={submit} noValidate aria-busy={busy}>
+        <form ref={formRef} className="auth__form" onSubmit={submit} noValidate aria-busy={busy}>
           {step === "signUp" && (
-            <AuthField label="Name" value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={40} required />
+            <AuthField label="Your name" hint="Shown on your profile. You can change it later." error={shown.name} value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" maxLength={40} required />
           )}
           {step !== "resetCode" && (
             <AuthField
@@ -258,15 +282,17 @@ export default function AuthScreen() {
               spellCheck={false}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              error={shown.email}
               required
             />
           )}
-          {step === "resetCode" && <CodeField label="Code from your email" value={code} onChange={setCode} autoFocus />}
+          {step === "resetCode" && <CodeField label="Code from your email" value={code} onChange={setCode} autoFocus error={shown.code} />}
           {(step === "signIn" || step === "signUp" || step === "resetCode") && (
             <PasswordField
               label={step === "resetCode" ? "New password" : "Password"}
               autoComplete={step === "signIn" ? "current-password" : "new-password"}
-              hint={step === "signIn" ? undefined : `At least ${MIN_PASSWORD} characters.`}
+              hint={passwordHint}
+              error={shown.password}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -276,9 +302,9 @@ export default function AuthScreen() {
           {step === "signUp" && (
             <div className="auth-consent">
               <label className="auth-check">
-                <input type="checkbox" checked={agreeTerms} onChange={(e) => setAgreeTerms(e.target.checked)} required />
+                <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} aria-invalid={shown.agree ? true : undefined} required />
                 <span>
-                  I'm {MIN_AGE} or older and I agree to the{" "}
+                  I'm {MIN_AGE} or older. I agree to the{" "}
                   <Link to="/legal/terms" target="_blank" rel="noopener">
                     Terms of Service
                   </Link>{" "}
@@ -286,19 +312,18 @@ export default function AuthScreen() {
                   <Link to="/legal/guidelines" target="_blank" rel="noopener">
                     Community Guidelines
                   </Link>
-                  .
-                </span>
-              </label>
-              <label className="auth-check">
-                <input type="checkbox" checked={agreePrivacy} onChange={(e) => setAgreePrivacy(e.target.checked)} required />
-                <span>
-                  I've read the{" "}
+                  , and I've read the{" "}
                   <Link to="/legal/privacy" target="_blank" rel="noopener">
                     Privacy Policy
                   </Link>
-                  , including how encrypted messages and reports work.
+                  .
                 </span>
               </label>
+              {shown.agree && (
+                <p className="auth-field__error" role="alert">
+                  {shown.agree}
+                </p>
+              )}
             </div>
           )}
 
@@ -318,13 +343,7 @@ export default function AuthScreen() {
             size="lg"
             block
             loading={busy}
-            disabled={
-              busy ||
-              (step !== "resetCode" && !trimmedEmail) ||
-              (step === "signIn" && !password) ||
-              (step === "signUp" && (!name.trim() || !passwordOk || !agreeTerms || !agreePrivacy)) ||
-              (step === "resetCode" && (code.length < 4 || !passwordOk))
-            }
+            disabled={busy}
           >
             {step === "signIn" ? "Sign in" : step === "signUp" ? "Create account" : step === "reset" ? (codeReset ? "Send code" : "Send reset link") : "Set new password"}
           </Button>

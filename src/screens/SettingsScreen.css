@@ -394,3 +394,11 @@ label.settings-row {
   color: var(--text-3);
   font-size: var(--text-xs);
 }
+
+/* A small heading inside a panel (e.g. "Theme"). */
+.settings-panel__label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-2);
+}

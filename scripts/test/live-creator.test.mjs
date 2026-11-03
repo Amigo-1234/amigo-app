@@ -120,9 +120,9 @@ try {
     await agree.waitFor({ state: "detached", timeout: 15000 }).catch(() => undefined);
   }
   await page.goto(`${BASE}/settings`, { waitUntil: "load" });
-  const entry = page.getByRole("link", { name: /Creator Monetization/ });
+  const entry = page.getByRole("link", { name: /Creator Programme/ });
   await entry.waitFor({ timeout: 20000 }).catch(() => undefined);
-  ok("Settings shows Creator Monetization", await entry.isVisible().catch(() => false));
+  ok("Settings shows the Creator Programme", await entry.isVisible().catch(() => false));
   await entry.click();
   await page.getByText("Your creativity deserves opportunities.").waitFor().catch(() => undefined);
   ok("intro and early-access notice", await page.getByText(/Approval does not guarantee earnings, and payments are not available yet/).isVisible().catch(() => false));

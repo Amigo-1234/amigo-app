@@ -266,8 +266,25 @@ Everything below leaves the main app (`amigo-app`, amigoworld.com.ng) untouched:
   - amigoworld.com.ng → 200.
   - Minor, cosmetic: unknown paths show Vercel's plain 404 instead of the page; the rule meant to show the page there isn't taking effect.
 - **Prepared, not deployed (3 Nov):** `reserve/public/privacy.html`, the reservation Privacy Notice v1.0. It's built from the Privacy 0.2 draft: operator Muftau Idris, contact olamidesamson841@gmail.com, 18+, 180 days, renewal in the final 30 days, deletion 30 days after a reservation ends, abuse-prevention fingerprints kept for at most 2 days, the processors, and your rights. The page's footer now links to `/privacy` ("Privacy Notice & reservation rules") instead of the main app's 0.1 policy and Terms. The rule for unknown paths now points to `/` so they show the page. Shipping both needs an amigo-reserve deploy, with your approval. **Wording approved by the owner on 3 Nov 2026.**
+- **Notice live (3 Nov 2026):** commit `1184e41`, Production deployment `dpl_Gr7TL5orBUzrdUt6QsPEhrdStR5x`.
+  - `/privacy` shows the notice (`/privacy.html` redirects there), and the main page's footer links to it.
+  - Unknown paths now show the reservation page. Main-app routes either return 404 or just show that page; the app itself is never served.
+  - `GET /api/reserve` → `open:false`; another site's origin → 403; a start → 403 "closed".
+  - Database: closed, 0 reservations, usernames unchanged. amigoworld.com.ng → 200.
+  - Rollback target if needed: `dpl_G9GfQgri96A9k9Ywp3oNcbTuiJRK`.
+- **Turnstile on (3 Nov 2026):** the owner created a Managed widget for `reserve.amigoworld.com.ng` and added `TURNSTILE_SECRET` and `TURNSTILE_SITE_KEY` (Production only). Redeploy `dpl_eAVsKSAk7JrT9ZqFvb5CoTAbUMMa`, same commit `1184e41`.
+  - **Outage:** a Vercel account-level billing block ("402 DEPLOYMENT_DISABLED") took both projects offline until about 07:20 UTC. The owner fixed it in Vercel; no deploys or code were involved.
+  - **Checks afterwards:** the route returns a live Cloudflare site key (`0x…`, not a test key). The content policy allows `challenges.cloudflare.com` for scripts and frames. Code requests with no token or an invalid token → 400 "challenge", stopped before any database or email work. Name checks still work. Another site's origin → 403. Database: closed, 0 reservations, no start attempts logged, usernames unchanged.
+  - **Still unproven:** whether the secret matches the site key. An invalid token is refused either way; the first real reservation will prove it (or fail with "challenge" if they don't match).
 
 **Viewing reservations (usernames, emails, expiry):** Admin → Reservations is part of the main app update (`7061af6`). It goes live when you approve deploying the main app; that's a separate decision, not needed for the reservation page. Until then I can show you the same list, read-only, from the database whenever you ask. The emails are visible only to you and never written to the audit log.
+
+**RESERVATIONS OPEN — 3 Nov 2026, 07:22:31 UTC** (owner's approval): Production `reservation_settings` set to open, 180 days, 1 per email, with an audit-log entry. The live route reports `open:true`; a request without a Turnstile token is still refused; 0 reservations at opening; usernames unchanged; amigoworld.com.ng → 200. To close: set `open = false` (instant).
+
+**Admin → Reservations live (3 Nov 2026):** branch `release/admin-reservations`, commit `43a0b3d`. It's the live d718521 plus only the 11 app files from 7061af6: no navigation or 18+ changes, and no database, `vercel.json`, API or package changes. amigo-app Production deployment `dpl_J6MhGxzgxfMnhDrP3u9eeYTP7agt` serves amigoworld.com.ng.
+- **Checks:** the site, `/admin/reservations` and the sign-in service → 200; the admin bundle contains the Reservations section; the new navigation is absent; the reserve site is unaffected (`open:true`, Turnstile on); 0 reservations; usernames unchanged.
+- **Only admin:** `@amigoisaboy` (the owner account).
+- **Rollback:** promote `dpl_5GWRjt6aS7MAQp3fZvQY4wXocNM9` (d718521).
 
 ## 8. Rollback
 - **Reservation page problem:** close reservations (instant), or redeploy the previous amigo-reserve deployment, or remove the domain from amigo-reserve. The main app is unaffected throughout.

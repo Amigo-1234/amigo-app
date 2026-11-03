@@ -224,23 +224,29 @@ function ProfileHeader({
 }) {
   return (
     <section className="profile" aria-label={`${profile.name}'s profile`}>
+      {/* Photo and the three counts: the numbers people look for first. */}
       <div className="profile__top">
         <ProfileAvatar profile={profile} />
-        <div className="profile__action">
-          {profile.isViewer ? (
-            <Button variant="secondary" size="sm" onClick={onEdit}>
-              Edit profile
-            </Button>
-          ) : blocked ? (
-            <UnblockButton profile={profile} onDone={() => onBlockChange(false)} />
-          ) : (
-            <>
-              {messagesEnabled && <MessageButton profile={profile} />}
-              <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} followsYou={profile.followsViewer} size="md" onChange={onFollowChange} />
-              <ProfileOptions id={profile.id} handle={profile.handle} onBlocked={() => onBlockChange(true)} />
-            </>
-          )}
-        </div>
+        <ul className="profile__stats" aria-label="Activity">
+          <li>
+            <span className="profile__stat">
+              <strong>{formatCount(profile.postCount)}</strong>
+              <span>{profile.postCount === 1 ? "post" : "posts"}</span>
+            </span>
+          </li>
+          <li>
+            <Link className="profile__stat" to={`/u/${profile.handle}/followers`}>
+              <strong>{formatCount(profile.followerCount)}</strong>
+              <span>{profile.followerCount === 1 ? "follower" : "followers"}</span>
+            </Link>
+          </li>
+          <li>
+            <Link className="profile__stat" to={`/u/${profile.handle}/following`}>
+              <strong>{formatCount(profile.followingCount)}</strong>
+              <span>following</span>
+            </Link>
+          </li>
+        </ul>
       </div>
 
       <h2 className="profile__name">
@@ -264,31 +270,32 @@ function ProfileHeader({
         )
       )}
 
-      {profile.joinedAt && (
-        <p className="profile__meta">
-          <CalendarDays size={15} aria-hidden="true" />
-          Joined {joined.format(profile.joinedAt)}
-        </p>
-      )}
-
-      <ul className="profile__stats">
-        <li>
-          <Link to={`/u/${profile.handle}/following`}>
-            <strong>{formatCount(profile.followingCount)}</strong> following
-          </Link>
-        </li>
-        <li>
-          <Link to={`/u/${profile.handle}/followers`}>
-            <strong>{formatCount(profile.followerCount)}</strong> {profile.followerCount === 1 ? "follower" : "followers"}
-          </Link>
-        </li>
-        <li>
+      <div className="profile__meta">
+        {profile.joinedAt && (
           <span>
-            <strong>{formatCount(profile.postCount)}</strong> {profile.postCount === 1 ? "post" : "posts"}
+            <CalendarDays size={15} aria-hidden="true" />
+            Joined {joined.format(profile.joinedAt)}
           </span>
-        </li>
-      </ul>
-      <SupportStat profile={profile} />
+        )}
+        <SupportStat profile={profile} />
+      </div>
+
+      {/* Actions span the width so they always fit on a phone. */}
+      <div className="profile__actions">
+        {profile.isViewer ? (
+          <Button variant="secondary" size="md" onClick={onEdit}>
+            Edit profile
+          </Button>
+        ) : blocked ? (
+          <UnblockButton profile={profile} onDone={() => onBlockChange(false)} />
+        ) : (
+          <>
+            <FollowButton personId={profile.id} personName={profile.name} following={profile.viewerFollows} followsYou={profile.followsViewer} size="md" onChange={onFollowChange} />
+            {messagesEnabled && <MessageButton profile={profile} />}
+            <ProfileOptions id={profile.id} handle={profile.handle} onBlocked={() => onBlockChange(true)} />
+          </>
+        )}
+      </div>
     </section>
   );
 }
@@ -305,15 +312,12 @@ function SupportStat({ profile }: { profile: Profile }) {
     };
   }, [profile.id]);
   if (!stats || (!stats.helpedCount && !stats.reputation && !stats.activeRequests)) return null;
-  const parts = [
-    <span key="h">Helped <strong>{stats.helpedCount}</strong> {stats.helpedCount === 1 ? "person" : "people"}</span>,
-    <span key="r"><strong>{stats.reputation}</strong> Support reputation</span>,
-  ];
-  if (stats.activeRequests) parts.push(<span key="a"><strong>{stats.activeRequests}</strong> active {stats.activeRequests === 1 ? "request" : "requests"}</span>);
+  const parts = [`helped ${stats.helpedCount}`, `${stats.reputation} reputation`];
+  if (stats.activeRequests) parts.push(`${stats.activeRequests} active ${stats.activeRequests === 1 ? "request" : "requests"}`);
   return (
     <Link to={profile.isViewer ? "/support?section=mine" : "/support"} className="profile__support" aria-label={`Support Hub: helped ${stats.helpedCount}, reputation ${stats.reputation}, ${stats.activeRequests} active requests`}>
       <HandHeart size={15} aria-hidden="true" />
-      {parts.flatMap((p, i) => (i ? [<span key={`d${i}`} aria-hidden="true">·</span>, p] : [p]))}
+      Support Hub: {parts.join(", ")}
     </Link>
   );
 }
@@ -382,12 +386,24 @@ function ProfileTabs({ profile }: { profile: Profile }) {
 function HeaderSkeleton() {
   return (
     <div className="profile" aria-hidden="true">
-      <Skeleton width={88} height={88} radius="50%" />
+      <div className="profile__top">
+        <Skeleton width={88} height={88} radius="50%" />
+        <div className="profile__stats">
+          {[0, 1, 2].map((i) => (
+            <div key={i} style={{ display: "grid", justifyItems: "center", gap: 6 }}>
+              <Skeleton width={28} height={16} />
+              <Skeleton width={56} height={10} />
+            </div>
+          ))}
+        </div>
+      </div>
       <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
         <Skeleton width={180} height={20} />
         <Skeleton width={110} height={12} />
         <Skeleton width="70%" height={12} />
-        <Skeleton width={220} height={12} />
+      </div>
+      <div className="profile__actions">
+        <Skeleton width="100%" height={40} radius="12px" />
       </div>
     </div>
   );
