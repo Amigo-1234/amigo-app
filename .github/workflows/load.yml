@@ -1,0 +1,21 @@
+# Bounded load test against a deployed environment (real Neon). Runs when
+# .github/load.run changes; its first line is the target URL, the second the levels.
+# Only temporary accounts are used; the script deletes them at the end.
+name: load
+on:
+  push:
+    branches: [claude/amigo-world-restart-7mrbrf]
+    paths: [.github/load.run]
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Load test
+        env:
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: BASE=$(sed -n 1p .github/load.run) LEVELS=$(sed -n 2p .github/load.run) DURATION=60 node scripts/test/load-test.mjs

@@ -1,0 +1,26 @@
+# Conversation-open latency on throttled mobile networks against the branch preview.
+# Runs when .github/dm-open.run changes (line 1 = label). Creates and deletes its own test accounts.
+name: dm-open-perf
+on:
+  push:
+    branches: [claude/amigo-world-restart-7mrbrf]
+    paths: [.github/dm-open.run]
+jobs:
+  dm-open:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Measure
+        env:
+          BASE: https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: node scripts/test/dm-open-perf.mjs
+      - name: Results
+        if: always()
+        run: cat dm-open.json || true

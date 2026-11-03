@@ -1,0 +1,24 @@
+# A World's whole life on two phones against the branch preview (see scripts/test/live-worlds.test.mjs).
+# Runs when .github/live-worlds.run changes; its first line is the slug of a test World the
+# operator created for the run (and deletes afterwards). Temporary accounts only.
+name: live-worlds
+on:
+  push:
+    branches: [claude/amigo-world-restart-7mrbrf]
+    paths: [.github/live-worlds.run]
+jobs:
+  live-worlds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: Live Worlds test
+        env:
+          BASE: https://amigo-app-git-claude-amigo-worl-d67e9b-amigos-projects-73fa05d5.vercel.app
+          VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: WORLD=$(head -1 .github/live-worlds.run) node scripts/test/live-worlds.test.mjs

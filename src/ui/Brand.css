@@ -1,0 +1,19 @@
+.amigo-mark {
+  flex: none;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.wordmark__text {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 1.5rem;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  font-variation-settings: "wdth" 90;
+  padding-bottom: 2px;
+}

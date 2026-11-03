@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Only the public pages: everything else needs a sign-in. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://amigoworld.com.ng/</loc></url>
+  <url><loc>https://amigoworld.com.ng/legal/terms</loc></url>
+  <url><loc>https://amigoworld.com.ng/legal/privacy</loc></url>
+  <url><loc>https://amigoworld.com.ng/legal/guidelines</loc></url>
+  <url><loc>https://amigoworld.com.ng/legal/copyright</loc></url>
+  <url><loc>https://amigoworld.com.ng/legal/deletion</loc></url>
+  <url><loc>https://amigoworld.com.ng/legal/cookies</loc></url>
+  <url><loc>https://amigoworld.com.ng/legal/monetization</loc></url>
+</urlset>

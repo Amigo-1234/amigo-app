@@ -1,0 +1,39 @@
+# Production smoke test of the redesigned app on the main domain (real Neon + R2).
+# Runs when .github/prod-smoke.run changes on this branch. Temporary test accounts
+# are created and deleted by the tests themselves; nothing else is changed.
+name: prod-smoke
+on:
+  push:
+    branches: [claude/amigo-world-restart-7mrbrf]
+    paths: [.github/prod-smoke.run]
+jobs:
+  prod-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BASE: https://amigo-app-one.vercel.app
+      VERCEL_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Exposure checks (read-only)
+        run: mkdir -p results && node scripts/test/prod-exposure.test.mjs 2>&1 | tee results/1-exposure.txt; exit ${PIPESTATUS[0]}
+      - name: Auth, posts, profiles, photos, Moments, encrypted messages (API)
+        if: always()
+        run: node scripts/test/live-media.test.mjs 2>&1 | tee results/2-api.txt; exit ${PIPESTATUS[0]}
+      - name: Install Playwright (runner only)
+        if: always()
+        run: npm i --no-save playwright@1.55.0 && npx playwright install --with-deps chromium
+      - name: iPhone browser test
+        if: always()
+        timeout-minutes: 12
+        env:
+          SHOTS: shots
+        run: mkdir -p shots && node scripts/test/live-mobile.test.mjs 2>&1 | tee results/3-iphone.txt; exit ${PIPESTATUS[0]}
+      - name: Summary
+        if: always()
+        run: for f in results/*.txt; do echo "=== $f"; grep -E "^(ok  |FAIL|info|cleanup|error|ALL|[0-9]+ FAILED)" "$f"; done
