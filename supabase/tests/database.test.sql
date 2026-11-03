@@ -2101,5 +2101,71 @@ select pg_temp.check('housekeeping: closed over 30 days ago → deleted with its
   and (select status = 'expired' and closed_at is not null from public.username_reservations where username = 'old_hold'));
 select pg_temp.q(:D, $$select public.admin_set_reservation_settings(false, 180, 1)::text$$);
 
+-- ------------------------------------------------------------ post views (20261104090000)
+
+delete from public.account_suspensions where user_id in (:A, :B, :C, :D);
+delete from public.user_blocks where blocker_id in (:A, :B, :C, :D) or blocked_id in (:A, :B, :C, :D);
+delete from public.follows where followee_id = :A and follower_id in (:B, :C, :D);
+create temp table pv (k text primary key, v uuid);
+grant all on pv to public;
+with x as (insert into public.posts (author_id, body) values (:A, 'views: public') returning id)
+insert into pv select 'pub', id from x;
+with x as (insert into public.posts (author_id, body, visibility) values (:A, 'views: followers only', 'followers') returning id)
+insert into pv select 'fol', id from x;
+create function pg_temp.pv(p_key text) returns uuid language sql as $$ select v from pv where k = p_key $$;
+create function pg_temp.views(p_key text) returns integer language sql as $$
+  select coalesce((select views from public.post_view_counts where post_id = pg_temp.pv(p_key)), 0) $$;
+-- Records p_key as seen by p_uid; answers how many were newly counted.
+create function pg_temp.see(p_uid uuid, p_key text) returns integer language sql as $$
+  select pg_temp.q(p_uid, format($q$select cardinality(public.record_post_views(array[%L]::uuid[]))::text$q$, pg_temp.pv(p_key)))::integer $$;
+create function pg_temp.totals(p_uid uuid, p_key text) returns jsonb language sql as $$
+  select pg_temp.q(p_uid, format($q$select public.post_view_totals(array[%L]::uuid[])::text$q$, pg_temp.pv(p_key)))::jsonb $$;
+
+select pg_temp.check('views: the switch starts off', not public.feature_enabled('post_views'));
+select pg_temp.check('views: nothing is recorded while switched off',
+  pg_temp.see(:B, 'pub') = 0 and pg_temp.views('pub') = 0 and not exists (select 1 from public.post_views));
+select pg_temp.check('views: no totals while switched off', pg_temp.totals(:B, 'pub') = '{"on": false}'::jsonb);
+
+update public.app_features set enabled = true where key = 'post_views';
+select pg_temp.check('views: a viewer counts once', pg_temp.see(:B, 'pub') = 1 and pg_temp.views('pub') = 1);
+select pg_temp.check('views: seeing it again adds nothing', pg_temp.see(:B, 'pub') = 0 and pg_temp.views('pub') = 1);
+select pg_temp.check('views: the same post twice in one request counts once',
+  pg_temp.q(:C, format($$select cardinality(public.record_post_views(array[%L, %L]::uuid[]))::text$$, pg_temp.pv('pub'), pg_temp.pv('pub'))) = '1'
+  and pg_temp.views('pub') = 2);
+select pg_temp.check('views: the author''s own views don''t count', pg_temp.see(:A, 'pub') = 0 and pg_temp.views('pub') = 2);
+select pg_temp.must_fail('views: signed-out visitors can''t record', null,
+  format($$select public.record_post_views(array[%L]::uuid[])$$, pg_temp.pv('pub')), '42501');
+select pg_temp.must_fail('views: signed-out visitors get no totals', null,
+  format($$select public.post_view_totals(array[%L]::uuid[])$$, pg_temp.pv('pub')), '42501');
+select pg_temp.check('views: a followers-only post you can''t see isn''t counted', pg_temp.see(:D, 'fol') = 0 and pg_temp.views('fol') = 0);
+select pg_temp.check('views: ...nor its total shown', pg_temp.totals(:D, 'fol') = '{"on": true, "counts": {}}'::jsonb);
+insert into public.follows (follower_id, followee_id) values (:C, :A);
+select pg_temp.check('views: followers-only posts count for followers', pg_temp.see(:C, 'fol') = 1 and pg_temp.views('fol') = 1);
+insert into public.user_blocks (blocker_id, blocked_id) values (:A, :D);
+select pg_temp.check('views: blocked people aren''t counted', pg_temp.see(:D, 'pub') = 0 and pg_temp.views('pub') = 2);
+select pg_temp.check('views: blocked people get no totals', pg_temp.totals(:D, 'pub') = '{"on": true, "counts": {}}'::jsonb);
+delete from public.user_blocks where blocker_id = :A and blocked_id = :D;
+insert into public.account_suspensions (user_id, reason) values (:D, 'test');
+select pg_temp.check('views: suspended accounts aren''t counted', pg_temp.see(:D, 'pub') = 0 and pg_temp.views('pub') = 2);
+delete from public.account_suspensions where user_id = :D;
+select pg_temp.check('views: totals show for posts you can see', (pg_temp.totals(:B, 'pub') -> 'counts' ->> pg_temp.pv('pub')::text) = '2');
+select pg_temp.must_fail('views: at most 50 posts a request', :B,
+  $$select public.record_post_views(array_fill('00000000-0000-0000-0000-000000000001'::uuid, array[51]))$$, '22023');
+select pg_temp.must_fail('views: who viewed what isn''t readable', :A, $$select count(*) from public.post_views$$, '42501');
+select pg_temp.must_fail('views: totals can''t be edited directly', :A,
+  format($$update public.post_view_counts set views = 99999 where post_id = %L$$, pg_temp.pv('pub')), '42501');
+select pg_temp.must_fail('views: viewers can''t be added directly', :B,
+  format($$insert into public.post_views (post_id, viewer_id) values (%L, %L)$$, pg_temp.pv('fol'), :B), '42501');
+select pg_temp.check('views: no function lists viewers',
+  not exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public' and p.prosrc ilike '%public.post_views %' and p.proname <> 'record_post_views'));
+-- The daily limit: D has already added 2,000 views today.
+with made as (insert into public.posts (author_id, body) select :C, 'views: filler ' || g from generate_series(1, 2000) g returning id)
+insert into public.post_views (post_id, viewer_id) select id, :D from made;
+select pg_temp.check('views: after 2,000 new views in a day, more aren''t counted', pg_temp.see(:D, 'pub') = 0 and pg_temp.views('pub') = 2);
+update public.post_views set viewed_at = now() - interval '25 hours' where viewer_id = :D;
+select pg_temp.check('views: ...and counting resumes the next day', pg_temp.see(:D, 'pub') = 1 and pg_temp.views('pub') = 3);
+update public.app_features set enabled = false where key = 'post_views';
+
 rollback;
 \echo 'ALL DATABASE TESTS PASSED'

@@ -285,6 +285,16 @@
   margin-left: auto;
 }
 
+/* Not a button: just how many people have seen the post. */
+.action--views {
+  cursor: default;
+}
+
+.action--views:hover {
+  background: none;
+  color: var(--text-2);
+}
+
 .action--like.is-active {
   color: var(--accent);
 }

@@ -1,6 +1,6 @@
-import { memo, useState, type MouseEvent } from "react";
+import { memo, useRef, useState, type MouseEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { Bookmark, Heart, MessageCircle, Share, Orbit } from "lucide-react";
+import { Bookmark, Eye, Heart, MessageCircle, Share, Orbit } from "lucide-react";
 import type { Post } from "../../data";
 import { Avatar } from "../../ui/Avatar";
 import { formatCount } from "../../lib/format";
@@ -9,6 +9,7 @@ import { PostMedia } from "./PostMedia";
 import { RichText } from "./RichText";
 import { useMediaViewer } from "./MediaViewer";
 import { useLike, useSharePost } from "./usePostActions";
+import { usePostViews } from "./views";
 import { PostOptions, useBookmark } from "./PostOptions";
 import { profileHref } from "../profile/links";
 import { ListingPostCard } from "../marketplace/shared";
@@ -62,6 +63,9 @@ export const PostCard = memo(function PostCard({
   const { liked, count, toggle } = useLike(post);
   const bookmark = useBookmark(post);
   const [expanded, setExpanded] = useState(false);
+  const articleRef = useRef<HTMLElement>(null);
+  // Posts still being sent have no id on the server yet.
+  const views = usePostViews(articleRef, post.id, !pending);
 
   const focus = variant === "focus";
   const href = `/post/${post.id}`;
@@ -86,6 +90,7 @@ export const PostCard = memo(function PostCard({
 
   return (
     <article
+      ref={articleRef}
       className={`post post--${variant}${pending ? ` post--pending post--${pending.status}` : ""}`}
       aria-labelledby={nameId}
       aria-busy={pending?.status === "sending" || undefined}
@@ -218,6 +223,14 @@ export const PostCard = memo(function PostCard({
           <MessageCircle size={20} strokeWidth={1.9} aria-hidden="true" />
           <span className="action__count">{post.replyCount > 0 ? formatCount(post.replyCount) : ""}</span>
         </Link>
+
+        {views !== null && (
+          <span className="action action--views" title={`${views.toLocaleString()} ${views === 1 ? "view" : "views"}`}>
+            <Eye size={19} strokeWidth={1.9} aria-hidden="true" />
+            <span className="action__count" aria-hidden="true">{views > 0 ? formatCount(views) : ""}</span>
+            <span className="visually-hidden">{`${views} ${views === 1 ? "view" : "views"}`}</span>
+          </span>
+        )}
 
         <button className="action action--share" onClick={() => share(post)} aria-label="Share">
           <Share size={19} strokeWidth={1.9} aria-hidden="true" />

@@ -211,6 +211,41 @@ const author = (id: string): Author => {
   return { id: p.id, name: p.name, handle: p.handle, avatarUrl: p.avatarUrl, verified: verifications.has(p.id) };
 };
 
+/**
+ * View counts (on with ?demo=views): other people's posts start with a plausible total; you add
+ * one to each post you see once, never to your own.
+ */
+function demoPostViews(): NonNullable<DataSource["postViews"]> {
+  let on = scenario === "views";
+  const seen = new Set<string>();
+  const extra = new Map<string, number>();
+  const base = (r: PostRecord) => (r.authorId === "me" ? 0 : r.baseLikes * 9 + (r.id.length * 37) % 50);
+  const total = (r: PostRecord) => base(r) + (extra.get(r.id) ?? 0);
+  return {
+    totals: (ids) =>
+      later(() => {
+        if (!on) return { on: false, counts: new Map() };
+        const counts = new Map<string, number>();
+        for (const r of records) if (ids.includes(r.id) && total(r) > 0) counts.set(r.id, total(r));
+        return { on: true, counts };
+      }, 120),
+    record: (ids) =>
+      later(() => {
+        if (!on) return [];
+        const added = records.filter((r) => ids.includes(r.id) && r.authorId !== "me" && !seen.has(r.id)).map((r) => r.id);
+        for (const id of added) {
+          seen.add(id);
+          extra.set(id, (extra.get(id) ?? 0) + 1);
+        }
+        return added;
+      }, 120),
+    admin: {
+      enabled: () => later(() => on, 50),
+      setEnabled: (v) => later(() => void (on = v), 50),
+    },
+  };
+}
+
 const replyCount = (id: string) => records.filter((r) => r.parentId === id).length;
 
 function toPost(r: PostRecord): Post {
@@ -767,6 +802,7 @@ export const demoSource: DataSource = {
   },
 
   business: demoBusiness,
+  postViews: demoPostViews(),
   marketplace: createDemoMarketplace({ enabled: scenario === "market", viewer: () => viewerFromPerson(people.get("me")!), later, businesses: demoBusiness.bridge }),
 
   profiles: {

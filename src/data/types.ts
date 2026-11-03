@@ -1580,6 +1580,8 @@ export interface DataSource {
   business?: BusinessApi;
   /** Marketplace: business listings, search and saves (needs migration 20261102090000; off until an admin switches it on). */
   marketplace?: MarketplaceApi;
+  /** Post view counts (needs migration 20261104090000; off until an admin switches it on). */
+  postViews?: PostViewsApi;
   /** Claiming reserved usernames (newer databases). */
   usernames?: UsernamesApi;
   /** Creator monetization overview (coming soon; nothing financial). */
@@ -1771,6 +1773,23 @@ export interface BusinessApi {
   admin: {
     list(status: "all" | "active" | "suspended"): Promise<AdminBusiness[]>;
     setStatus(businessId: string, suspend: boolean, note: string): Promise<void>;
+    setEnabled(enabled: boolean): Promise<void>;
+  };
+}
+
+// ------------------------------------------------------------------ post views
+
+/**
+ * How many people have seen a post. Each signed-in account counts once per post; authors,
+ * signed-out visitors and suspended accounts don't count. Who viewed is never available.
+ */
+export interface PostViewsApi {
+  /** Whether counting is on, and totals for the posts you can see (posts without views are absent). */
+  totals(postIds: string[]): Promise<{ on: boolean; counts: Map<string, number> }>;
+  /** Records posts you've seen (at most 50 at a time); answers the ones newly counted. */
+  record(postIds: string[]): Promise<string[]>;
+  admin: {
+    enabled(): Promise<boolean>;
     setEnabled(enabled: boolean): Promise<void>;
   };
 }

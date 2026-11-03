@@ -18,6 +18,7 @@ import { createSupabaseMoments } from "./supabase/moments";
 import { createModeration } from "./supabase/moderation";
 import { businessIdOf, createBusinessApi } from "./supabase/business";
 import { createMarketplaceApi } from "./supabase/marketplace";
+import { createPostViewsApi } from "./supabase/postViews";
 import { createReservationsAdminApi, createUsernamesApi, usernameAvailable } from "./supabase/reservations";
 import { createMediaStore } from "./supabase/mediaStore";
 import { createPushApi } from "./supabase/push";
@@ -435,6 +436,9 @@ const business = isNeon && media ? createBusinessApi(supabase, media, invalidate
 // Marketplace needs migration 20261102090000 (listings, posts.listing_id); off until an admin switches it on.
 if (isNeon && media) q.enableListingCards();
 const marketplace = isNeon && media ? createMarketplaceApi(supabase, media, () => businessIdOf(), invalidate) : undefined;
+// Post view counts need migration 20261104090000; they're read separately from posts, so feeds
+// keep working (without counts) on a database that doesn't have it yet.
+const postViews = isNeon ? createPostViewsApi(supabase) : undefined;
 
 export const supabaseSource: DataSource = {
   kind: isNeon ? "neon" : "supabase",
@@ -917,6 +921,7 @@ export const supabaseSource: DataSource = {
   push: isNeon ? push : undefined,
   business,
   marketplace,
+  postViews,
   usernames: isNeon ? withViewerRefresh(createUsernamesApi(supabase)) : undefined,
 
   notifications: {
