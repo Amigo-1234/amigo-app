@@ -1,0 +1,31 @@
+{
+ "service": "Azure AI Speech",
+ "voice": "en-US-AndrewMultilingualNeural",
+ "style": "empathetic",
+ "prosody": {
+  "rate": "-6%",
+  "pitch": "-4%"
+ },
+ "region": "eastus",
+ "provenance": "voiceover/azure-andrew-warm/PROVENANCE.json",
+ "renderedAt": "2026-11-04T17:06:12.878Z",
+ "lines": {
+  "line01.wav": "2ce8d1f242e4b384d2d9d1ce77bbf354",
+  "line02.wav": "c67c27b7dc1daadac3e1022c85353f23",
+  "line03.wav": "d78ae63f147b7fc1edaa3a82b29ac77e",
+  "line04.wav": "7d4a3a75d898337b7d9150231069bc00",
+  "line05.wav": "9ef7669b78c497e1010f666ddd388709",
+  "line06.wav": "8c1f482c8f73e7180c7cfe16dbe6844f",
+  "line07.wav": "995ad43d628f8f8b77d10c0fb0058e8a",
+  "line08.wav": "627240dedf5f2120d6e6d89799a444d9",
+  "line09.wav": "c3ca5d0f3cffcba9bef1b21a68925f89",
+  "line10.wav": "a9cc7267c63db57e93f284d3c0d3bcd1",
+  "line11.wav": "f83941b6e4224254c727dec8619d5ed4",
+  "line12.wav": "4930ae88ab2db51decb9a0d69d2a7d9f",
+  "line13.wav": "4acc0932a7d9247a8d80dac9b59c44b5",
+  "line14.wav": "ad23c8bae44e810323fdf6e2df016f79",
+  "line15.wav": "8064e9ddc4d8cdb3433445eb7f8a89b8",
+  "line16.wav": "9ae49f0ebd76aa237ffe82097fcac5e6",
+  "line17.wav": "f22417e7522eb24300ded4aa2f1c5c27"
+ }
+}

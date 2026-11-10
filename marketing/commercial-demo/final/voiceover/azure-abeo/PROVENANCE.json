@@ -1,0 +1,116 @@
+{
+ "service": "Azure AI Speech (text to speech, REST)",
+ "region": "eastus",
+ "voice": "en-NG-AbeoNeural",
+ "prosody": {
+  "rate": "-10%",
+  "pitch": "-6Hz"
+ },
+ "outputFormat": "riff-48khz-16bit-mono-pcm",
+ "characters": 624,
+ "renderedAt": "2026-11-04T15:26:09.015Z",
+ "lines": [
+  {
+   "line": 1,
+   "text": "The world is full of people…",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:40 GMT"
+  },
+  {
+   "line": 2,
+   "text": "with ideas waiting to be heard.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:42 GMT"
+  },
+  {
+   "line": 3,
+   "text": "With work worth finding.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:44 GMT"
+  },
+  {
+   "line": 4,
+   "text": "With friends a world away.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:46 GMT"
+  },
+  {
+   "line": 5,
+   "text": "And people still looking for the ones who get them.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:47 GMT"
+  },
+  {
+   "line": 6,
+   "text": "Imagine one place where all of it comes together.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:49 GMT"
+  },
+  {
+   "line": 7,
+   "text": "Share the moments that matter.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:50 GMT"
+  },
+  {
+   "line": 8,
+   "text": "Find the people who see the world the way you do.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:52 GMT"
+  },
+  {
+   "line": 9,
+   "text": "Talk freely, in messages only you and the people you're talking to can read.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:54 GMT"
+  },
+  {
+   "line": 10,
+   "text": "Show what your business does, so the people nearby can find you.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:55 GMT"
+  },
+  {
+   "line": 11,
+   "text": "Ask your community for a hand, and give one back.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:25:58 GMT"
+  },
+  {
+   "line": 12,
+   "text": "And when the moment comes…",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:26:00 GMT"
+  },
+  {
+   "line": 13,
+   "text": "everyone shows up.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:26:00 GMT"
+  },
+  {
+   "line": 14,
+   "text": "Live. Together. In the same World.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:26:02 GMT"
+  },
+  {
+   "line": 15,
+   "text": "This is Amigo World.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:26:04 GMT"
+  },
+  {
+   "line": 16,
+   "text": "Your world, together.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:26:06 GMT"
+  },
+  {
+   "line": 17,
+   "text": "Reserve your username today.",
+   "requestId": null,
+   "date": "Wed, 04 Nov 2026 15:26:07 GMT"
+  }
+ ]
+}

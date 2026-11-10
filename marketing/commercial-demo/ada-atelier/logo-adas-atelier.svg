@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Ada's Atelier: fictional demo business logo made for the commercial (original artwork). -->
+  <defs>
+    <radialGradient id="g" cx="35%" cy="30%" r="80%">
+      <stop offset="0" stop-color="#2c4f8f"/>
+      <stop offset="1" stop-color="#14254a"/>
+    </radialGradient>
+    <pattern id="adire" width="48" height="48" patternUnits="userSpaceOnUse">
+      <circle cx="24" cy="24" r="9" fill="none" stroke="#9fb6e0" stroke-opacity=".18" stroke-width="3"/>
+      <circle cx="0" cy="0" r="5" fill="#9fb6e0" fill-opacity=".14"/>
+      <circle cx="48" cy="48" r="5" fill="#9fb6e0" fill-opacity=".14"/>
+    </pattern>
+  </defs>
+  <rect width="512" height="512" fill="url(#g)"/>
+  <rect width="512" height="512" fill="url(#adire)"/>
+  <circle cx="256" cy="256" r="178" fill="none" stroke="#e9b949" stroke-width="6"/>
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#e9b949" stroke-opacity=".45" stroke-width="2" stroke-dasharray="6 10"/>
+  <path d="M168 352 L256 150 L344 352" fill="none" stroke="#f6e7c1" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M200 290 H312" stroke="#e9b949" stroke-width="14" stroke-linecap="round"/>
+  <!-- the needle through the crossbar -->
+  <path d="M340 168 L196 324" stroke="#e9b949" stroke-width="6" stroke-linecap="round"/>
+  <ellipse cx="344" cy="164" rx="10" ry="5" transform="rotate(-47 344 164)" fill="none" stroke="#e9b949" stroke-width="4"/>
+  <text x="256" y="410" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="34" letter-spacing="6" fill="#f6e7c1">ATELIER</text>
+</svg>

@@ -1,0 +1,824 @@
+[
+ {
+  "type": "stock",
+  "scene": 1,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-28920105-lagos-dusk-aerial_vitalis-nwenyi.mp4",
+  "in": 0.5,
+  "dur": 5,
+  "what": "Lagos at dusk, slow push-in (stock)",
+  "grade": "bluehour",
+  "push": 0.04,
+  "f0": 0,
+  "f1": 120,
+  "frames": 120,
+  "id": "00_s01_stock"
+ },
+ {
+  "type": "pending",
+  "scene": 2,
+  "dur": 6,
+  "action": "Tobi in his bedroom studio, headphones on; his phone lies face down beside the keyboard.",
+  "framing": "Medium-wide, slow push-in; warm practical light",
+  "screen": "Phone face down (screen not seen)",
+  "cast": "Tobi",
+  "file": "S02_tobi-studio.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-31050551-studio-producer_somogro-bangladesh.mp4",
+   "in": 0,
+   "grade": "night"
+  },
+  "f0": 120,
+  "f1": 264,
+  "frames": 144,
+  "id": "01_s02_pending"
+ },
+ {
+  "type": "pending",
+  "scene": 3,
+  "dur": 5,
+  "action": "Ada folds coral fabric, seen from the street through her shop window in Yaba.",
+  "framing": "Exterior through the glass, medium; shop name visible",
+  "screen": "None",
+  "cast": "Ada",
+  "file": "S03_ada-shop-window.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-6841969-hands-folding-cloth_teona-swift.mp4",
+   "in": 1.5,
+   "grade": "golden",
+   "vcrop": 0.5
+  },
+  "f0": 264,
+  "f1": 384,
+  "frames": 120,
+  "id": "02_s03_pending"
+ },
+ {
+  "type": "split",
+  "scene": 4,
+  "dur": 5,
+  "left": {
+   "type": "pending",
+   "scene": 4,
+   "dur": 5,
+   "action": "Kemi on a Lagos bus at dusk, looking out of the window.",
+   "framing": "LEFT half of a split screen: frame for 960×1080 (centre-weighted), medium close",
+   "screen": "None (phone in hand, screen not seen)",
+   "cast": "Kemi",
+   "file": "S04_kemi-bus.mov",
+   "fill": {
+    "kind": "video",
+    "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-27706413-lagos-danfo-sunset_shedrack-salami.mp4",
+    "in": 0,
+    "grade": "golden",
+    "hcrop": 0.32
+   }
+  },
+  "right": {
+   "type": "stock",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-35621441-rainy-window-night_emre-varisli.mp4",
+   "in": 1,
+   "dur": 5,
+   "what": "Rainy window abroad, night (stock; Bisi's side)",
+   "grade": "coolnight"
+  },
+  "f0": 384,
+  "f1": 504,
+  "frames": 120,
+  "id": "03_s04_split"
+ },
+ {
+  "type": "pending",
+  "scene": 5,
+  "dur": 5,
+  "action": "Femi photographs a street corner, alone.",
+  "framing": "Medium, handheld; Femi slightly off-centre",
+  "screen": "Camera, not phone",
+  "cast": "Femi",
+  "file": "S05_femi-street.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-32896750-photographer-hands-city_ahmed.mp4",
+   "in": 0.8,
+   "grade": "natural",
+   "vcrop": 0.55
+  },
+  "f0": 504,
+  "f1": 624,
+  "frames": 120,
+  "id": "04_s05_pending"
+ },
+ {
+  "type": "pending",
+  "scene": 6,
+  "dur": 2,
+  "action": "Macro: a hand turns a phone over; the thumb taps the Amigo World icon.",
+  "framing": "Macro, top-down, shallow focus",
+  "screen": "iPhone Home Screen with the Amigo World icon (Add to Home Screen from the recording Preview); dark mode, 9:41",
+  "cast": "Femi's hand",
+  "file": "S06_macro-icon-tap.mov",
+  "fill": {
+   "kind": "gfx",
+   "name": "s06-home-tap"
+  },
+  "f0": 624,
+  "f1": 672,
+  "frames": 48,
+  "id": "05_s06_pending"
+ },
+ {
+  "type": "group",
+  "xf": 10,
+  "items": [
+   {
+    "type": "clip",
+    "scene": 6,
+    "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S06-app-open/S06_femi_app-open_take01_chromium-iphone15pro.mp4",
+    "in": 0.1,
+    "out": 1.5,
+    "dur": 1.4,
+    "what": "App opens: splash",
+    "id": "06_s06_clip",
+    "frames": 34
+   },
+   {
+    "type": "still",
+    "scene": 6,
+    "png": "/Users/mac/amigo-world/marketing/commercial-demo/ada-atelier/composite-home-feed-femi.png",
+    "dur": 2,
+    "push": 0.02,
+    "what": "Home feed (composited still, C1)",
+    "id": "07_s06_still",
+    "frames": 48
+   }
+  ],
+  "f0": 672,
+  "f1": 744,
+  "frames": 72
+ },
+ {
+  "type": "pending",
+  "scene": 7,
+  "dur": 3,
+  "action": "Golden hour on a Lagos rooftop: Kemi and friends, suya on the table; Kemi types her caption.",
+  "framing": "Wide establishing → over-the-shoulder on Kemi's phone",
+  "screen": "Kemi's New post composer: \"Rooftop, suya and my people. Lagos sunsets never miss. 🧡\"",
+  "cast": "Kemi + 3–4 friends",
+  "file": "S07_rooftop-kemi-types.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-39416582-friends-rooftop-sunset_dara-visuals.mp4",
+   "in": 24,
+   "grade": "golden"
+  },
+  "f0": 744,
+  "f1": 816,
+  "frames": 72,
+  "id": "08_s07_pending"
+ },
+ {
+  "type": "clip",
+  "scene": 7,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S07-post-and-moment/S07_kemi_text-post_take02_chromium-iphone15pro.mp4",
+  "in": 3,
+  "out": 8.5,
+  "dur": 4,
+  "what": "New post lands in the feed",
+  "patches": [
+   {
+    "cx": 108,
+    "cy": 1284,
+    "from": 7.62,
+    "to": 999
+   },
+   {
+    "cx": 108,
+    "cy": 1824,
+    "from": 7.62,
+    "to": 999
+   },
+   {
+    "cx": 110,
+    "cy": 2370,
+    "from": 7.62,
+    "to": 999,
+    "clipTop": 2322,
+    "clipBottom": 2380
+   }
+  ],
+  "f0": 816,
+  "f1": 912,
+  "frames": 96,
+  "id": "09_s07_clip"
+ },
+ {
+  "type": "clip",
+  "scene": 7,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S07-post-and-moment/S07_kemi_text-moment_take02_chromium-iphone15pro.mp4",
+  "in": 9.7,
+  "out": 11.7,
+  "dur": 2,
+  "what": "Her Moment, viewed",
+  "f0": 912,
+  "f1": 960,
+  "frames": 48,
+  "id": "10_s07_clip"
+ },
+ {
+  "type": "pending",
+  "scene": 8,
+  "dur": 2,
+  "action": "Femi at a café, scrolling on his phone.",
+  "framing": "Medium close, window light",
+  "screen": "Femi's Explore page (search field)",
+  "cast": "Femi",
+  "file": "S08_femi-cafe.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-5075206-cafe-phone-hands_cottonbro.mp4",
+   "in": 3,
+   "grade": "natural"
+  },
+  "f0": 960,
+  "f1": 1008,
+  "frames": 48,
+  "id": "11_s08_pending"
+ },
+ {
+  "type": "clip",
+  "scene": 8,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S08-explore-follow/S08_femi_explore-follow_take01_chromium-iphone15pro.mp4",
+  "in": 1,
+  "out": 8.5,
+  "dur": 6,
+  "what": "Explore → search → Seyi → Follow Back",
+  "patches": [
+   {
+    "cx": 108,
+    "cy": 1976,
+    "from": 0,
+    "to": 3.3
+   }
+  ],
+  "f0": 1008,
+  "f1": 1152,
+  "frames": 144,
+  "id": "12_s08_clip"
+ },
+ {
+  "type": "pending",
+  "scene": 9,
+  "dur": 1,
+  "action": "Night, abroad: Bisi sends a message.",
+  "framing": "Close-up, face lit by the phone; rain on the window behind",
+  "screen": "Bisi's chat with Kemi, sending \"Found a Nigerian shop by the station. PLANTAIN. I almost cried 😭\"",
+  "cast": "Bisi",
+  "file": "S09_bisi-sends.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-33942937-hands-phone-dark_ozgur-surmeli.mp4",
+   "in": 2,
+   "grade": "night"
+  },
+  "f0": 1152,
+  "f1": 1176,
+  "frames": 24,
+  "id": "13_s09_pending"
+ },
+ {
+  "type": "clip",
+  "scene": 9,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S09-encrypted-chat/S09_bisi_chat_take01_chromium-iphone15pro.mp4",
+  "in": 7,
+  "out": 10.5,
+  "dur": 1.5,
+  "what": "Bisi sends",
+  "masks": [
+   {
+    "x": 36,
+    "y": 1362,
+    "w": 116,
+    "h": 62,
+    "from": 0,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 896,
+    "y": 1620,
+    "w": 128,
+    "h": 62,
+    "from": 9.8,
+    "to": 999,
+    "color": "0x0c0c0e"
+   }
+  ],
+  "f0": 1176,
+  "f1": 1212,
+  "frames": 36,
+  "id": "14_s09_clip"
+ },
+ {
+  "type": "clip",
+  "scene": 9,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S09-encrypted-chat/S09_kemi_chat_take01_chromium-iphone15pro.mp4",
+  "in": 10,
+  "out": 19.5,
+  "dur": 4.5,
+  "what": "Kemi: message arrives → ❤️ → swipe-reply",
+  "masks": [
+   {
+    "x": 900,
+    "y": 1362,
+    "w": 112,
+    "h": 62,
+    "from": 0,
+    "to": 18.4,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 1030,
+    "y": 1362,
+    "w": 112,
+    "h": 62,
+    "from": 18.4,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 36,
+    "y": 1620,
+    "w": 116,
+    "h": 62,
+    "from": 0,
+    "to": 17.55,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 36,
+    "y": 1694,
+    "w": 116,
+    "h": 58,
+    "from": 0,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 896,
+    "y": 2060,
+    "w": 118,
+    "h": 64,
+    "from": 18.3,
+    "to": 999,
+    "color": "0x0c0c0e"
+   }
+  ],
+  "f0": 1212,
+  "f1": 1320,
+  "frames": 108,
+  "id": "15_s09_clip"
+ },
+ {
+  "type": "pending",
+  "scene": 9,
+  "dur": 1,
+  "action": "Kemi laughs on the bus as it passes Ada's shop.",
+  "framing": "Through the bus window; Ada's shop sign passes behind Kemi",
+  "screen": "Kemi's chat with Bisi (not readable)",
+  "cast": "Kemi (Ada's shop in background)",
+  "file": "S09_kemi-laughs-bus.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-27706275-lagos-road-danfos_shedrack-salami.mp4",
+   "in": 6,
+   "grade": "golden"
+  },
+  "f0": 1320,
+  "f1": 1344,
+  "frames": 24,
+  "id": "16_s09_pending"
+ },
+ {
+  "type": "pending",
+  "scene": 10,
+  "dur": 4,
+  "action": "Ada and a customer hold up a phone at the shop counter.",
+  "framing": "Medium two-shot across the counter; phone toward camera",
+  "screen": "Ada's Atelier business page (show composite-frame-1.png full screen on the phone)",
+  "cast": "Ada + customer",
+  "file": "S10_ada-customer.mov",
+  "fill": {
+   "kind": "photo",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-30698866-fabric-shop_mohamed-hamdi.jpg",
+   "push": 0.06
+  },
+  "f0": 1344,
+  "f1": 1440,
+  "frames": 96,
+  "id": "17_s10_pending"
+ },
+ {
+  "type": "group",
+  "xf": 10,
+  "items": [
+   {
+    "type": "still",
+    "scene": 10,
+    "png": "ADA_T1",
+    "dur": 2.2,
+    "push": 0.08,
+    "what": "Ada's Atelier: business page",
+    "id": "18_s10_still",
+    "frames": 53
+   },
+   {
+    "type": "still",
+    "scene": 10,
+    "png": "ADA_T2",
+    "dur": 2.2,
+    "push": 0,
+    "what": "Ada's Atelier: posts",
+    "id": "19_s10_still",
+    "frames": 53
+   }
+  ],
+  "f0": 1440,
+  "f1": 1536,
+  "frames": 96
+ },
+ {
+  "type": "pending",
+  "scene": 11,
+  "dur": 1,
+  "action": "Tobi posts his request from the studio.",
+  "framing": "Close on Tobi's hands and screen",
+  "screen": "Help Hub: \"Listen to my new song — does the chorus land?\" request",
+  "cast": "Tobi",
+  "file": "S11_tobi-posts.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-31050551-studio-producer_somogro-bangladesh.mp4",
+   "in": 12,
+   "grade": "night"
+  },
+  "f0": 1536,
+  "f1": 1560,
+  "frames": 24,
+  "id": "20_s11_pending"
+ },
+ {
+  "type": "clip",
+  "scene": 11,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S11-help-hub/S11_femi_help-tobi_take01_chromium-iphone15pro.mp4",
+  "in": 2.5,
+  "out": 4.7,
+  "dur": 2.2,
+  "what": "Femi: Help out",
+  "f0": 1560,
+  "f1": 1613,
+  "frames": 53,
+  "id": "21_s11_clip"
+ },
+ {
+  "type": "clip",
+  "scene": 11,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S11-help-hub/S11_ada_help-tobi_take01_chromium-iphone15pro.mp4",
+  "in": 5,
+  "out": 10.5,
+  "dur": 2.2,
+  "what": "Ada: confirms she helped",
+  "f0": 1613,
+  "f1": 1666,
+  "frames": 53,
+  "id": "22_s11_clip"
+ },
+ {
+  "type": "clip",
+  "scene": 11,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S11-help-hub/S11_tobi_notification_take01_chromium-iphone15pro.mp4",
+  "in": 1.5,
+  "out": 7,
+  "dur": 3.6,
+  "what": "Tobi: notification → 2 helpers + feedback",
+  "f0": 1666,
+  "f1": 1752,
+  "frames": 86,
+  "id": "23_s11_clip"
+ },
+ {
+  "type": "clip",
+  "scene": 12,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S12-world-live/S12_femi_countdown-to-live_take01_chromium-iphone15pro.mp4",
+  "in": 36.5,
+  "out": 37.5,
+  "dur": 1,
+  "what": "World countdown",
+  "masks": [
+   {
+    "x": 36,
+    "y": 1056,
+    "w": 456,
+    "h": 64,
+    "from": 0,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 584,
+    "y": 1446,
+    "w": 452,
+    "h": 46,
+    "from": 0,
+    "to": 40.35,
+    "color": "0x1c1c20"
+   }
+  ],
+  "f0": 1752,
+  "f1": 1776,
+  "frames": 24,
+  "id": "24_s12_clip"
+ },
+ {
+  "type": "pending",
+  "scene": 12,
+  "dur": 0.5,
+  "action": "Kemi, Ada, Tobi and Bisi glance down at their phones (quick cuts).",
+  "framing": "Four tight singles, 12 frames each are enough",
+  "screen": "Golden Hour Lagos World countdown",
+  "cast": "Kemi, Ada, Tobi, Bisi",
+  "file": "S12_glances.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-6940967-hands-phone-night_cottonbro.mp4",
+   "in": 3,
+   "grade": "night"
+  },
+  "f0": 1776,
+  "f1": 1788,
+  "frames": 12,
+  "id": "25_s12_pending"
+ },
+ {
+  "type": "clip",
+  "scene": 12,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S12-world-live/S12_femi_countdown-to-live_take01_chromium-iphone15pro.mp4",
+  "in": 38,
+  "out": 39.5,
+  "dur": 1.5,
+  "what": "World countdown",
+  "masks": [
+   {
+    "x": 36,
+    "y": 1056,
+    "w": 456,
+    "h": 64,
+    "from": 0,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 584,
+    "y": 1446,
+    "w": 452,
+    "h": 46,
+    "from": 0,
+    "to": 40.35,
+    "color": "0x1c1c20"
+   }
+  ],
+  "f0": 1788,
+  "f1": 1824,
+  "frames": 36,
+  "id": "26_s12_clip"
+ },
+ {
+  "type": "pending",
+  "scene": 12,
+  "dur": 0.5,
+  "action": "Phones light up in four places at once.",
+  "framing": "Inserts of phone screens in hand, four locations",
+  "screen": "Golden Hour Lagos World going LIVE",
+  "cast": "Hands only",
+  "file": "S12_phones-light-up.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-33942937-hands-phone-dark_ozgur-surmeli.mp4",
+   "in": 9,
+   "grade": "night"
+  },
+  "f0": 1824,
+  "f1": 1836,
+  "frames": 12,
+  "id": "27_s12_pending"
+ },
+ {
+  "type": "clip",
+  "scene": 12,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S12-world-live/S12_femi_countdown-to-live_take01_chromium-iphone15pro.mp4",
+  "in": 40,
+  "out": 41.5,
+  "dur": 1.5,
+  "what": "LIVE",
+  "masks": [
+   {
+    "x": 36,
+    "y": 1056,
+    "w": 456,
+    "h": 64,
+    "from": 0,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 584,
+    "y": 1446,
+    "w": 452,
+    "h": 46,
+    "from": 0,
+    "to": 40.35,
+    "color": "0x1c1c20"
+   }
+  ],
+  "f0": 1836,
+  "f1": 1872,
+  "frames": 36,
+  "id": "28_s12_clip"
+ },
+ {
+  "type": "still",
+  "scene": 12,
+  "png": "ENTRY",
+  "dur": 1.5,
+  "push": 0.02,
+  "what": "Femi's entry with his photo (C3c)",
+  "placeholderTag": true,
+  "f0": 1872,
+  "f1": 1908,
+  "frames": 36,
+  "id": "29_s12_still"
+ },
+ {
+  "type": "clip",
+  "scene": 12,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S12-world-live/S12_femi_reactions-leaderboard_take01_chromium-iphone15pro.mp4",
+  "in": 9,
+  "out": 11.6,
+  "dur": 1.3,
+  "what": "Live reaction banners",
+  "frame": "wide",
+  "crop": [
+   0,
+   0,
+   1180,
+   700
+  ],
+  "f0": 1908,
+  "f1": 1939,
+  "frames": 31,
+  "id": "30_s12_clip"
+ },
+ {
+  "type": "clip",
+  "scene": 12,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S12-world-live/S12_femi_chat_take01_chromium-iphone15pro.mp4",
+  "in": 12,
+  "out": 20,
+  "dur": 3.2,
+  "what": "Live room chat",
+  "f0": 1939,
+  "f1": 2016,
+  "frames": 77,
+  "id": "31_s12_clip"
+ },
+ {
+  "type": "pending",
+  "scene": 13,
+  "dur": 3.5,
+  "action": "Match cut from Femi's entry photo: the same rooftop at sunset; crane up over the friends together.",
+  "framing": "Wide, crane/drone rising; same angle as Femi's photo",
+  "screen": "None",
+  "cast": "Whole cast",
+  "file": "S13_rooftop-crane.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-31661123-lagos-sunset-aerial_vitalis-nwenyi.mp4",
+   "in": 0,
+   "grade": "golden"
+  },
+  "f0": 2016,
+  "f1": 2100,
+  "frames": 84,
+  "id": "32_s13_pending"
+ },
+ {
+  "type": "clip",
+  "scene": 13,
+  "src": "/Users/mac/amigo-world/marketing/commercial-demo/raw/S09-encrypted-chat/S09_kemi_chat_take01_chromium-iphone15pro.mp4",
+  "in": 20,
+  "out": 23,
+  "dur": 3,
+  "what": "Kemi's phone: Bisi's message",
+  "masks": [
+   {
+    "x": 900,
+    "y": 1362,
+    "w": 112,
+    "h": 62,
+    "from": 0,
+    "to": 18.4,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 1030,
+    "y": 1362,
+    "w": 112,
+    "h": 62,
+    "from": 18.4,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 36,
+    "y": 1620,
+    "w": 116,
+    "h": 62,
+    "from": 0,
+    "to": 17.55,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 36,
+    "y": 1694,
+    "w": 116,
+    "h": 58,
+    "from": 0,
+    "to": 999,
+    "color": "0x0c0c0e"
+   },
+   {
+    "x": 896,
+    "y": 2060,
+    "w": 118,
+    "h": 64,
+    "from": 18.3,
+    "to": 999,
+    "color": "0x0c0c0e"
+   }
+  ],
+  "f0": 2100,
+  "f1": 2172,
+  "frames": 72,
+  "id": "33_s13_clip"
+ },
+ {
+  "type": "pending",
+  "scene": 13,
+  "dur": 2.5,
+  "action": "Wide: the group laughing, Lagos glowing behind them.",
+  "framing": "Wide, golden-hour backlight",
+  "screen": "None",
+  "cast": "Whole cast",
+  "file": "S13_rooftop-wide.mov",
+  "fill": {
+   "kind": "video",
+   "src": "/Users/mac/amigo-world/marketing/commercial-demo/final/assets/stock/pexels-31948670-friends-sparklers-sunset_vitaly-gariev.mp4",
+   "in": 2,
+   "grade": "golden"
+  },
+  "f0": 2172,
+  "f1": 2232,
+  "frames": 60,
+  "id": "34_s13_pending"
+ },
+ {
+  "type": "group",
+  "xf": 10,
+  "items": [
+   {
+    "type": "card",
+    "png": "end0",
+    "dur": 3.2,
+    "id": "35_s14_card",
+    "frames": 77
+   },
+   {
+    "type": "card",
+    "png": "end1",
+    "dur": 3.4,
+    "id": "36_s14_card",
+    "frames": 82
+   },
+   {
+    "type": "card",
+    "png": "end2",
+    "dur": 6.2,
+    "id": "37_s14_card",
+    "frames": 149
+   }
+  ],
+  "f0": 2232,
+  "f1": 2520,
+  "frames": 288
+ }
+]
