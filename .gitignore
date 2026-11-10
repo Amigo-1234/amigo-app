@@ -9,3 +9,10 @@ secrets
 neon/build/
 *.tsbuildinfo
 email-previews/
+
+# macOS folder metadata
+.DS_Store
+# Large media belongs outside git (commercial footage, narration)
+*.mp4
+*.mov
+*.wav

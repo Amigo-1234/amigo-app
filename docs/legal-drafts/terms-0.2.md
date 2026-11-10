@@ -39,7 +39,7 @@ You agree to follow the [Community Guidelines](/legal/guidelines). In short, you
 - post sexual content involving minors, or any content that exploits or endangers children;
 - post spam, scams, malware or deceptive links;
 - impersonate people or organisations, or mislead people about who you are;
-- manipulate likes, follows, Support Hub support or other engagement (for example with fake accounts or automation);
+- manipulate likes, follows, Help Hub activity, Kudos or other engagement (for example with fake accounts or automation);
 - reserve or hold usernames in bulk, or to sell them;
 - try to access accounts, data or parts of Amigo you're not allowed to, interfere with Amigo's security, or overload our services;
 - scrape or collect other people's information without permission.
@@ -48,10 +48,10 @@ You agree to follow the [Community Guidelines](/legal/guidelines). In short, you
 
 Direct messages are end-to-end encrypted: we cannot read them. Because of this, we can only act on a message conversation if someone reports it and chooses to share the messages with us. See the [Privacy Policy](/legal/privacy) for how encryption works and its limits.
 
-## 7. Worlds, Support Hub, business pages and the Marketplace
+## 7. Worlds, Help Hub, business pages and the Marketplace
 
 - **Worlds** are scheduled events run by Amigo. Some include competitions with points and leaderboards calculated by Amigo. Prizes, if any, are described in each World. Worlds never involve gambling or real-money stakes.
-- **Support Hub** lets creators ask the community to support their projects. Support counts are a community signal only; they don't guarantee payment, promotion or any reward. Support Hub is free.
+- **Help Hub** lets creators ask the community for help with their projects. People who help can earn Kudos and reputation. Kudos are recognition points only: they have no cash value and can't be bought, sold, transferred, withdrawn or paid out. Help counts and Kudos are a community signal only; they don't guarantee payment, promotion or any reward. Help Hub has no monetary fees: you never pay money to use it. Asking for help costs Kudos, currently 5 Kudos per request; the cost is shown before you submit. You receive 5 starter Kudos the first time you use Help Hub and earn more by helping others. If we don't approve a request, its Kudos are returned; a request removed for breaking these Terms or the Community Guidelines is not refunded.
 - **Business pages** let a person run a page for their business. The person who runs a business page is responsible for it and for everything posted or listed on it.
 - **Marketplace listings** are made by businesses, not by Amigo. Amigo doesn't sell, buy, hold payment for, deliver or guarantee anything listed. Any deal is between the buyer and the business, and prices, availability and descriptions are the business's responsibility. Prohibited items and services aren't allowed and will be removed.
 

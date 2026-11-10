@@ -73,7 +73,7 @@ This policy explains what information Amigo World collects, why, who processes i
 
 - **Account:** email address, password (stored only as a secure hash by our authentication provider), display name, username, and your confirmation that you are 18 or older.
 - **Profile:** bio, profile photo and anything else you add.
-- **Content and activity:** posts, replies, likes, follows, Moments, World participation and chat, Support Hub requests, support and feedback, reports you make.
+- **Content and activity:** posts, replies, likes, follows, Moments, World participation and chat, Help Hub requests, help and feedback, reports you make.
 - **Business pages and listings** (if you create them): business name, description, logo, contact details you choose to show, opening hours, area, and products or services you list. These are public.
 - **Direct messages:** see section 4 — we store them only in encrypted form.
 - **Legal acceptance:** which versions of the Terms and Privacy Policy you accepted, and when.
@@ -94,7 +94,7 @@ We do **not** use advertising trackers, sell personal information, or use third-
 
 #### 3. How we use information
 
-- to provide Amigo: accounts, profiles, feeds, notifications, Worlds, Support Hub, business pages, the Marketplace, messaging and username reservations;
+- to provide Amigo: accounts, profiles, feeds, notifications, Worlds, Help Hub, business pages, the Marketplace, messaging and username reservations;
 - to keep Amigo safe: preventing spam and abuse, reviewing reports, enforcing our rules (including the minimum age), keeping audit logs of admin actions;
 - to verify your email and help you recover your account;
 - to find and fix problems with the app;
@@ -112,7 +112,7 @@ We do **not** use advertising trackers, sell personal information, or use third-
 
 #### 5. Who can see your information
 
-- **Public by default:** your profile, followers and following lists, public posts, World participation, Support Hub requests, business pages and Marketplace listings.
+- **Public by default:** your profile, followers and following lists, public posts, World participation, Help Hub requests, business pages and Marketplace listings.
 - **Followers only:** posts and Moments you share with followers.
 - **Admins:** a small team of administrators can review reports, moderate content and manage username reservations; their actions are logged. They cannot read encrypted messages.
 - **Service providers** that process data for us: **Vercel Inc.** (hosting and server functions), **Neon** (database and authentication, hosted in AWS London, UK), **Resend** (sending emails such as verification codes and reservation emails), **Cloudflare** (storing photos and videos you upload, in Cloudflare R2; and, if enabled, the Turnstile check on the reservation page), and your browser's push service (for example Apple, Google or Mozilla) if you turn on notifications. **[OWNER: confirm data-processing agreements with each provider.]**
