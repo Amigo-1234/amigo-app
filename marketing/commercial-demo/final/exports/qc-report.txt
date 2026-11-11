@@ -1,0 +1,16 @@
+QC PASS — _candidate.mp4 — 2026-11-04T17:08:01.588Z
+PASS  resolution: 1920x1080
+PASS  frame rate: 24/1
+PASS  frame count: 2520
+PASS  duration: 105.000 s
+PASS  audio format: 48000 Hz, 2 ch
+PASS  A/V stream alignment: video 0.000–105.000 s, audio 0.000–105.000 s
+PASS  black frames: none
+PASS  white flashes on screen: none
+PASS  production text (OCR, 420 frames): none found
+PASS  shot boundaries (33 cuts, 2520 frames decoded): every cut lands on a clear picture change
+PASS  narration source: Azure AI Speech, en-US-AndrewMultilingualNeural (empathetic), -6%/-4%, eastus; 17 lines, all identical to the Azure render
+PASS  narration timing (17 lines): all within ±1 frame (max 0.005 s)
+PASS  audio = approved mix: export -14.7 LUFS vs mix -14.7 LUFS
+PASS  integrated loudness: -14.7 LUFS (target −14 ±1)
+PASS  true peak: -1.3 dBTP (max −1)

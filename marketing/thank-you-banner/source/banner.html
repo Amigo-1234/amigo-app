@@ -1,0 +1,232 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Thank You Banner</title>
+<style>
+@font-face { font-family: "Bricolage"; src: url(fonts/bricolage-grotesque-latin-standard-normal.woff2) format("woff2"); font-weight: 200 800; font-stretch: 75% 100%; }
+@font-face { font-family: "Geist"; src: url(fonts/geist-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; }
+:root {
+  --bg: #08070b; --text: #f3f1ee; --text-2: #b3adbd; --text-3: #6f6a7a;
+  --coral: #ff5a3c; --coral-2: #ff8a6b; --on-coral: #1d0a05;
+  --v300: #c4b5fd; --v400: #a78bfa; --v500: #8b5cf6; --v600: #7c3aed;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: var(--bg); }
+body { width: var(--w); height: var(--h); overflow: hidden; font-family: "Geist", sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+.stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+.light { position: absolute; border-radius: 50%; pointer-events: none; }
+.beam { position: absolute; pointer-events: none; transform-origin: 50% 0; filter: blur(26px); mix-blend-mode: screen; }
+#sky, #world { position: absolute; inset: 0; pointer-events: none; }
+.grain { position: absolute; inset: 0; opacity: .07; mix-blend-mode: overlay; pointer-events: none; }
+.vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse 85% 75% at 50% 45%, transparent 55%, rgba(0,0,0,.55) 100%); }
+
+/* brand */
+.brand { position: absolute; display: flex; align-items: center; gap: 14px; font-family: "Bricolage"; font-weight: 700; letter-spacing: -0.01em; }
+.brand svg { filter: drop-shadow(0 6px 20px rgba(255,90,60,.4)); flex: none; }
+
+/* appreciation */
+.thanks { position: absolute; }
+.kicker { display: inline-flex; align-items: center; gap: 14px; color: var(--coral-2); font-weight: 600; letter-spacing: .26em; text-transform: uppercase; }
+.kicker::before { content: ""; width: 54px; height: 2px; background: linear-gradient(90deg, transparent, var(--coral)); }
+h1 { font-family: "Bricolage"; font-weight: 800; font-stretch: 84%; text-transform: uppercase; letter-spacing: -0.03em; line-height: .88; }
+h1 .big { display: block; white-space: nowrap; background: linear-gradient(180deg, #fff 0%, #f1edf6 45%, #aaa1b8 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 10px 50px rgba(255,255,255,.08)); }
+h1 .mid { display: block; background: linear-gradient(180deg, #f6f3fa 0%, #c9c1d6 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h1 .glow { display: block; background: linear-gradient(95deg, #ffb39e 0%, var(--coral) 45%, #ff7a52 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 36px rgba(255,90,60,.45)); }
+.note { color: var(--text-2); line-height: 1.45; letter-spacing: -0.005em; }
+.note b { color: var(--text); font-weight: 600; }
+
+/* trailer */
+.trailer { position: absolute; }
+.screen { position: relative; aspect-ratio: 2.39 / 1; border-radius: 22px; overflow: hidden;
+  background: radial-gradient(ellipse 70% 120% at 30% 110%, rgba(255,90,60,.55) 0%, transparent 55%),
+              radial-gradient(ellipse 60% 110% at 85% -10%, rgba(139,92,246,.55) 0%, transparent 60%),
+              linear-gradient(180deg, #17121d 0%, #0b0a10 100%);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.09) inset, 0 40px 110px rgba(0,0,0,.75), 0 0 120px rgba(255,90,60,.22), 0 0 160px rgba(124,58,237,.18); }
+.screen::before { content: ""; position: absolute; inset: 0; background:
+  repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, transparent 1px 5px); mix-blend-mode: overlay; }
+.screen .bar { position: absolute; left: 0; right: 0; height: 11%; background: #050407; }
+.screen .bar.t { top: 0; } .screen .bar.b { bottom: 0; }
+.screen .flare { position: absolute; left: 50%; top: 50%; width: 140%; height: 2px; transform: translate(-50%, -50%);
+  background: linear-gradient(90deg, transparent, rgba(255,138,107,.0) 10%, rgba(255,180,160,.85) 50%, rgba(167,139,250,.0) 90%, transparent); filter: blur(1px); }
+.screen .flare2 { position: absolute; left: 50%; top: 50%; width: 70%; height: 40%; transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse, rgba(255,140,110,.35), transparent 65%); filter: blur(10px); }
+.play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; display: grid; place-items: center;
+  background: var(--coral); box-shadow: 0 0 0 10px rgba(255,90,60,.16), 0 0 0 22px rgba(255,90,60,.07), 0 14px 50px rgba(255,90,60,.55); }
+.play svg { margin-left: 8%; }
+.tc { position: absolute; color: rgba(243,241,238,.55); font-weight: 500; letter-spacing: .18em; text-transform: uppercase; }
+.tc.l { left: 4%; bottom: 14.5%; } .tc.r { right: 4%; bottom: 14.5%; display: flex; align-items: center; gap: 8px; }
+.tc.r i { width: 8px; height: 8px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 10px var(--coral); }
+.eyebrow { display: inline-flex; align-items: center; gap: 12px; padding: 9px 18px 9px 14px; border-radius: 999px;
+  font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--v300);
+  background: linear-gradient(rgba(139,92,246,.14), rgba(139,92,246,.14)), #120d18; border: 1px solid rgba(167,139,250,.36); box-shadow: 0 0 0 6px rgba(8,7,11,.55); }
+.eyebrow i { width: 9px; height: 9px; border-radius: 50%; background: var(--coral); box-shadow: 0 0 0 4px rgba(255,90,60,.18), 0 0 14px var(--coral); }
+h2 { font-family: "Bricolage"; font-weight: 800; font-stretch: 86%; text-transform: uppercase; letter-spacing: -0.02em; line-height: .95; }
+h2 .w { background: linear-gradient(180deg, #fff, #cfc8da); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h2 .v { background: linear-gradient(95deg, var(--v300), var(--v400) 50%, var(--v500)); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 30px rgba(139,92,246,.4)); }
+.see { color: var(--text); font-family: "Bricolage"; font-weight: 600; letter-spacing: -0.015em; }
+
+/* close */
+.foot { position: absolute; display: flex; align-items: center; color: var(--text-3); text-transform: uppercase; letter-spacing: .18em; font-weight: 500; }
+.foot .rule { flex: 1; height: 1px; background: linear-gradient(90deg, rgba(255,255,255,.12), rgba(255,255,255,.02)); }
+.foot .rule.r { background: linear-gradient(90deg, rgba(255,255,255,.02), rgba(255,255,255,.12)); }
+.tag { font-family: "Bricolage"; font-weight: 600; letter-spacing: -0.02em; text-transform: none; color: var(--text); white-space: nowrap; }
+.tag em { font-style: normal; color: var(--coral-2); }
+
+/* ================= 9:16 story (WhatsApp Status, Instagram Stories) ================= */
+.story { --w: 1080px; --h: 1920px; }
+.story .brand { left: 80px; top: 92px; font-size: 32px; }
+.story .thanks { left: 80px; right: 80px; top: 236px; }
+.story .kicker { font-size: 20px; }
+.story h1 { margin-top: 34px; }
+.story h1 .big { font-size: 204px; }
+.story h1 .mid { font-size: 92px; margin-top: 18px; }
+.story h1 .glow { font-size: 128px; margin-top: 6px; }
+.story .note { font-size: 33px; margin-top: 36px; max-width: 880px; }
+.story .trailer { left: 80px; right: 80px; top: 962px; }
+.story .eyebrow { font-size: 16px; }
+.story .screen { margin-top: 28px; }
+.story .play { width: 104px; height: 104px; }
+.story .tc { font-size: 14px; }
+.story h2 { font-size: 72px; margin-top: 40px; }
+.story .see { font-size: 36px; margin-top: 20px; }
+.story .foot { left: 80px; right: 80px; bottom: 92px; gap: 30px; }
+.story .tag { font-size: 48px; }
+
+/* ================= 4:5 feed (Instagram) ================= */
+.feed { --w: 1080px; --h: 1350px; }
+.feed .brand { left: 72px; top: 68px; font-size: 28px; }
+.feed .thanks { left: 72px; right: 72px; top: 164px; }
+.feed .kicker { font-size: 17px; }
+.feed h1 { margin-top: 24px; }
+.feed h1 .big { font-size: 168px; }
+.feed h1 .mid { font-size: 66px; margin-top: 12px; }
+.feed h1 .glow { font-size: 92px; margin-top: 4px; }
+.feed .note { font-size: 25px; margin-top: 26px; max-width: 700px; }
+.feed .trailer { left: 72px; right: 72px; top: 790px; display: grid; grid-template-columns: 440px 1fr; gap: 40px; align-items: center; }
+.feed .eyebrow { font-size: 13px; padding: 8px 14px 8px 12px; }
+.feed .screen { margin-top: 0; border-radius: 16px; grid-row: 1 / span 3; grid-column: 1; }
+.feed .trailer .txt { grid-column: 2; }
+.feed .play { width: 66px; height: 66px; }
+.feed .tc { font-size: 10px; }
+.feed h2 { font-size: 46px; margin-top: 18px; }
+.feed .see { font-size: 24px; margin-top: 14px; }
+.feed .foot { left: 72px; right: 72px; bottom: 70px; gap: 26px; }
+.feed .tag { font-size: 38px; }
+
+/* ================= 16:9 (X) ================= */
+.wide { --w: 1600px; --h: 900px; }
+.wide .brand { left: 88px; top: 70px; font-size: 27px; }
+.wide .thanks { left: 88px; top: 168px; width: 760px; }
+.wide .kicker { font-size: 16px; }
+.wide h1 { margin-top: 22px; }
+.wide h1 .big { font-size: 176px; }
+.wide h1 .mid { font-size: 68px; margin-top: 12px; }
+.wide h1 .glow { font-size: 94px; margin-top: 2px; }
+.wide .note { font-size: 23px; margin-top: 26px; max-width: 640px; }
+.wide .trailer { right: 88px; top: 214px; width: 640px; }
+.wide .eyebrow { font-size: 13px; }
+.wide .screen { margin-top: 20px; border-radius: 18px; }
+.wide .play { width: 82px; height: 82px; }
+.wide .tc { font-size: 11px; }
+.wide h2 { font-size: 50px; margin-top: 28px; }
+.wide .see { font-size: 25px; margin-top: 14px; }
+.wide .foot { left: 88px; right: 88px; bottom: 60px; gap: 26px; }
+.wide .tag { font-size: 34px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="light" id="l1"></div><div class="light" id="l2"></div><div class="light" id="l3"></div>
+  <svg id="world" width="100%" height="100%"></svg>
+  <div class="beam" id="beam"></div>
+  <svg id="sky" width="100%" height="100%"></svg>
+  <svg class="grain" width="100%" height="100%"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>
+  <div class="vignette"></div>
+
+  <div class="brand">
+    <svg width="46" height="46" viewBox="0 0 32 32"><path d="M9 0h14a9 9 0 0 1 9 9v14a9 9 0 0 1-9 9H3a3 3 0 0 1-3-3V9a9 9 0 0 1 9-9z" fill="#ff5a3c"/><circle cx="14.6" cy="17.2" r="5.6" fill="none" stroke="#1d0a05" stroke-width="3.2"/><rect x="19.6" y="10" width="3.3" height="13" rx="1.65" fill="#1d0a05"/></svg>
+    Amigo World
+  </div>
+
+  <div class="thanks">
+    <div class="kicker">From all of us</div>
+    <h1><span class="big">Thank you</span><span class="mid">for being part of</span><span class="glow">our world.</span></h1>
+    <p class="note">To everyone who <b>reserved their username</b>, showed interest and believed in what we’re building — thank you.</p>
+  </div>
+
+  <div class="trailer">
+    <div class="screen">
+      <div class="flare2"></div><div class="flare"></div>
+      <div class="bar t"></div><div class="bar b"></div>
+      <div class="play"><svg width="38%" height="38%" viewBox="0 0 24 24"><path d="M6 4.5v15a1 1 0 0 0 1.5.86l12.6-7.5a1 1 0 0 0 0-1.72L7.5 3.64A1 1 0 0 0 6 4.5z" fill="#1d0a05"/></svg></div>
+      <div class="tc l">Amigo World · Official trailer</div>
+      <div class="tc r"><i></i>Soon</div>
+    </div>
+    <div class="txt">
+      <div class="eyebrow"><i></i>Official trailer</div>
+      <h2><span class="w">The Amigo World trailer is </span><span class="v">coming soon.</span></h2>
+      <p class="see">You’ll finally see what we’ve been building.</p>
+    </div>
+  </div>
+
+  <div class="foot"><span class="rule"></span><span class="tag">Your world, <em>together.</em></span><span class="rule r"></span></div>
+</div>
+<script>
+const v = new URLSearchParams(location.search).get("v") || "story";
+document.body.className = v;
+// feed: eyebrow + headline sit beside the screen
+if (v === "feed") { const t = document.querySelector(".trailer"), s = t.querySelector(".screen"), x = t.querySelector(".txt"); t.prepend(s); }
+if (v !== "feed") { const t = document.querySelector(".trailer"), s = t.querySelector(".screen"), x = t.querySelector(".txt"); t.prepend(x.querySelector(".eyebrow")); x.before(s); }
+const [W, H] = { story: [1080, 1920], feed: [1080, 1350], wide: [1600, 900] }[v];
+const L = {
+  story: [[860, 1010, 1300, "rgba(255,90,60,.30)"], [180, 1500, 1100, "rgba(124,58,237,.30)"], [900, 180, 760, "rgba(196,181,253,.12)"]],
+  feed:  [[880, 700, 1000, "rgba(255,90,60,.28)"], [120, 1100, 900, "rgba(124,58,237,.28)"], [960, 120, 600, "rgba(196,181,253,.12)"]],
+  wide:  [[1180, 470, 1100, "rgba(124,58,237,.34)"], [1400, 820, 900, "rgba(255,90,60,.26)"], [240, 100, 700, "rgba(196,181,253,.10)"]],
+}[v];
+["l1", "l2", "l3"].forEach((id, i) => { const [x, y, s, c] = L[i];
+  Object.assign(document.getElementById(id).style, { left: x - s / 2 + "px", top: y - s / 2 + "px", width: s + "px", height: s + "px", background: `radial-gradient(circle, ${c} 0%, transparent 62%)` }); });
+
+// The world: a glowing planet limb (same coral orbital language as the launch banner) with connection arcs and points of light,
+// one for every person who reserved: a quiet "you're part of this" cue.
+const NS = "http://www.w3.org/2000/svg", world = document.getElementById("world"), sky = document.getElementById("sky");
+const el = (p, tag, a) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
+const defs = el(world, "defs", {});
+const g1 = el(defs, "radialGradient", { id: "planet", cx: "50%", cy: "0%", r: "75%" });
+el(g1, "stop", { offset: "0", "stop-color": "#3a1610" }); el(g1, "stop", { offset: ".55", "stop-color": "#140a0c" }); el(g1, "stop", { offset: "1", "stop-color": "#08070b" });
+const glow = el(defs, "filter", { id: "glow", x: "-20%", y: "-20%", width: "140%", height: "140%" }); el(glow, "feGaussianBlur", { stdDeviation: "6" });
+const P = { story: [540, 2690, 1720], feed: [540, 1980, 1260], wide: [1250, 1910, 1100] }[v]; // planet cx, cy, r (horizon near the bottom)
+const [px, py, pr] = P;
+el(world, "circle", { cx: px, cy: py, r: pr + 26, fill: "none", stroke: "rgba(255,90,60,.35)", "stroke-width": 40, filter: "url(#glow)" });
+el(world, "circle", { cx: px, cy: py, r: pr, fill: "url(#planet)", stroke: "rgba(255,138,107,.85)", "stroke-width": 2.2 });
+for (let i = 1; i <= 5; i++) el(world, "ellipse", { cx: px, cy: py, rx: pr * (1 - i * 0.16), ry: pr, fill: "none", stroke: `rgba(255,120,90,${0.16 - i * 0.02})`, "stroke-width": 1 });
+for (let i = 1; i <= 4; i++) el(world, "ellipse", { cx: px, cy: py - pr + i * pr * 0.09, rx: pr * Math.sqrt(1 - Math.pow(1 - i * 0.09, 2)), ry: pr * 0.06 * i, fill: "none", stroke: "rgba(255,120,90,.10)", "stroke-width": 1 });
+// seeded points of light on and above the horizon
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+const pts = [];
+for (let i = 0; i < (v === "wide" ? 70 : 90); i++) {
+  const a = -Math.PI / 2 + (rnd() - 0.5) * (v === "wide" ? 1.5 : 1.25), rr = pr * (0.985 + rnd() * 0.02);
+  const x = px + Math.cos(a) * rr, y = py + Math.sin(a) * rr + rnd() * pr * 0.035;
+  if (x < 0 || x > W || y > H) continue; pts.push([x, y]);
+  el(world, "circle", { cx: x, cy: y, r: 1.4 + rnd() * 2.2, fill: rnd() > .8 ? "#fff" : "#ffb39e", opacity: 0.5 + rnd() * 0.5 });
+}
+for (let i = 0; i < 9; i++) { const a = pts[Math.floor(rnd() * pts.length)], b = pts[Math.floor(rnd() * pts.length)]; if (!a || !b) continue;
+  const mx = (a[0] + b[0]) / 2, my = Math.min(a[1], b[1]) - Math.abs(a[0] - b[0]) * 0.35;
+  el(world, "path", { d: `M${a[0]} ${a[1]} Q${mx} ${my} ${b[0]} ${b[1]}`, fill: "none", stroke: "rgba(255,150,120,.32)", "stroke-width": 1.2 });
+  el(world, "circle", { cx: a[0], cy: a[1], r: 4, fill: "#fff", filter: "url(#glow)", opacity: .7 }); }
+// dust in the projector light
+for (let i = 0; i < 120; i++) el(sky, "circle", { cx: rnd() * W, cy: rnd() * H * 0.95, r: rnd() * 1.6 + 0.3, fill: "#fff", opacity: (rnd() * 0.35).toFixed(2) });
+// projector beam onto the trailer screen
+const scr = document.querySelector(".screen").getBoundingClientRect();
+const src = { story: [W * 0.92, -40], feed: [W * 0.95, -40], wide: [W * 0.5, -60] }[v];
+const tx = scr.left + scr.width / 2, ty = scr.top + scr.height / 2;
+const len = Math.hypot(tx - src[0], ty - src[1]), ang = Math.atan2(ty - src[1], tx - src[0]) * 180 / Math.PI - 90;
+Object.assign(document.getElementById("beam").style, { left: src[0] - scr.width * 0.45 + "px", top: src[1] + "px", width: scr.width * 0.9 + "px", height: len + "px",
+  transform: `rotate(${ang}deg)`, background: "linear-gradient(180deg, rgba(255,214,200,.0) 0%, rgba(255,190,170,.07) 35%, rgba(196,181,253,.10) 100%)",
+  clipPath: "polygon(46% 0, 54% 0, 100% 100%, 0 100%)" });
+</script>
+</body>
+</html>

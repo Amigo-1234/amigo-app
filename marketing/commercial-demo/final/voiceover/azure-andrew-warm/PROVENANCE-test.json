@@ -1,0 +1,30 @@
+{
+ "service": "Azure AI Speech (text to speech, REST)",
+ "region": "eastus",
+ "voice": "en-US-AndrewMultilingualNeural",
+ "style": "empathetic",
+ "prosody": {
+  "rate": "-6%",
+  "pitch": "-4%"
+ },
+ "outputFormat": "riff-48khz-16bit-mono-pcm",
+ "characters": 159,
+ "renderedAt": "2026-11-04T17:03:34.005Z",
+ "lines": [
+  {
+   "line": 6,
+   "text": "Imagine one place where all of it comes together.",
+   "date": "Wed, 04 Nov 2026 17:03:27 GMT"
+  },
+  {
+   "line": 9,
+   "text": "Talk freely, in messages only you and the people you're talking to can read.",
+   "date": "Wed, 04 Nov 2026 17:03:29 GMT"
+  },
+  {
+   "line": 14,
+   "text": "Live. Together. In the same World.",
+   "date": "Wed, 04 Nov 2026 17:03:32 GMT"
+  }
+ ]
+}

@@ -1,0 +1,240 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Username Reservations Banner</title>
+<style>
+@font-face { font-family: "Bricolage"; src: url(fonts/bricolage-grotesque-latin-standard-normal.woff2) format("woff2"); font-weight: 200 800; font-stretch: 75% 100%; }
+@font-face { font-family: "Geist"; src: url(fonts/geist-latin-wght-normal.woff2) format("woff2"); font-weight: 100 900; }
+:root {
+  --bg: #08070b; --text: #f3f1ee; --text-2: #aaa4b4; --text-3: #6f6a7a;
+  --coral: #ff5a3c; --on-coral: #1d0a05;
+  --v300: #c4b5fd; --v400: #a78bfa; --v500: #8b5cf6; --v600: #7c3aed; --v700: #5b21b6;
+  --ok: #4fd18b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { background: var(--bg); }
+body { width: var(--w); height: var(--h); overflow: hidden; font-family: "Geist", sans-serif; color: var(--text); -webkit-font-smoothing: antialiased; }
+.stage { position: relative; width: 100%; height: 100%; overflow: hidden; background: var(--bg); }
+.light { position: absolute; border-radius: 50%; pointer-events: none; }
+.beam { position: absolute; pointer-events: none; transform-origin: top center; filter: blur(30px); }
+.lines { position: absolute; inset: 0; opacity: .55; }
+.grain { position: absolute; inset: 0; opacity: .06; mix-blend-mode: overlay; }
+
+/* ---------- copy ---------- */
+.brand { position: absolute; display: flex; align-items: center; gap: 14px; font-family: "Bricolage"; font-weight: 700; letter-spacing: -0.01em; }
+.eyebrow { display: inline-flex; align-items: center; gap: 12px; align-self: flex-start; padding: 9px 18px 9px 14px; border-radius: 999px;
+  font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--v300);
+  background: rgba(139,92,246,.10); border: 1px solid rgba(167,139,250,.32); }
+.eyebrow i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px rgba(79,209,139,.18), 0 0 14px var(--ok); }
+.copy { position: absolute; display: flex; flex-direction: column; }
+h1 { font-family: "Bricolage"; font-weight: 800; font-stretch: 86%; text-transform: uppercase; letter-spacing: -0.03em; line-height: .9; }
+h1 .w { display: block; background: linear-gradient(180deg, #fff 0%, #ece8f3 50%, #b6aec4 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+h1 .v { display: block; background: linear-gradient(95deg, var(--v300) 0%, var(--v400) 45%, var(--v500) 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 0 40px rgba(139,92,246,.35)); }
+.lead { font-family: "Bricolage"; font-weight: 600; letter-spacing: -0.015em; color: var(--text); }
+.sub { color: var(--text-2); line-height: 1.4; letter-spacing: -0.005em; }
+.cta-row { display: flex; align-items: center; }
+.cta { display: inline-flex; align-items: center; gap: 16px; border-radius: 18px; background: var(--coral); color: var(--on-coral);
+  font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  box-shadow: 0 0 0 1px rgba(255,155,131,.5) inset, 0 18px 50px rgba(255,90,60,.35), 0 0 90px rgba(255,90,60,.18); }
+.url { display: flex; align-items: center; gap: 12px; color: var(--text); font-weight: 500; letter-spacing: -0.005em; }
+.url svg { color: var(--v400); flex: none; }
+.facts { position: absolute; display: flex; }
+.fact { display: flex; align-items: center; gap: 12px; color: var(--text-2); font-weight: 500; white-space: nowrap; }
+.fact b { color: var(--text); font-weight: 600; }
+.fact .ic { display: grid; place-items: center; border-radius: 10px; background: rgba(139,92,246,.12); border: 1px solid rgba(167,139,250,.22); color: var(--v300); flex: none; }
+
+/* ---------- mockup ---------- */
+.mock { position: absolute; }
+.card { position: relative; border-radius: 28px; background: linear-gradient(180deg, #16141c 0%, #111016 100%);
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, 0 50px 120px rgba(0,0,0,.7), 0 0 0 1px rgba(139,92,246,.10), 0 0 140px rgba(124,58,237,.22); }
+.card::before { content: ""; position: absolute; inset: -1px; border-radius: 29px; padding: 1px; pointer-events: none;
+  background: linear-gradient(160deg, rgba(196,181,253,.55), rgba(139,92,246,.08) 40%, transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.bar { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.dots { display: flex; gap: 8px; } .dots i { width: 11px; height: 11px; border-radius: 50%; background: #2a2832; }
+.addr { flex: 1; display: flex; align-items: center; justify-content: center; gap: 9px; border-radius: 10px; background: #0d0c11; border: 1px solid rgba(255,255,255,.05); color: var(--text-2); }
+.addr svg { color: var(--ok); }
+.body { position: relative; }
+.mk-head { display: flex; align-items: center; gap: 10px; font-family: "Bricolage"; font-weight: 700; }
+.mk-title { font-family: "Bricolage"; font-weight: 700; letter-spacing: -0.025em; line-height: 1.08; }
+.mk-label { font-weight: 600; color: var(--text); }
+.field { display: flex; align-items: center; border-radius: 16px; background: #1b1a21; border: 1.5px solid rgba(79,209,139,.65); box-shadow: 0 0 0 4px rgba(79,209,139,.08); }
+.field .at { color: var(--text-3); margin-right: 2px; }
+.field .name { flex: 1; color: var(--text); }
+.field .tick { display: grid; place-items: center; border-radius: 50%; background: rgba(79,209,139,.15); color: var(--ok); }
+.avail { display: flex; align-items: center; gap: 8px; color: var(--ok); font-weight: 500; }
+.mk-btn { display: grid; place-items: center; border-radius: 16px; background: var(--coral); color: var(--on-coral); font-weight: 700; }
+
+.toast { position: absolute; display: flex; align-items: center; border-radius: 22px;
+  background: linear-gradient(180deg, #1d1a26, #15131c); border: 1px solid rgba(167,139,250,.35);
+  box-shadow: 0 30px 80px rgba(0,0,0,.65), 0 0 60px rgba(139,92,246,.30), 0 1px 0 rgba(255,255,255,.08) inset; }
+.toast .badge { display: grid; place-items: center; border-radius: 16px; background: radial-gradient(circle at 35% 30%, #a78bfa, #6d28d9); color: #fff;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.18) inset, 0 8px 26px rgba(124,58,237,.6); flex: none; }
+.toast .t1 { font-family: "Bricolage"; font-weight: 700; letter-spacing: -0.02em; display: flex; align-items: center; gap: 8px; }
+.toast .t1 svg { color: var(--v400); }
+.toast .t2 { color: var(--text-2); display: flex; align-items: center; gap: 7px; }
+.toast .t2 svg { color: var(--v300); }
+
+.foot { position: absolute; display: flex; justify-content: space-between; align-items: center; color: var(--text-3); text-transform: uppercase; letter-spacing: .16em; font-weight: 500; }
+.foot .rule { flex: 1; height: 1px; margin: 0 26px; background: linear-gradient(90deg, rgba(255,255,255,.10), rgba(255,255,255,.02)); }
+
+/* ================= 16:9 ================= */
+.wide { --w: 1920px; --h: 1080px; }
+.wide .brand { left: 112px; top: 84px; font-size: 30px; }
+.wide .copy { left: 112px; top: 190px; width: 980px; }
+.wide .eyebrow { font-size: 15px; }
+.wide h1 { font-size: 132px; margin-top: 30px; }
+.wide .lead { font-size: 38px; margin-top: 34px; }
+.wide .sub { font-size: 25px; margin-top: 10px; max-width: 760px; }
+.wide .cta-row { margin-top: 40px; gap: 34px; }
+.wide .cta { font-size: 23px; padding: 24px 30px 24px 34px; }
+.wide .url { font-size: 25px; }
+.wide .facts { left: 112px; right: 112px; bottom: 74px; justify-content: space-between; }
+.wide .fact { font-size: 19px; }
+.wide .fact .ic { width: 38px; height: 38px; }
+.wide .mock { right: 112px; top: 166px; width: 620px; }
+.wide .card .bar { padding: 18px 22px; }
+.wide .addr { height: 38px; font-size: 16px; }
+.wide .body { padding: 38px 42px 44px; }
+.wide .mk-head { font-size: 18px; } .wide .mk-title { font-size: 40px; margin-top: 26px; }
+.wide .mk-label { font-size: 17px; margin-top: 30px; }
+.wide .field { height: 72px; padding: 0 20px; margin-top: 12px; font-size: 26px; }
+.wide .field .tick { width: 34px; height: 34px; }
+.wide .avail { font-size: 17px; margin-top: 14px; }
+.wide .mk-btn { height: 66px; font-size: 20px; margin-top: 26px; }
+.wide .toast { left: -96px; bottom: -64px; gap: 18px; padding: 20px 28px 20px 20px; }
+.wide .toast .badge { width: 64px; height: 64px; }
+.wide .toast .t1 { font-size: 27px; } .wide .toast .t2 { font-size: 17px; margin-top: 6px; }
+.wide .foot { display: none; }
+
+/* ================= 4:5 ================= */
+.tall { --w: 1080px; --h: 1350px; }
+.tall .brand { left: 72px; top: 64px; font-size: 26px; }
+.tall .copy { left: 72px; right: 72px; top: 150px; }
+.tall .eyebrow { font-size: 13px; position: absolute; top: -84px; right: 0; align-self: auto; }
+.tall h1 { font-size: 112px; margin-top: 0; }
+.tall .lead { font-size: 32px; margin-top: 26px; }
+.tall .sub { font-size: 22px; margin-top: 8px; max-width: 560px; }
+.tall .cta-row { position: absolute; top: 905px; left: 0; right: 0; flex-direction: row; gap: 28px; }
+.tall .cta { font-size: 20px; padding: 21px 26px 21px 30px; }
+.tall .url { font-size: 21px; }
+.tall .facts { left: 72px; right: 72px; bottom: 112px; flex-wrap: wrap; justify-content: center; gap: 16px 34px; }
+.tall .fact { font-size: 17px; }
+.tall .fact .ic { width: 34px; height: 34px; }
+.tall .mock { left: 72px; top: 648px; width: 936px; }
+.tall .card .bar { padding: 14px 18px; }
+.tall .addr { height: 32px; font-size: 14px; }
+.tall .body { padding: 24px 30px 30px; }
+.tall .mk-head { display: none; } .tall .mk-title { display: none; }
+.tall .mk-label { font-size: 15px; margin-top: 0; }
+.tall .field { height: 60px; padding: 0 16px; margin-top: 10px; font-size: 22px; }
+.tall .field .tick { width: 30px; height: 30px; }
+.tall .avail { font-size: 15px; margin-top: 10px; }
+.tall .mk-btn { height: 54px; font-size: 17px; margin-top: 18px; width: 52%; }
+.tall .toast { right: -20px; bottom: -58px; gap: 16px; padding: 16px 24px 16px 16px; }
+.tall .toast .badge { width: 54px; height: 54px; }
+.tall .toast .t1 { font-size: 23px; } .tall .toast .t2 { font-size: 15px; margin-top: 4px; }
+.tall .foot { left: 72px; right: 72px; bottom: 52px; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="light" id="l1"></div>
+  <div class="light" id="l2"></div>
+  <div class="light" id="l3"></div>
+  <svg class="lines" id="lines" width="100%" height="100%"></svg>
+  <svg class="grain" width="100%" height="100%"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>
+
+  <div class="brand">
+    <svg width="44" height="44" viewBox="0 0 32 32" style="filter: drop-shadow(0 6px 20px rgba(255,90,60,.35))"><path d="M9 0h14a9 9 0 0 1 9 9v14a9 9 0 0 1-9 9H3a3 3 0 0 1-3-3V9a9 9 0 0 1 9-9z" fill="#ff5a3c"/><circle cx="14.6" cy="17.2" r="5.6" fill="none" stroke="#1d0a05" stroke-width="3.2"/><rect x="19.6" y="10" width="3.3" height="13" rx="1.65" fill="#1d0a05"/></svg>
+    Amigo World
+  </div>
+
+  <div class="copy">
+    <div class="eyebrow"><i></i>Now open</div>
+    <h1><span class="w">Username</span><span class="w">Reservations</span><span class="v">Start now.</span></h1>
+    <p class="lead">Your identity. Your username. Your choice.</p>
+    <p class="sub">Reserve your preferred username now and secure it before public registration.</p>
+    <div class="cta-row">
+      <div class="cta">Reserve your username
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg>
+      </div>
+      <div class="url">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+        reserve.amigoworld.com.ng
+      </div>
+    </div>
+  </div>
+
+  <div class="mock">
+    <div class="card">
+      <div class="bar">
+        <div class="dots"><i></i><i></i><i></i></div>
+        <div class="addr">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          reserve.amigoworld.com.ng
+        </div>
+        <div style="width:49px"></div>
+      </div>
+      <div class="body">
+        <div class="mk-head">
+          <svg width="26" height="26" viewBox="0 0 32 32"><path d="M9 0h14a9 9 0 0 1 9 9v14a9 9 0 0 1-9 9H3a3 3 0 0 1-3-3V9a9 9 0 0 1 9-9z" fill="#ff5a3c"/><circle cx="14.6" cy="17.2" r="5.6" fill="none" stroke="#1d0a05" stroke-width="3.2"/><rect x="19.6" y="10" width="3.3" height="13" rx="1.65" fill="#1d0a05"/></svg>
+          Amigo World
+        </div>
+        <div class="mk-title">Reserve your username<br>on Amigo World.</div>
+        <div class="mk-label">Your username</div>
+        <div class="field"><span class="at">@</span><span class="name">yourname</span>
+          <span class="tick"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+        </div>
+        <div class="avail"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>@yourname is available.</div>
+        <div class="mk-btn">Reserve username</div>
+      </div>
+    </div>
+    <div class="toast">
+      <div class="badge"><svg width="60%" height="60%" viewBox="0 0 24 24" fill="rgba(255,255,255,.16)" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4" fill="none"/></svg></div>
+      <div>
+        <div class="t1">@yourname is yours.</div>
+        <div class="t2"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Held for you for 180 days</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="facts">
+    <div class="fact"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span><span><b>Free</b> to reserve</span></div>
+    <div class="fact"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span><span><b>One</b> username per email</span></div>
+    <div class="fact"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg></span><span><b>180 days</b>, renewable</span></div>
+    <div class="fact"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span><span><b>18+</b> only</span></div>
+    <div class="fact"><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></span><span>Doesn't create an <b>account</b></span></div>
+  </div>
+
+  <div class="foot"><span>Amigo World</span><span class="rule"></span><span>Reservations open now</span></div>
+</div>
+<script>
+const v = new URLSearchParams(location.search).get("v") || "wide";
+document.body.className = v;
+const W = v === "wide" ? 1920 : 1080, H = v === "wide" ? 1080 : 1350;
+const lights = {
+  wide: [[1480, 420, 1300, "rgba(124,58,237,.42)"], [1780, 40, 700, "rgba(196,181,253,.16)"], [220, 1080, 900, "rgba(91,33,182,.22)"]],
+  tall: [[700, 760, 1200, "rgba(124,58,237,.40)"], [1000, 80, 640, "rgba(196,181,253,.14)"], [80, 1300, 760, "rgba(91,33,182,.20)"]],
+}[v];
+["l1", "l2", "l3"].forEach((id, i) => {
+  const [x, y, s, c] = lights[i];
+  Object.assign(document.getElementById(id).style, { left: x - s / 2 + "px", top: y - s / 2 + "px", width: s + "px", height: s + "px",
+    background: `radial-gradient(circle, ${c} 0%, transparent 62%)` });
+});
+// fine concentric arcs behind the mockup: a quiet "orbit" cue, no clutter
+const svg = document.getElementById("lines"), NS = "http://www.w3.org/2000/svg";
+const [cx, cy] = v === "wide" ? [1500, 500] : [600, 800];
+for (let i = 0; i < 7; i++) {
+  const c = document.createElementNS(NS, "circle");
+  const r = 260 + i * 110;
+  Object.entries({ cx, cy, r, fill: "none", stroke: `rgba(167,139,250,${(0.16 - i * 0.018).toFixed(3)})`, "stroke-width": 1, ...(i % 2 ? { "stroke-dasharray": "2 9" } : {}) })
+    .forEach(([k, val]) => c.setAttribute(k, val));
+  svg.appendChild(c);
+}
+</script>
+</body>
+</html>

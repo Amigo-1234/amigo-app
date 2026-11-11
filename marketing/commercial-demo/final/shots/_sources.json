@@ -1,0 +1,95 @@
+{
+ "mode": "review",
+ "slots": [
+  {
+   "id": "01_s02_pending",
+   "scene": 2,
+   "source": "stock",
+   "file": "pexels-31050551-studio-producer_somogro-bangladesh.mp4"
+  },
+  {
+   "id": "02_s03_pending",
+   "scene": 3,
+   "source": "stock",
+   "file": "pexels-6841969-hands-folding-cloth_teona-swift.mp4"
+  },
+  {
+   "id": "03_s04_split",
+   "scene": 4,
+   "source": "stock",
+   "file": "pexels-27706413-lagos-danfo-sunset_shedrack-salami.mp4"
+  },
+  {
+   "id": "04_s05_pending",
+   "scene": 5,
+   "source": "stock",
+   "file": "pexels-32896750-photographer-hands-city_ahmed.mp4"
+  },
+  {
+   "id": "05_s06_pending",
+   "scene": 6,
+   "source": "graphic",
+   "file": "s06-home-tap"
+  },
+  {
+   "id": "08_s07_pending",
+   "scene": 7,
+   "source": "stock",
+   "file": "pexels-39416582-friends-rooftop-sunset_dara-visuals.mp4"
+  },
+  {
+   "id": "11_s08_pending",
+   "scene": 8,
+   "source": "stock",
+   "file": "pexels-5075206-cafe-phone-hands_cottonbro.mp4"
+  },
+  {
+   "id": "13_s09_pending",
+   "scene": 9,
+   "source": "stock",
+   "file": "pexels-33942937-hands-phone-dark_ozgur-surmeli.mp4"
+  },
+  {
+   "id": "16_s09_pending",
+   "scene": 9,
+   "source": "stock",
+   "file": "pexels-27706275-lagos-road-danfos_shedrack-salami.mp4"
+  },
+  {
+   "id": "17_s10_pending",
+   "scene": 10,
+   "source": "stock",
+   "file": "pexels-30698866-fabric-shop_mohamed-hamdi.jpg"
+  },
+  {
+   "id": "20_s11_pending",
+   "scene": 11,
+   "source": "stock",
+   "file": "pexels-31050551-studio-producer_somogro-bangladesh.mp4"
+  },
+  {
+   "id": "25_s12_pending",
+   "scene": 12,
+   "source": "stock",
+   "file": "pexels-6940967-hands-phone-night_cottonbro.mp4"
+  },
+  {
+   "id": "27_s12_pending",
+   "scene": 12,
+   "source": "stock",
+   "file": "pexels-33942937-hands-phone-dark_ozgur-surmeli.mp4"
+  },
+  {
+   "id": "32_s13_pending",
+   "scene": 13,
+   "source": "stock",
+   "file": "pexels-31661123-lagos-sunset-aerial_vitalis-nwenyi.mp4"
+  },
+  {
+   "id": "34_s13_pending",
+   "scene": 13,
+   "source": "stock",
+   "file": "pexels-31948670-friends-sparklers-sunset_vitaly-gariev.mp4"
+  }
+ ]
+}

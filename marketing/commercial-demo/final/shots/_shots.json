@@ -1,0 +1,240 @@
+[
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/00_s01_stock.mp4",
+  "f0": 0,
+  "frames": 120,
+  "scene": 1,
+  "type": "stock"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/01_s02_pending.mp4",
+  "f0": 120,
+  "frames": 144,
+  "scene": 2,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/02_s03_pending.mp4",
+  "f0": 264,
+  "frames": 120,
+  "scene": 3,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/03_s04_split.mp4",
+  "f0": 384,
+  "frames": 120,
+  "scene": 4,
+  "type": "split"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/04_s05_pending.mp4",
+  "f0": 504,
+  "frames": 120,
+  "scene": 5,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/05_s06_pending.mp4",
+  "f0": 624,
+  "frames": 48,
+  "scene": 6,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/06_s06_clip+xfade.mp4",
+  "f0": 672,
+  "frames": 72,
+  "scene": 6,
+  "type": "group"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/08_s07_pending.mp4",
+  "f0": 744,
+  "frames": 72,
+  "scene": 7,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/09_s07_clip.mp4",
+  "f0": 816,
+  "frames": 96,
+  "scene": 7,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/10_s07_clip.mp4",
+  "f0": 912,
+  "frames": 48,
+  "scene": 7,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/11_s08_pending.mp4",
+  "f0": 960,
+  "frames": 48,
+  "scene": 8,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/12_s08_clip.mp4",
+  "f0": 1008,
+  "frames": 144,
+  "scene": 8,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/13_s09_pending.mp4",
+  "f0": 1152,
+  "frames": 24,
+  "scene": 9,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/14_s09_clip.mp4",
+  "f0": 1176,
+  "frames": 36,
+  "scene": 9,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/15_s09_clip.mp4",
+  "f0": 1212,
+  "frames": 108,
+  "scene": 9,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/16_s09_pending.mp4",
+  "f0": 1320,
+  "frames": 24,
+  "scene": 9,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/17_s10_pending.mp4",
+  "f0": 1344,
+  "frames": 96,
+  "scene": 10,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/18_s10_still+xfade.mp4",
+  "f0": 1440,
+  "frames": 96,
+  "scene": 10,
+  "type": "group"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/20_s11_pending.mp4",
+  "f0": 1536,
+  "frames": 24,
+  "scene": 11,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/21_s11_clip.mp4",
+  "f0": 1560,
+  "frames": 53,
+  "scene": 11,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/22_s11_clip.mp4",
+  "f0": 1613,
+  "frames": 53,
+  "scene": 11,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/23_s11_clip.mp4",
+  "f0": 1666,
+  "frames": 86,
+  "scene": 11,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/24_s12_clip.mp4",
+  "f0": 1752,
+  "frames": 24,
+  "scene": 12,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/25_s12_pending.mp4",
+  "f0": 1776,
+  "frames": 12,
+  "scene": 12,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/26_s12_clip.mp4",
+  "f0": 1788,
+  "frames": 36,
+  "scene": 12,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/27_s12_pending.mp4",
+  "f0": 1824,
+  "frames": 12,
+  "scene": 12,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/28_s12_clip.mp4",
+  "f0": 1836,
+  "frames": 36,
+  "scene": 12,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/29_s12_still.mp4",
+  "f0": 1872,
+  "frames": 36,
+  "scene": 12,
+  "type": "still"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/30_s12_clip.mp4",
+  "f0": 1908,
+  "frames": 31,
+  "scene": 12,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/31_s12_clip.mp4",
+  "f0": 1939,
+  "frames": 77,
+  "scene": 12,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/32_s13_pending.mp4",
+  "f0": 2016,
+  "frames": 84,
+  "scene": 13,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/33_s13_clip.mp4",
+  "f0": 2100,
+  "frames": 72,
+  "scene": 13,
+  "type": "clip"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/34_s13_pending.mp4",
+  "f0": 2172,
+  "frames": 60,
+  "scene": 13,
+  "type": "pending"
+ },
+ {
+  "file": "/Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/35_s14_card+xfade.mp4",
+  "f0": 2232,
+  "frames": 288,
+  "scene": 14,
+  "type": "group"
+ }
+]

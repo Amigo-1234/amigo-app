@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE fcpxml>
+<fcpxml version="1.9">
+<resources>
+<format id="r0" name="FFVideoFormat1080p24" frameDuration="1/24s" width="1920" height="1080" colorSpace="1-1-1 (Rec. 709)"/>
+<asset id="v0" name="00_s01_stock" start="0s" duration="120/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/00_s01_stock.mp4"/></asset>
+<asset id="v1" name="01_s02_pending" start="0s" duration="144/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/01_s02_pending.mp4"/></asset>
+<asset id="v2" name="02_s03_pending" start="0s" duration="120/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/02_s03_pending.mp4"/></asset>
+<asset id="v3" name="03_s04_split" start="0s" duration="120/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/03_s04_split.mp4"/></asset>
+<asset id="v4" name="04_s05_pending" start="0s" duration="120/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/04_s05_pending.mp4"/></asset>
+<asset id="v5" name="05_s06_pending" start="0s" duration="48/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/05_s06_pending.mp4"/></asset>
+<asset id="v6" name="06_s06_clip+xfade" start="0s" duration="72/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/06_s06_clip+xfade.mp4"/></asset>
+<asset id="v7" name="08_s07_pending" start="0s" duration="72/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/08_s07_pending.mp4"/></asset>
+<asset id="v8" name="09_s07_clip" start="0s" duration="96/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/09_s07_clip.mp4"/></asset>
+<asset id="v9" name="10_s07_clip" start="0s" duration="48/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/10_s07_clip.mp4"/></asset>
+<asset id="v10" name="11_s08_pending" start="0s" duration="48/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/11_s08_pending.mp4"/></asset>
+<asset id="v11" name="12_s08_clip" start="0s" duration="144/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/12_s08_clip.mp4"/></asset>
+<asset id="v12" name="13_s09_pending" start="0s" duration="24/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/13_s09_pending.mp4"/></asset>
+<asset id="v13" name="14_s09_clip" start="0s" duration="36/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/14_s09_clip.mp4"/></asset>
+<asset id="v14" name="15_s09_clip" start="0s" duration="108/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/15_s09_clip.mp4"/></asset>
+<asset id="v15" name="16_s09_pending" start="0s" duration="24/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/16_s09_pending.mp4"/></asset>
+<asset id="v16" name="17_s10_pending" start="0s" duration="96/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/17_s10_pending.mp4"/></asset>
+<asset id="v17" name="18_s10_still+xfade" start="0s" duration="96/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/18_s10_still+xfade.mp4"/></asset>
+<asset id="v18" name="20_s11_pending" start="0s" duration="24/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/20_s11_pending.mp4"/></asset>
+<asset id="v19" name="21_s11_clip" start="0s" duration="53/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/21_s11_clip.mp4"/></asset>
+<asset id="v20" name="22_s11_clip" start="0s" duration="53/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/22_s11_clip.mp4"/></asset>
+<asset id="v21" name="23_s11_clip" start="0s" duration="86/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/23_s11_clip.mp4"/></asset>
+<asset id="v22" name="24_s12_clip" start="0s" duration="24/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/24_s12_clip.mp4"/></asset>
+<asset id="v23" name="25_s12_pending" start="0s" duration="12/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/25_s12_pending.mp4"/></asset>
+<asset id="v24" name="26_s12_clip" start="0s" duration="36/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/26_s12_clip.mp4"/></asset>
+<asset id="v25" name="27_s12_pending" start="0s" duration="12/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/27_s12_pending.mp4"/></asset>
+<asset id="v26" name="28_s12_clip" start="0s" duration="36/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/28_s12_clip.mp4"/></asset>
+<asset id="v27" name="29_s12_still" start="0s" duration="36/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/29_s12_still.mp4"/></asset>
+<asset id="v28" name="30_s12_clip" start="0s" duration="31/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/30_s12_clip.mp4"/></asset>
+<asset id="v29" name="31_s12_clip" start="0s" duration="77/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/31_s12_clip.mp4"/></asset>
+<asset id="v30" name="32_s13_pending" start="0s" duration="84/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/32_s13_pending.mp4"/></asset>
+<asset id="v31" name="33_s13_clip" start="0s" duration="72/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/33_s13_clip.mp4"/></asset>
+<asset id="v32" name="34_s13_pending" start="0s" duration="60/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/34_s13_pending.mp4"/></asset>
+<asset id="v33" name="35_s14_card+xfade" start="0s" duration="288/24s" hasVideo="1" videoSources="1" format="r0"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/project/../shots/35_s14_card+xfade.mp4"/></asset>
+<asset id="s0" name="VO" start="0s" duration="2520/24s" hasAudio="1" audioSources="1" audioChannels="2" audioRate="48000"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/stems/VO.wav"/></asset>
+<asset id="s1" name="MUSIC" start="0s" duration="2520/24s" hasAudio="1" audioSources="1" audioChannels="2" audioRate="48000"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/stems/MUSIC.wav"/></asset>
+<asset id="s2" name="SFX" start="0s" duration="2520/24s" hasAudio="1" audioSources="1" audioChannels="2" audioRate="48000"><media-rep kind="original-media" src="file:///Users/mac/amigo-world/marketing/commercial-demo/final/stems/SFX.wav"/></asset>
+</resources>
+<library><event name="Amigo World launch commercial"><project name="AmigoWorld_Launch_1m45_v1">
+<sequence format="r0" duration="2520/24s" tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k"><spine>
+<asset-clip ref="v0" offset="0/24s" name="S01 · 00_s01_stock" duration="120/24s" start="0s" format="r0" tcFormat="NDF"><asset-clip ref="s0" lane="-1" offset="0s" name="VO stem" duration="2520/24s" start="0s" audioRole="dialogue"/><asset-clip ref="s1" lane="-2" offset="0s" name="MUSIC stem" duration="2520/24s" start="0s" audioRole="music"/><asset-clip ref="s2" lane="-3" offset="0s" name="SFX stem" duration="2520/24s" start="0s" audioRole="effects"/></asset-clip>
+<asset-clip ref="v1" offset="120/24s" name="S02 · 01_s02_pending" duration="144/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v2" offset="264/24s" name="S03 · 02_s03_pending" duration="120/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v3" offset="384/24s" name="S04 · 03_s04_split" duration="120/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v4" offset="504/24s" name="S05 · 04_s05_pending" duration="120/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v5" offset="624/24s" name="S06 · 05_s06_pending" duration="48/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v6" offset="672/24s" name="S06 · 06_s06_clip+xfade" duration="72/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v7" offset="744/24s" name="S07 · 08_s07_pending" duration="72/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v8" offset="816/24s" name="S07 · 09_s07_clip" duration="96/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v9" offset="912/24s" name="S07 · 10_s07_clip" duration="48/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v10" offset="960/24s" name="S08 · 11_s08_pending" duration="48/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v11" offset="1008/24s" name="S08 · 12_s08_clip" duration="144/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v12" offset="1152/24s" name="S09 · 13_s09_pending" duration="24/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v13" offset="1176/24s" name="S09 · 14_s09_clip" duration="36/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v14" offset="1212/24s" name="S09 · 15_s09_clip" duration="108/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v15" offset="1320/24s" name="S09 · 16_s09_pending" duration="24/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v16" offset="1344/24s" name="S10 · 17_s10_pending" duration="96/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v17" offset="1440/24s" name="S10 · 18_s10_still+xfade" duration="96/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v18" offset="1536/24s" name="S11 · 20_s11_pending" duration="24/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v19" offset="1560/24s" name="S11 · 21_s11_clip" duration="53/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v20" offset="1613/24s" name="S11 · 22_s11_clip" duration="53/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v21" offset="1666/24s" name="S11 · 23_s11_clip" duration="86/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v22" offset="1752/24s" name="S12 · 24_s12_clip" duration="24/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v23" offset="1776/24s" name="S12 · 25_s12_pending" duration="12/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v24" offset="1788/24s" name="S12 · 26_s12_clip" duration="36/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v25" offset="1824/24s" name="S12 · 27_s12_pending" duration="12/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v26" offset="1836/24s" name="S12 · 28_s12_clip" duration="36/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v27" offset="1872/24s" name="S12 · 29_s12_still" duration="36/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v28" offset="1908/24s" name="S12 · 30_s12_clip" duration="31/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v29" offset="1939/24s" name="S12 · 31_s12_clip" duration="77/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v30" offset="2016/24s" name="S13 · 32_s13_pending" duration="84/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v31" offset="2100/24s" name="S13 · 33_s13_clip" duration="72/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v32" offset="2172/24s" name="S13 · 34_s13_pending" duration="60/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+<asset-clip ref="v33" offset="2232/24s" name="S14 · 35_s14_card+xfade" duration="288/24s" start="0s" format="r0" tcFormat="NDF"></asset-clip>
+</spine></sequence></project></event></library>
+</fcpxml>
