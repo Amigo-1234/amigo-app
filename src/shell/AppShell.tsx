@@ -26,6 +26,7 @@ import { SuspensionBanner } from "../features/moderation/SuspensionBanner";
 import { UpdateBanner } from "../features/update/UpdateBanner";
 import { InAppAlerts } from "../features/inapp/InAppAlerts";
 import { Tour } from "../features/onboarding/Tour";
+import { InstallBubble } from "../features/onboarding/InstallBubble";
 import "./AppShell.css";
 
 export function AppShell() {
@@ -174,6 +175,7 @@ export function AppShell() {
 
       {pathname !== "/" && <PublishStatusBar />}
       <Tour />
+      <InstallBubble />
     </div>
   );
 }

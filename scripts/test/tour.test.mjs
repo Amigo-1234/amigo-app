@@ -98,6 +98,39 @@ try {
     ok("Skip tour ends it", (await bubble(page).count()) === 0);
     await context.close();
   }
+  // Add to Home Screen bubble (iPhone Safari), after the tour
+  {
+    const { context, page, errors } = await open(devices["iPhone 13"], "demo=reset&tour&install");
+    await bubble(page).getByRole("button", { name: "Skip tour" }).click();
+    ok("install: not shown during the tour", (await page.locator(".install-bubble").count()) === 0);
+    await page.waitForTimeout(5000);
+    const ib = page.locator(".install-bubble");
+    ok("install: shown on iPhone Safari after the tour", (await ib.count()) === 1);
+    ok("install: explains Share → Add to Home Screen", /Add to Home Screen/.test(await ib.innerText()) && /Share/.test(await ib.innerText()));
+    const b = await ib.boundingBox();
+    const nav = await page.locator(".bottom-nav").boundingBox();
+    ok("install: sits above the tab bar, inside the screen", b && nav && b.y + b.height <= nav.y + 1 && b.x >= 0 && b.x + b.width <= 391, JSON.stringify(b));
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/install-iphone.png` });
+    await ib.getByRole("button", { name: "Got it" }).click();
+    await page.reload({ waitUntil: "load" });
+    await page.waitForTimeout(6000);
+    ok("install: 'Got it' hides it (for two weeks)", (await page.locator(".install-bubble").count()) === 0);
+    ok("install: no page errors", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+  {
+    const context = await browser.newContext({ ...devices["iPhone 13"] });
+    await context.addInitScript(() => {
+      localStorage.setItem("amigo.welcome.done.me", "1");
+      localStorage.setItem("amigo:tour:me", "done");
+      Object.defineProperty(navigator, "standalone", { get: () => true });
+    });
+    const page = await context.newPage();
+    await page.goto(`${BASE}/?demo=reset&install`, { waitUntil: "load" });
+    await page.waitForTimeout(6500);
+    ok("install: never inside the installed app", (await page.locator(".install-bubble").count()) === 0);
+    await context.close();
+  }
   {
     const { context, page } = await open({ viewport: { width: 1280, height: 820 } }, "demo=reset");
     ok("plain demo (tests, UI work): no tour", (await bubble(page).count()) === 0);
