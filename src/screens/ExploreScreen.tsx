@@ -18,6 +18,10 @@ import { Button } from "../ui/Button";
 import { Skeleton } from "../ui/Skeleton";
 import { StateMessage } from "../ui/StateMessage";
 import "../shell/ScreenHeader.css";
+import { useNow, worldStatus } from "../features/worlds/time";
+import { useWorldList } from "../features/worlds/useWorlds";
+import { WorldCard } from "../features/worlds/WorldBits";
+import "../features/worlds/Worlds.css";
 import "./ExploreScreen.css";
 
 const TABS: { id: SearchTab; label: string }[] = [
@@ -129,6 +133,7 @@ function ExploreHome({ onPickRecent }: { onPickRecent: (q: string) => void }) {
   return (
     <>
       <Browse market={market} businesses={!!businesses} />
+      {dataSource.worlds && <WorldsNow />}
       {recent.length > 0 && (
         <Section
           title="Recent searches"
@@ -168,6 +173,37 @@ function ExploreHome({ onPickRecent }: { onPickRecent: (q: string) => void }) {
 
       {state.status === "ready" && <ExploreSections feed={state.feed} />}
     </>
+  );
+}
+
+/** Live and upcoming Worlds at the top of Explore (live first, then the soonest), so events are easy to find. */
+function WorldsNow() {
+  const { state, refresh } = useWorldList();
+  const now = useNow(1000);
+  if (state.status !== "ready") return null;
+  const shown = state.data
+    .filter((w) => ["live", "upcoming"].includes(worldStatus(w, now)))
+    .sort((a, b) => {
+      const live = (w: typeof a) => (worldStatus(w, now) === "live" ? 0 : 1);
+      return live(a) - live(b) || a.startsAt.getTime() - b.startsAt.getTime();
+    })
+    .slice(0, 3);
+  if (!shown.length) return null;
+  return (
+    <Section
+      title={shown.some((w) => worldStatus(w, now) === "live") ? "Worlds happening now" : "Worlds coming up"}
+      action={
+        <Link to="/worlds" className="explore-section__action">
+          See all
+        </Link>
+      }
+    >
+      <ul className="world-list explore-worlds">
+        {shown.map((w) => (
+          <WorldCard key={w.id} world={w} now={now} onChange={refresh} />
+        ))}
+      </ul>
+    </Section>
   );
 }
 
