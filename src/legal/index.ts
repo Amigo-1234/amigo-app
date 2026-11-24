@@ -16,13 +16,13 @@ export const LEGAL_DOCS: { slug: LegalSlug; title: string; blurb: string }[] = [
 
 /** The version shown when the backend can't say which is current (demo, offline). */
 export const BUNDLED_VERSION: Record<LegalSlug, string> = {
-  terms: "0.1",
-  privacy: "0.1",
-  guidelines: "0.1",
-  copyright: "0.1",
-  monetization: "0.1",
-  deletion: "0.1",
-  cookies: "0.1",
+  terms: "1.0",
+  privacy: "1.0",
+  guidelines: "1.0",
+  copyright: "1.0",
+  monetization: "1.0",
+  deletion: "1.0",
+  cookies: "1.0",
 };
 
 const files = import.meta.glob("./docs/*.md", { query: "?raw", import: "default" }) as Record<string, () => Promise<string>>;

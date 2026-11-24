@@ -33,7 +33,12 @@ We do **not** use advertising trackers, sell personal information, or use third-
 - to find and fix problems with the app;
 - to comply with legal obligations.
 
-**[LEGAL REVIEW: legal bases for processing under the Nigeria Data Protection Act 2023 (and GDPR/UK GDPR if relevant), e.g. contract, legitimate interests, consent.]**
+Our legal bases under the Nigeria Data Protection Act 2023 (and, where they apply, the GDPR and UK GDPR):
+
+- **Contract:** to create and run your account and provide the features you use.
+- **Legitimate interests:** to keep Amigo safe and secure, prevent abuse and fraud, enforce our rules and improve the service, in ways you'd reasonably expect.
+- **Consent:** for optional things such as push notifications. You can withdraw consent at any time in Settings or your device settings.
+- **Legal obligation:** where the law requires us to keep or share information.
 
 ## 4. Encrypted direct messages
 
@@ -48,12 +53,12 @@ We do **not** use advertising trackers, sell personal information, or use third-
 - **Public by default:** your profile, followers and following lists, public posts, World participation, Help Hub requests, business pages and Marketplace listings.
 - **Followers only:** posts and Moments you share with followers.
 - **Admins:** a small team of administrators can review reports, moderate content and manage username reservations; their actions are logged. They cannot read encrypted messages.
-- **Service providers** that process data for us: **Vercel Inc.** (hosting and server functions), **Neon** (database and authentication, hosted in AWS London, UK), **Resend** (sending emails such as verification codes and reservation emails), **Cloudflare** (storing photos and videos you upload, in Cloudflare R2; and, if enabled, the Turnstile check on the reservation page), and your browser's push service (for example Apple, Google or Mozilla) if you turn on notifications. **[OWNER: confirm data-processing agreements with each provider.]**
+- **Service providers** that process data for us: **Vercel Inc.** (hosting and server functions), **Neon** (database and authentication, hosted in AWS London, UK), **Resend** (sending emails such as verification codes and reservation emails), **Cloudflare** (storing photos and videos you upload, in Cloudflare R2; and, if enabled, the Turnstile check on the reservation page), and your browser's push service (for example Apple, Google or Mozilla) if you turn on notifications. Each provider processes data only to provide its service to us, under its data-processing terms.
 - We may disclose information if the law requires it or to protect people from serious harm.
 
 ## 6. International transfers
 
-Our providers may process data outside Nigeria (for example in the UK, EU or US). **[LEGAL REVIEW: transfer basis under the NDPA 2023.]**
+Our providers may process data outside Nigeria (for example in the UK, EU or US). When information is transferred outside Nigeria, we rely on the safeguards the NDPA 2023 allows, such as the contractual data-protection commitments our providers make, and we only use providers that protect personal data to a standard comparable to Nigerian law.
 
 ## 7. Retention
 

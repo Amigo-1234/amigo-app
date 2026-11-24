@@ -19,7 +19,7 @@ If you believe content on Amigo infringes your copyright or other rights, send a
 5. a statement that the information is accurate and that you're the owner or authorised to act for them;
 6. your physical or electronic signature.
 
-We'll review notices, remove infringing content where appropriate, and tell the person who posted it. **[LEGAL REVIEW: counter-notice procedure and any statutory requirements (e.g. DMCA agent registration) for the operator's jurisdiction.]**
+We'll review notices, remove infringing content where appropriate, and tell the person who posted it. If your content was removed and you believe that was a mistake (for example, you have permission or the use is allowed by law), reply to the email we send you, or contact **olamidesamson841@gmail.com**, explaining why. We'll review it and restore the content if we agree.
 
 ## Repeat infringers
 

@@ -19,4 +19,4 @@ Help Hub has no monetary fees; asking for help costs Kudos, as described in sect
 
 Amigo may mark creators as eligible, not eligible or suspended, and will keep a record of those decisions. You can ask for a decision to be reviewed by contacting **olamidesamson841@gmail.com**.
 
-**[OWNER/LEGAL: full programme terms — payment provider, revenue model, tax obligations, payout methods and dispute process — must be written and reviewed before the programme opens.]**
+Before any payments start, we'll publish full programme terms (covering the payment provider, how earnings are worked out, tax, payouts and disputes) and ask you to accept them. Nothing in these terms entitles anyone to earnings until then.

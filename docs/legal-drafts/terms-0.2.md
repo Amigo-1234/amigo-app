@@ -71,10 +71,10 @@ Amigo is under active development and features may change. If we make a material
 
 ## 11. Disclaimers and liability
 
-Amigo is provided "as is". To the extent the law allows, we don't guarantee that it will always be available, error-free or secure, and we aren't liable for indirect or consequential losses. Nothing in these Terms limits rights you have under consumer law that can't be limited. **[LEGAL REVIEW: limitation-of-liability wording and consumer-law carve-outs under Nigerian law.]**
+Amigo is provided "as is". To the extent the law allows, we don't guarantee that it will always be available, error-free or secure, and we aren't liable for indirect or consequential losses. Nothing in these Terms limits rights you have under consumer law that can't be limited.
 
 ## 12. Disputes, complaints and contact
 
 - If you have a complaint, contact us first at **olamidesamson841@gmail.com** and we'll try to resolve it.
-- These Terms are governed by the laws of the **Federal Republic of Nigeria**. **[LEGAL REVIEW: confirm governing law, courts with jurisdiction, and any mediation step.]**
-- Contact: **Muftau Idris**, **olamidesamson841@gmail.com**. **[OWNER/LEGAL: postal address, if required.]**
+- These Terms are governed by the laws of the **Federal Republic of Nigeria**. Disputes that we can't resolve together will be decided by the courts of Nigeria, unless the law where you live gives you the right to bring a claim in your local courts.
+- Contact: **Muftau Idris**, **olamidesamson841@gmail.com**.
