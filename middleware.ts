@@ -5,6 +5,9 @@
  * team access. They get the "under development" page (503), or a 503 JSON answer for APIs.
  *
  *   MAINTENANCE_MODE        "on" closes the site. Anything else (or unset): no effect at all.
+ *   MAINTENANCE_OPENS_AT    When the gate lifts by itself (ISO time, e.g. 2026-11-24T19:00:00Z). Until
+ *                           then the public sees a countdown; from then on the site is open to everyone
+ *                           with no redeploy. Unset: LAUNCH_AT below. "never": no automatic opening.
  *   MAINTENANCE_ACCESS_KEY  The team key (at least 24 characters). Entered once at /_team, it
  *                           gives that browser a signed, HttpOnly cookie for 30 days. Changing the
  *                           key signs every browser out of team access. Unset: nobody gets in.
@@ -16,7 +19,18 @@
  * Only this project (amigoworld.com.ng) has the gate. The reservation site is a separate Vercel
  * project rooted at reserve/, so this file isn't part of it.
  */
-import { teamAccessHtml, UNDER_DEVELOPMENT_HTML } from "./gate/pages";
+import { countdownHtml, teamAccessHtml, UNDER_DEVELOPMENT_HTML } from "./gate/pages";
+
+/** Launch: Tuesday 24 November 2026, 8:00 PM in Lagos (WAT, UTC+1). */
+const LAUNCH_AT = "2026-11-24T19:00:00Z";
+
+/** When the gate opens by itself, or null for never. */
+function opensAt(): number | null {
+  const v = (process.env.MAINTENANCE_OPENS_AT ?? LAUNCH_AT).trim();
+  if (v === "never") return null;
+  const t = Date.parse(v);
+  return Number.isFinite(t) ? t : null;
+}
 
 const COOKIE = "amigo_team_access";
 const ACCESS_DAYS = 30;
@@ -107,6 +121,8 @@ async function team(request: Request, path: string): Promise<Response> {
 
 export default async function middleware(request: Request): Promise<Response | undefined> {
   if (process.env.MAINTENANCE_MODE !== "on") return;
+  const opens = opensAt();
+  if (opens !== null && Date.now() >= opens) return; // launched: open to everyone
 
   const path = new URL(request.url).pathname;
   if (SERVER_ROUTES.has(path) || PAGE_FILES.has(path)) return;
@@ -118,6 +134,10 @@ export default async function middleware(request: Request): Promise<Response | u
       status: 503,
       headers: { "content-type": "application/json", "retry-after": "3600", ...NO_STORE },
     });
+  }
+  if (opens !== null) {
+    const wait = Math.max(1, Math.ceil((opens - Date.now()) / 1000));
+    return html(request.method === "HEAD" ? "" : countdownHtml(opens), 503, { "retry-after": String(Math.min(wait, 3600)) });
   }
   return html(request.method === "HEAD" ? "" : UNDER_DEVELOPMENT_HTML, 503, { "retry-after": "3600" });
 }

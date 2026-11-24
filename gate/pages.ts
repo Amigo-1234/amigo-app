@@ -46,6 +46,11 @@ const STYLE = `
   input { width: 100%; min-height: 48px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--text); font: 16px "Geist", sans-serif; }
   .error { margin: 0; color: #ff8a73; font-size: 14px; }
   .muted { color: var(--faint); font-size: 14px; }
+  .clock { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 34px 0 0; max-width: 520px; }
+  .clock div { padding: 16px 6px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: center; }
+  .clock b { display: block; font: 800 clamp(30px, 9vw, 46px)/1 "Bricolage", sans-serif; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .clock span { display: block; margin-top: 8px; color: var(--faint); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .when { margin: 16px 0 0; color: var(--muted); font-size: 15px; }
 `;
 
 function shell(title: string, body: string): string {
@@ -69,6 +74,54 @@ ${body}
 <footer><p>© Amigo World</p></footer>
 </body>
 </html>`;
+}
+
+/**
+ * Before launch: a live countdown to opensAt (ms). The numbers are also rendered on the server,
+ * so it reads correctly without JavaScript; at zero the page reloads into the app.
+ */
+export function countdownHtml(opensAt: number): string {
+  const left = Math.max(0, Math.floor((opensAt - Date.now()) / 1000));
+  const parts = [Math.floor(left / 86400), Math.floor((left % 86400) / 3600), Math.floor((left % 3600) / 60), left % 60];
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const cell = (id: string, n: number, label: string) => `<div><b id="${id}">${pad(n)}</b><span>${label}</span></div>`;
+  return shell(
+    "Amigo World · Launching soon",
+    `<main>
+  <p class="status"><i aria-hidden="true"></i>Launching tonight</p>
+  <h1>Amigo World opens at 8 PM</h1>
+  <p class="lede">Tuesday 24 November, 8:00 PM (Lagos time). Come back then to sign up. This page opens the app by itself when the countdown ends.</p>
+  <div class="clock" role="timer" aria-label="Time until launch">
+    ${cell("d", parts[0], "Days")}${cell("h", parts[1], "Hours")}${cell("m", parts[2], "Minutes")}${cell("s", parts[3], "Seconds")}
+  </div>
+  <p class="when" id="local"></p>
+  <div class="aside">
+    <p><strong>Reserved a username?</strong>It's held for you. Sign up with the same email after launch to claim it.</p>
+  </div>
+</main>
+<script>
+(function () {
+  var end = ${opensAt};
+  var ids = ["d", "h", "m", "s"];
+  try {
+    var t = new Date(end).toLocaleString(undefined, { weekday: "long", hour: "numeric", minute: "2-digit", timeZoneName: "short" });
+    document.getElementById("local").textContent = "That's " + t + " where you are.";
+  } catch (e) {}
+  function tick() {
+    var left = Math.max(0, Math.floor((end - Date.now()) / 1000));
+    var v = [Math.floor(left / 86400), Math.floor((left % 86400) / 3600), Math.floor((left % 3600) / 60), left % 60];
+    for (var i = 0; i < 4; i++) document.getElementById(ids[i]).textContent = (v[i] < 10 ? "0" : "") + v[i];
+    if (left <= 0) {
+      clearInterval(timer);
+      // A moment's grace for clocks that run slightly fast, then into the app.
+      setTimeout(function () { location.reload(); }, 3000 + Math.random() * 4000);
+    }
+  }
+  var timer = setInterval(tick, 1000);
+  tick();
+})();
+</script>`,
+  );
 }
 
 /** What everyone without team access sees, at every address. */

@@ -35,6 +35,9 @@ const closedApi = async (r) => r && r.status === 503 && (await r.clone().json())
 const post = (path, body, headers = {}) =>
   req(path, { method: "POST", body: new URLSearchParams(body), headers: { "content-type": "application/x-www-form-urlencoded", ...headers } });
 
+// The checks below are about the gate itself: no automatic opening (see "launch" at the end).
+process.env.MAINTENANCE_OPENS_AT = "never";
+
 try {
   // ------------------------------------------------------------------ off
   for (const mode of [undefined, "off", "ON", ""]) {
@@ -114,6 +117,39 @@ try {
   env("on", "short-key");
   ok("short key (< 24 characters): not accepted", (await gate(post("/_team", { key: "short-key" }))).status === 403);
   ok("short key: old cookies don't open it either", await closedPage(await gate(withCookie("/"))));
+
+  // ------------------------------------------------------------------ launch countdown
+  env("on", KEY);
+  const LAUNCH = Date.parse("2026-11-24T19:00:00Z"); // 8 PM in Lagos
+  const at = async (iso, path = "/", envOpens) => {
+    if (envOpens === undefined) delete process.env.MAINTENANCE_OPENS_AT;
+    else process.env.MAINTENANCE_OPENS_AT = envOpens;
+    Date.now = () => Date.parse(iso);
+    try {
+      return await gate(req(path));
+    } finally {
+      Date.now = realNow;
+    }
+  };
+  r = await at("2026-11-24T10:30:00Z");
+  const page = r ? await r.text() : "";
+  ok("launch: before 8 PM, a countdown (503)", r?.status === 503 && page.includes("Amigo World opens at 8 PM"));
+  ok("launch: the countdown shows the time left from the server (08:30:00)", page.includes('id="h">08<') && page.includes('id="m">30<') && page.includes('id="s">00<'), page.match(/id="[dhms]">\d+</g)?.join(" "));
+  ok("launch: the page counts to the launch moment", page.includes(`var end = ${LAUNCH};`));
+  ok("launch: no reservation link any more", !page.includes("reserve.amigoworld.com.ng"));
+  ok("launch: reserved names are said to be held", page.includes("Reserved a username?"));
+  ok("launch: Retry-After is never more than an hour", r?.headers.get("retry-after") === "3600");
+  r = await at("2026-11-24T18:59:30Z");
+  ok("launch: 30 s before, Retry-After is 30", r?.headers.get("retry-after") === "30");
+  ok("launch: 1 s before, still closed", (await at("2026-11-24T18:59:59Z"))?.status === 503);
+  ok("launch: before, APIs stay closed", await closedApi(await at("2026-11-24T18:00:00Z", "/neon/auth/sign-up/email")));
+  ok("launch: at exactly 8 PM the site is open", (await at("2026-11-24T19:00:00Z")) === undefined);
+  ok("launch: after, sign-up is open", (await at("2026-11-24T19:00:05Z", "/neon/auth/sign-up/email")) === undefined);
+  ok("launch: after, every page is open", (await at("2026-11-25T08:00:00Z", "/explore")) === undefined);
+  ok("launch: MAINTENANCE_OPENS_AT can move it", (await at("2026-11-24T19:30:00Z", "/", "2026-11-24T20:00:00Z"))?.status === 503 && (await at("2026-11-24T20:00:00Z", "/", "2026-11-24T20:00:00Z")) === undefined);
+  ok("launch: MAINTENANCE_OPENS_AT=never keeps it closed", await closedPage(await at("2026-12-01T00:00:00Z", "/", "never")));
+  env(undefined, KEY);
+  ok("launch: MAINTENANCE_MODE off still opens everything at once", (await at("2026-11-24T10:30:00Z")) === undefined);
 } finally {
   await vite.close();
 }

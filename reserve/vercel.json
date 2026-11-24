@@ -4,6 +4,13 @@
   "buildCommand": "",
   "outputDirectory": "public",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/((?!privacy|fonts/|favicon\\.svg).*)",
+      "destination": "https://amigoworld.com.ng/",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!api/|fonts/|favicon\\.svg|privacy).*)",
