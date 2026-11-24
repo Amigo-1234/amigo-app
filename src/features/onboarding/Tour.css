@@ -1,0 +1,93 @@
+/* First-visit tour: a spotlight on one part of the app and a bubble explaining it. */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.tour__dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 7, 6, 0.62);
+  animation: tour-fade var(--dur-med) ease;
+}
+
+/* The highlight: a clear rounded box whose huge shadow dims everything else. */
+.tour__hole {
+  position: absolute;
+  border-radius: 16px;
+  box-shadow: 0 0 0 9999px rgba(8, 7, 6, 0.62), 0 0 0 3px var(--accent);
+  transition: top 0.28s var(--ease-out), left 0.28s var(--ease-out), width 0.28s var(--ease-out), height 0.28s var(--ease-out);
+  pointer-events: none;
+}
+
+.tour__bubble {
+  position: absolute;
+  width: min(320px, calc(100vw - 24px));
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-radius: 18px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border);
+  transition: top 0.28s var(--ease-out), left 0.28s var(--ease-out);
+  animation: pop-in var(--dur-med) var(--ease-out);
+}
+
+.tour__bubble.is-measuring {
+  visibility: hidden;
+  top: 0;
+  left: 0;
+}
+
+.tour__count {
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.tour__title {
+  margin-top: 6px;
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.tour__body {
+  margin-top: var(--space-2);
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+.tour__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.tour__nav {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+
+.tour__later {
+  display: block;
+  margin: var(--space-3) auto 0;
+  color: var(--text-3);
+  font-size: var(--text-sm);
+}
+
+@keyframes tour-fade { from { opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tour__hole,
+  .tour__bubble {
+    transition: none;
+    animation: none;
+  }
+}

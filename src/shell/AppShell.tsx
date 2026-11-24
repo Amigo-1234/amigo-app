@@ -25,6 +25,7 @@ import { RightRail } from "./RightRail";
 import { SuspensionBanner } from "../features/moderation/SuspensionBanner";
 import { UpdateBanner } from "../features/update/UpdateBanner";
 import { InAppAlerts } from "../features/inapp/InAppAlerts";
+import { Tour } from "../features/onboarding/Tour";
 import "./AppShell.css";
 
 export function AppShell() {
@@ -172,6 +173,7 @@ export function AppShell() {
       </Sheet>
 
       {pathname !== "/" && <PublishStatusBar />}
+      <Tour />
     </div>
   );
 }
