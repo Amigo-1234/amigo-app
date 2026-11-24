@@ -50,6 +50,7 @@ const STYLE = `
   .clock div { padding: 16px 6px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--card); text-align: center; }
   .clock b { display: block; font: 800 clamp(30px, 9vw, 46px)/1 "Bricolage", sans-serif; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
   .clock span { display: block; margin-top: 8px; color: var(--faint); font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+  .sign { color: var(--text); font-weight: 600; white-space: nowrap; }
   .when { margin: 16px 0 0; color: var(--muted); font-size: 15px; }
 `;
 
@@ -90,7 +91,7 @@ export function countdownHtml(opensAt: number): string {
     `<main>
   <p class="status"><i aria-hidden="true"></i>Launching tonight</p>
   <h1>Amigo World opens at 8 PM</h1>
-  <p class="lede">Tuesday 24 November, 8:00 PM (Lagos time). Come back then to sign up. This page opens the app by itself when the countdown ends.</p>
+  <p class="lede">My birthday is just around the corner, and I couldn't think of a better way to celebrate than opening Amigo World to you. Join me tonight, Tuesday 24 November at 8:00 PM (Lagos time). This page opens the app by itself when the countdown ends. <span class="sign">— Idris</span></p>
   <div class="clock" role="timer" aria-label="Time until launch">
     ${cell("d", parts[0], "Days")}${cell("h", parts[1], "Hours")}${cell("m", parts[2], "Minutes")}${cell("s", parts[3], "Seconds")}
   </div>
