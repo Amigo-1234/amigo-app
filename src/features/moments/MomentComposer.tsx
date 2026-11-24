@@ -11,7 +11,7 @@ import {
   type NewMediaInput,
 } from "../../data";
 import { ImageError, processImage } from "../../lib/image";
-import { capturePointer } from "../../lib/visualViewport";
+import { capturePointer, useVisualViewportFit } from "../../lib/visualViewport";
 import { useViewer } from "../../state/session";
 import { useToast } from "../../state/toast";
 import { Button, IconButton } from "../../ui/Button";
@@ -31,8 +31,10 @@ const BG_LABEL: Record<MomentBackground, string> = {
 
 /** New Moment: a photo, text on a background, or text over a photo. Disappears after 24 hours. */
 export function MomentComposerSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  // Phones: keep the sheet on the area above the keyboard (iOS otherwise slides it up off screen).
+  useVisualViewportFit(open, undefined, { lock: true });
   return (
-    <Sheet open={open} onClose={onClose} label="New Moment" fullscreenOnMobile>
+    <Sheet open={open} onClose={onClose} label="New Moment" fullscreenOnMobile className="sheet--moment">
       {open && <MomentComposer onClose={onClose} />}
     </Sheet>
   );
@@ -213,6 +215,11 @@ function MomentComposer({ onClose }: { onClose: () => void }) {
           onChange={(e) => setText(e.target.value)}
           placeholder="Say something…"
           aria-invalid={tooLong}
+          onFocus={(e) => {
+            const el = e.currentTarget;
+            // After the keyboard has opened and the sheet has resized.
+            setTimeout(() => el.scrollIntoView({ block: "center", behavior: "smooth" }), 350);
+          }}
         />
       </label>
 

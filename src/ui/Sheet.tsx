@@ -11,12 +11,15 @@ export function Sheet({
   label,
   children,
   fullscreenOnMobile = false,
+  className = "",
 }: {
   open: boolean;
   onClose: () => void;
   label: string;
   children: ReactNode;
   fullscreenOnMobile?: boolean;
+  /** Extra class on the dialog, for a screen's own layout rules. */
+  className?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   /** Where the current press started: only a press that starts and ends on the backdrop closes. */
@@ -32,7 +35,7 @@ export function Sheet({
   return (
     <dialog
       ref={ref}
-      className={`sheet${fullscreenOnMobile ? " sheet--full" : ""}`}
+      className={`sheet${fullscreenOnMobile ? " sheet--full" : ""}${className ? ` ${className}` : ""}`}
       aria-label={label}
       onCancel={(e) => {
         e.preventDefault();

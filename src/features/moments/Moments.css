@@ -752,3 +752,36 @@
 .moment-viewer__failed p {
   margin: 0;
 }
+
+/* Phones: the New Moment sheet follows the visible area above the keyboard (lib/visualViewport.ts),
+   and while typing the preview shrinks so the text box and preview both stay on screen. */
+@media (max-width: 767px) {
+  html.vv-lock,
+  html.vv-lock body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .vv-fit .sheet.sheet--moment {
+    inset: var(--vvt, 0px) 0 auto 0;
+    height: var(--vvh, 100dvh);
+  }
+
+  .vv-fit .sheet--moment .sheet__panel {
+    height: var(--vvh, 100dvh);
+    padding-top: 0;
+  }
+
+  .kb-open .sheet--moment .moment-composer__frame {
+    width: min(100%, calc(var(--vvh, 60dvh) * 0.34 * 9 / 16));
+  }
+
+  .kb-open .sheet--moment .moment-composer {
+    padding-bottom: var(--space-3);
+  }
+
+  .kb-open .sheet--moment .moment-composer__bgs,
+  .kb-open .sheet--moment .moment-composer__note {
+    display: none;
+  }
+}
