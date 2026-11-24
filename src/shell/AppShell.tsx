@@ -44,6 +44,16 @@ export function AppShell() {
   const inMessages = pathname === "/messages" || pathname.startsWith("/messages/");
   const inConversation = pathname.startsWith("/messages/");
 
+  // The red number on the app icon (Home Screen app on iPhone 16.4+, installed app on Android and
+  // desktop): unread notifications + unread conversations, kept exact while the app is open.
+  // The service worker raises it when a push arrives while the app is closed.
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (!nav.setAppBadge || unread === null) return;
+    const total = (unread ?? 0) + (Number(unreadMessages) || 0);
+    (total > 0 ? nav.setAppBadge(total) : nav.clearAppBadge?.())?.catch(() => undefined);
+  }, [unread, unreadMessages]);
+
   useScrollMemory();
   const [navHidden, showNav] = useAutoHideNav(pathname === "/", visit);
 

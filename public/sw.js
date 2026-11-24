@@ -174,6 +174,12 @@ self.addEventListener("push", (event) => {
         badge: BADGE,
         data: { url },
       });
+      // The red number on the app icon: how many Amigo notifications are waiting. The app
+      // sets the exact unread count again as soon as it's opened.
+      if (!isTest && self.navigator.setAppBadge) {
+        const shown = await self.registration.getNotifications().catch(() => []);
+        await self.navigator.setAppBadge(Math.max(1, shown.length)).catch(() => undefined);
+      }
     })(),
   );
 });
