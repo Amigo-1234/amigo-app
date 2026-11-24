@@ -223,6 +223,21 @@ export default function AuthScreen() {
           }
         />
       )}
+      {(step === "reset" || step === "resetCode") && (
+        <div className="auth__help" role="note">
+          <p>
+            <strong>No email after a minute?</strong> Check spam. Then:
+          </p>
+          <ul>
+            <li>
+              <strong>Signed up with Google?</strong> You don't have a password. Go back and tap <em>Continue with Google</em>.
+            </li>
+            <li>
+              <strong>Only reserved a username?</strong> That isn't an account yet. Go back and tap <em>Create account</em> with the same email to claim your name.
+            </li>
+          </ul>
+        </div>
+      )}
 
       {(step === "resetSent" || step === "resetDone") && (
         <div className="auth-done">
