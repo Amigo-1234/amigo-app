@@ -34,7 +34,7 @@ import { AuthError, INTERESTS, ProfileError, type AuthErrorCode, type DataSource
 const REFRESH_DEBOUNCE_MS = 250;
 // Neon has no Realtime: open views refetch on this interval while the tab is
 // visible (and immediately after our own writes). Gentle on Neon Free compute.
-const NEON_POLL_MS = 30_000;
+const NEON_POLL_MS = 60_000;
 // Worlds are live gatherings: an open World refreshes its posts and standings more often, and its chat every few seconds.
 const WORLD_POLL_MS = 10_000;
 const CHAT_POLL_MS = 4_000;

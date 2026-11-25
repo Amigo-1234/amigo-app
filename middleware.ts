@@ -141,3 +141,12 @@ export default async function middleware(request: Request): Promise<Response | u
   }
   return html(request.method === "HEAD" ? "" : UNDER_DEVELOPMENT_HTML, 503, { "retry-after": "3600" });
 }
+
+/**
+ * Only page addresses go through the gate. App files (scripts, styles, icons, fonts, images), the
+ * API routes and the /neon proxy skip it, so the site's normal traffic costs no middleware runs.
+ * (While the site is closed, people can't reach the app's pages, so those files aren't requested.)
+ */
+export const config = {
+  matcher: ["/((?!assets/|api/|neon/|icons/|worlds/|brand/|_maintenance/|favicon|sw\\.js|manifest|robots\\.txt|sitemap\\.xml).*)"],
+};

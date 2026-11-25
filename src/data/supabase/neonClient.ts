@@ -20,8 +20,11 @@ const base = `${location.origin}/neon`;
 // to Neon when its CORS allows this origin (VITE_NEON_DATA_API_URL, set for the
 // preview): one hop fewer per request, and polling doesn't consume Vercel
 // function invocations. Elsewhere they use the same-origin proxy.
-const directDataApi = import.meta.env.VITE_NEON_DATA_API_URL as string | undefined;
-const directOrigins = ((import.meta.env.VITE_NEON_DATA_API_ORIGINS as string | undefined) ?? "").split(",").map((o) => o.trim());
+// Production (amigoworld.com.ng) goes direct by default: the Data API's CORS allows it, and it keeps
+// the app's polling off Vercel's function quota. Local/test builds still use the proxy.
+const directDataApi =
+  (import.meta.env.VITE_NEON_DATA_API_URL as string | undefined) ?? "https://ep-dry-mode-zano9y8g.apirest.c-2.eu-west-2.aws.neon.tech/neondb/rest/v1";
+const directOrigins = ((import.meta.env.VITE_NEON_DATA_API_ORIGINS as string | undefined) ?? "https://amigoworld.com.ng").split(",").map((o) => o.trim());
 const dataApiUrl = directDataApi && directOrigins.includes(location.origin) ? directDataApi : `${base}/rest/v1`;
 
 const client = createClient<Database>({

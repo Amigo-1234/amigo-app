@@ -92,7 +92,7 @@ export async function serverTime(db: Db): Promise<number> {
 /** At most every few minutes per app; the server makes it idempotent and cheap. */
 let lastTick = 0;
 export async function worldsTick(db: Db, force = false): Promise<void> {
-  if (!force && Date.now() - lastTick < 4 * 60_000) return;
+  if (!force && Date.now() - lastTick < 10 * 60_000) return;
   lastTick = Date.now();
   const token = (await db.auth.getSession()).data.session?.access_token;
   if (!token) return;
